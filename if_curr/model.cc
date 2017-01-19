@@ -59,20 +59,20 @@ void modelDefinition(NNmodel &model)
   nModels.back().simCode =
     "if ($(RefracTime) <= 0.0)\n"
     "{\n"
-    "  scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);\n"
-    "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
     "  if ($(V) >= $(Vthresh))\n"
     "  {\n"
     "    $(V) = $(Vreset);\n"
     "    $(RefracTime) = $(TauRefrac);\n"
     "  }\n"
+    "  scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);\n"
+    "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
     "}\n"
     "else\n"
     "{\n"
     "  $(RefracTime) -= DT;\n"
     "}\n";
 
-  nModels.back().thresholdConditionCode = "$(V) >= $(Vthresh)";
+  nModels.back().thresholdConditionCode = "$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)";
 
   //---------------------------------------------------------------------------
   // Create exponential current postsynaptic mechanism
