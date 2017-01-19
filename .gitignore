@@ -1,0 +1,9 @@
+# Ignore object files
+**/*.o
+
+# Ignore output folders from code generation
+**/*_CODE
+
+# Ignore generator executables
+**/generateALL_CPU_ONLY
+
