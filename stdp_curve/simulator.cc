@@ -25,9 +25,8 @@ int main()
     CPreStimToExcitatory.ind[i] = i;
     CPostStimToExcitatory.ind[i] = i;
 
-    gPreStimToExcitatory[i] = 0.0;
+    gPreStimToExcitatory[i] = 0.5;
     gPostStimToExcitatory[i] = 8.0;
-    gLearntPreStimToExcitatory[i] = 0.5;
   }
 
   CPreStimToExcitatory.indInG[NUM_NEURONS] = NUM_NEURONS;
@@ -119,7 +118,7 @@ int main()
 
   for(unsigned int n = 0; n < NUM_NEURONS; n++)
   {
-    fprintf(weights, "%f, %f\n", deltaT[n], gLearntPreStimToExcitatory[n]);
+    fprintf(weights, "%f, %f\n", deltaT[n], gPreStimToExcitatory[n]);
   }
 
   fclose(weights);

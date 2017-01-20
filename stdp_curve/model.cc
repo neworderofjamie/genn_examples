@@ -106,11 +106,10 @@ void modelDefinition(NNmodel &model)
     "Aminus"    // 3 - Rate of depression
   };
 
-  weightUpdateModels.back().varNames.reserve(2);
+  weightUpdateModels.back().varNames.reserve(1);
   weightUpdateModels.back().varNames =
   {
     "g",        // 0 - conductance
-    "gLearnt",  // 1 - learnt conductance
   };
 
   weightUpdateModels.back().varTypes.reserve(2);
@@ -124,7 +123,7 @@ void modelDefinition(NNmodel &model)
     "if (dt > 0)\n"
     "{\n"
     "  scalar timing = exp(-dt / $(tauMinus));\n"
-    "  $(gLearnt) -= ($(Aminus) * timing);\n"
+    "  $(g) -= ($(Aminus) * timing);\n"
     "}\n";
 
   // code for post-synaptic spike
@@ -133,7 +132,7 @@ void modelDefinition(NNmodel &model)
     "if (dt > 0)\n"
     "{\n"
     "  scalar timing = exp(-dt / $(tauPlus));\n"
-    "  $(gLearnt) += ($(Aplus) * timing);\n"
+    "  $(g) += ($(Aplus) * timing);\n"
     "}\n";
 
   // STDP rule requires pre and postsynaptic spike times
@@ -177,10 +176,9 @@ void modelDefinition(NNmodel &model)
     0.005,  // 3 - AMinus
   };
 
-  double additiveSTDPInit[2] =
+  double additiveSTDPInit[1] =
   {
-    0.0,  // 0 - g
-    0.5,  // 1 - GLearnt
+    0.5,  // 0 - g
   };
 
   // Exponential current parameters
@@ -195,10 +193,10 @@ void modelDefinition(NNmodel &model)
   model.addNeuronPopulation("Excitatory", 14, MY_LIF,
                             lifParams, lifInit);
 
-  model.addSynapsePopulation("PreStimToExcitatory", MY_ADDITIVE_STDP, SPARSE, INDIVIDUALG, NO_DELAY, MY_EXP_CURR,
+  model.addSynapsePopulation("PreStimToExcitatory", MY_ADDITIVE_STDP, SPARSE, INDIVIDUALG, NO_DELAY, IZHIKEVICH_PS,
                              "PreStim", "Excitatory",
                              additiveSTDPInit, additiveSTDPParams,
-                             NULL, expCurrParams);
+                             NULL, NULL);
   model.addSynapsePopulation("PostStimToExcitatory", NSYNAPSE, SPARSE, INDIVIDUALG, NO_DELAY, MY_EXP_CURR,
                              "PostStim", "Excitatory",
                              staticSynapseInit, NULL,
