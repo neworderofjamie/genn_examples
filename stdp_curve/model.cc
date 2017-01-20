@@ -97,13 +97,15 @@ void modelDefinition(NNmodel &model)
   const unsigned int MY_ADDITIVE_STDP = weightUpdateModels.size();
   weightUpdateModels.push_back(weightUpdateModel());
 
-  weightUpdateModels.back().pNames.reserve(4);
+  weightUpdateModels.back().pNames.reserve(6);
   weightUpdateModels.back().pNames =
   {
     "tauPlus",  // 0 - Potentiation time constant (ms)
     "tauMinus", // 1 - Depression time constant (ms)
     "Aplus",    // 2 - Rate of potentiation
-    "Aminus"    // 3 - Rate of depression
+    "Aminus",   // 3 - Rate of depression
+    "Wmin",     // 4 - Minimum weight
+    "Wmax",     // 5 - Maximum weight
   };
 
   weightUpdateModels.back().varNames.reserve(1);
@@ -123,7 +125,8 @@ void modelDefinition(NNmodel &model)
     "if (dt > 0)\n"
     "{\n"
     "  scalar timing = exp(-dt / $(tauMinus));\n"
-    "  $(g) -= ($(Aminus) * timing);\n"
+    "  scalar newWeight = $(g) - ($(Aminus) * timing);\n"
+    "  $(g) = (newWeight < $(Wmin)) ? $(Wmin) : newWeight;\n"
     "}\n";
 
   // code for post-synaptic spike
@@ -132,7 +135,8 @@ void modelDefinition(NNmodel &model)
     "if (dt > 0)\n"
     "{\n"
     "  scalar timing = exp(-dt / $(tauPlus));\n"
-    "  $(g) += ($(Aplus) * timing);\n"
+    "  scalar newWeight = $(g) + ($(Aplus) * timing);\n"
+    "  $(g) = (newWeight > $(Wmax)) ? $(Wmax) : newWeight;\n"
     "}\n";
 
   // STDP rule requires pre and postsynaptic spike times
@@ -168,12 +172,14 @@ void modelDefinition(NNmodel &model)
   };
 
   // Additive STDP synapse parameters
-  double additiveSTDPParams[4] =
+  double additiveSTDPParams[6] =
   {
     16.7,   // 0 - TauPlus
     33.7,   // 1 - TauMinus
     0.005,  // 2 - APlus
     0.005,  // 3 - AMinus
+    0.0,    // 4 - Wmin
+    1.0,    // 5 - Wmax
   };
 
   double additiveSTDPInit[1] =
