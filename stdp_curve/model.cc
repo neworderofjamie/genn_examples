@@ -114,8 +114,8 @@ void modelDefinition(NNmodel &model)
     "g",        // 0 - conductance
   };
 
-  weightUpdateModels.back().varTypes.reserve(2);
-  weightUpdateModels.back().varTypes = {"scalar", "scalar"};
+  weightUpdateModels.back().varTypes.reserve(1);
+  weightUpdateModels.back().varTypes = {"scalar"};
 
   // Presynaptic spike update code
   weightUpdateModels.back().simCode =
