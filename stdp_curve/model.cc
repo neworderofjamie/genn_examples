@@ -179,7 +179,7 @@ void modelDefinition(NNmodel &model)
 
   double additiveSTDPInit[2] =
   {
-    1.0,  // 0 - g
+    0.0,  // 0 - g
     0.5,  // 1 - GLearnt
   };
 

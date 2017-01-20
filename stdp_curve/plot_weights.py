@@ -12,14 +12,21 @@ with open("weights.csv", "rb") as csv_file:
     data_columns = zip(*csv_reader)
 
     # Convert times to numpy
-    neuron_id = np.asarray(data_columns[0], dtype=int)
+    delta_t = np.asarray(data_columns[0], dtype=float)
     weight = np.asarray(data_columns[1], dtype=float)
+
+    weight = (weight - 0.5) / 0.5
 
     # Create plot
     figure, axis = plt.subplots()
 
+    # Add axis lines
+    axis.axhline(0.0, color="black")
+    axis.axvline(0.0, color="black")
+
+
     # Plot voltages
-    axis.plot(neuron_id, weight)
+    axis.plot(delta_t, weight)
 
     # Show plot
     plt.show()

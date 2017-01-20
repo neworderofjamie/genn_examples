@@ -25,7 +25,7 @@ int main()
     CPreStimToExcitatory.ind[i] = i;
     CPostStimToExcitatory.ind[i] = i;
 
-    gPreStimToExcitatory[i] = 8.0;
+    gPreStimToExcitatory[i] = 0.0;
     gPostStimToExcitatory[i] = 8.0;
     gLearntPreStimToExcitatory[i] = 0.5;
   }
@@ -115,11 +115,11 @@ int main()
   fclose(spikes);
 
   FILE *weights = fopen("weights.csv", "w");
-  fprintf(weights, "Neuron ID, Weight\n");
+  fprintf(weights, "Delta T [ms], Weight\n");
 
   for(unsigned int n = 0; n < NUM_NEURONS; n++)
   {
-    fprintf(weights, "%u, %f\n", n, gLearntPreStimToExcitatory[n]);
+    fprintf(weights, "%f, %f\n", deltaT[n], gLearntPreStimToExcitatory[n]);
   }
 
   fclose(weights);
