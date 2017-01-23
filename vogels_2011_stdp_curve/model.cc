@@ -122,7 +122,7 @@ void modelDefinition(NNmodel &model)
     "$(updatelinsyn);\n"
     "scalar dt = $(t) - $(sT_post); \n"
     "scalar timing = exp(-dt / $(tau)) - $(rho);\n"
-    "scalar newWeight = $(g) + ($(eta) * timing);\n"
+    "scalar newWeight = $(g) - ($(eta) * timing);\n"
     "if(newWeight < $(Wmin))\n"
     "{\n"
     "  $(g) = $(Wmin);\n"
@@ -140,8 +140,8 @@ void modelDefinition(NNmodel &model)
   weightUpdateModels.back().simLearnPost =
     "scalar dt = $(t) - $(sT_pre);\n"
     "scalar timing = exp(-dt / $(tau));\n"
-    "scalar newWeight = $(g) + ($(eta) * timing);\n"
-    "$(g) = (newWeight > $(Wmax)) ? $(Wmax) : newWeight;\n";
+    "scalar newWeight = $(g) - ($(eta) * timing);\n"
+    "$(g) = (newWeight < $(Wmin)) ? $(Wmin) : newWeight;\n";
 
   // STDP rule requires pre and postsynaptic spike times
   weightUpdateModels.back().needPreSt = true;
@@ -181,13 +181,13 @@ void modelDefinition(NNmodel &model)
     20.0,   // 0 - Tau
     0.12,   // 1 - rho
     0.005,  // 2 - eta
-    0.0,    // 3 - Wmin
-    1.0,    // 4 - Wmax
+    -1.0,    // 3 - Wmin
+    0.0,    // 4 - Wmax
   };
 
   double vogels2011AdditiveSTDPInit[1] =
   {
-    0.5,  // 0 - g
+    -0.5,  // 0 - g
   };
 
   // Exponential current parameters

@@ -101,7 +101,7 @@ void modelDefinition(NNmodel &model)
   weightUpdateModels.back().pNames =
   {
     "tau",      // 0 - Plasticity time constant (ms)
-    "rho",      // 1 - Depression time constant (ms)
+    "rho",      // 1 - Target rate
     "eta",      // 2 - Learning rate
     "Wmin",     // 3 - Minimum weight
     "Wmax",     // 4 - Maximum weight
@@ -181,7 +181,7 @@ void modelDefinition(NNmodel &model)
   {
     20.0,   // 0 - Tau
     0.12,   // 1 - rho
-    0.05,  // 2 - eta
+    0.005,  // 2 - eta
     -1.0,    // 3 - Wmin
     0.0,    // 4 - Wmax
   };
@@ -224,5 +224,10 @@ void modelDefinition(NNmodel &model)
                              "I", "E",
                              vogels2011AdditiveSTDPInit, vogels2011AdditiveSTDPParams,
                              NULL, inhibitoryExpCurrParams);
+
+  /*model.addSynapsePopulation("IE", NSYNAPSE, SPARSE, INDIVIDUALG, NO_DELAY, MY_EXP_CURR,
+                             "I", "E",
+                             staticSynapseInit, NULL,
+                             NULL, inhibitoryExpCurrParams);*/
   model.finalize();
 }

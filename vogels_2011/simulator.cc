@@ -4,10 +4,10 @@
 #include "model.cc"
 #include "vogels_2011_CODE/definitions.h"
 
+template<typename Generator>
 void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost, float probability,
-                                       SparseProjection &projection, bool plastic)
+                                       SparseProjection &projection, bool plastic, Generator &gen)
 {
-
   // Allocate memory for indices
   projection.indInG = new unsigned int[numPre + 1];
 
@@ -15,9 +15,7 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
   std::vector<unsigned int> tempInd;
   tempInd.reserve((unsigned int)((float)(numPre * numPost) * probability));
 
-  // Create RNG
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  // Create RNG to draw probabilities
   std::uniform_real_distribution<> dis(0.0, 1.0);
 
   //printf("Projection:\n");
@@ -26,7 +24,6 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
   {
     // Connections from this neuron start at current end of indices
     projection.indInG[i] = tempInd.size();
-    //printf("\t%u\n", projection.indInG[i]);
 
     // Loop through post neurons
     for(unsigned int j = 0; j < numPost; j++)
@@ -34,12 +31,10 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
       // If there should be a connection here, add one to temporary array
       if(dis(gen) < probability)
       {
-        //printf("\t\t%u->%u\n", i, j);
         tempInd.push_back(j);
       }
     }
   }
-
 
   projection.connN = tempInd.size();
   projection.indInG[numPre] = projection.connN;
@@ -65,14 +60,17 @@ int main()
 
   initialize();
 
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
   build_fixed_probability_connector(500, 500, 0.02f,
-                                    CII, false);
+                                    CII, false, gen);
   build_fixed_probability_connector(500, 2000, 0.02f,
-                                    CIE, true);
+                                    CIE, true, gen);
   build_fixed_probability_connector(2000, 2000, 0.02f,
-                                    CEE, false);
+                                    CEE, false, gen);
   build_fixed_probability_connector(2000, 500, 0.02f,
-                                    CEI, false);
+                                    CEI, false, gen);
 
   // Allocate synapse conductances
   gII = new float[CII.connN];
@@ -87,8 +85,23 @@ int main()
   // Setup reverse connection indices for STDP
   initvogels_2011();
 
+  // Randomlise initial membrane voltages
+  std::uniform_real_distribution<> dis(-60.0, -50.0);
+  for(unsigned int i = 0; i < 2000; i++)
+  {
+    VE[i] = dis(gen);
+  }
+
+  for(unsigned int i = 0; i < 500; i++)
+  {
+    VI[i] = dis(gen);
+  }
+
+  // Open CSV output files
   FILE *spikes = fopen("spikes.csv", "w");
   fprintf(spikes, "Time(ms), Neuron ID\n");
+  FILE *weights = fopen("weights.csv", "w");
+  fprintf(weights, "Time(ms), Weight (nA)\n");
 
   // Loop through timesteps
   for(unsigned int t = 0; t < 10000; t++)
@@ -101,13 +114,16 @@ int main()
     {
       fprintf(spikes, "%f, %u\n", 1.0 * (double)t, glbSpkE[i]);
     }
+
+    // Calculate mean IE weights
+    float totalWeight = std::accumulate(&gIE[0], &gIE[CIE.connN], 0.0f);
+    fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)CIE.connN);
+
   }
+
+  // Close files
   fclose(spikes);
-
-  // Calculate mean IE weights
-  float totalWeight = std::accumulate(&gIE[0], &gIE[CIE.connN], 0.0f);
-  printf("Mean weight:%f\n", totalWeight / (double)CIE.connN);
-
+  fclose(weights);
 
   return 0;
 }

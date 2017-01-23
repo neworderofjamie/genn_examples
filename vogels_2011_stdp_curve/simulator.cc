@@ -25,7 +25,7 @@ int main()
     CPreStimToExcitatory.ind[i] = i;
     CPostStimToExcitatory.ind[i] = i;
 
-    gPreStimToExcitatory[i] = 0.5;
+    gPreStimToExcitatory[i] = -0.5;
     gPostStimToExcitatory[i] = 8.0;
   }
 
