@@ -18,7 +18,6 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
   // Create RNG to draw probabilities
   std::uniform_real_distribution<> dis(0.0, 1.0);
 
-  //printf("Projection:\n");
   // Loop through pre neurons
   for(unsigned int i = 0; i < numPre; i++)
   {
