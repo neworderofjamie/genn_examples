@@ -23,8 +23,8 @@ with open("spikes.csv", "rb") as spikes_csv_file, open("weights.csv", "rb") as w
     # Create plot
     figure, axes = plt.subplots(3, sharex=True)
 
-    # Plot voltages
-    axes[0].scatter(spike_times, spike_neuron_id)
+    # Plot spikes
+    axes[0].scatter(spike_times, spike_neuron_id, s=2, edgecolors="none")
 
     # Plot rates
     bins = np.arange(0, 10000 + 1, 10)
