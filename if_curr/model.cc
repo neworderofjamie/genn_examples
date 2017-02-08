@@ -6,12 +6,9 @@
 //----------------------------------------------------------------------------
 // ClosedFormLIF
 //----------------------------------------------------------------------------
-class ClosedFormLIF : public NeuronModels::BaseSingleton<ClosedFormLIF>
+class ClosedFormLIF : public NeuronModels::BaseSingleton<ClosedFormLIF, 7, 2>
 {
 public:
-    DECLARE_PARAM_VALUES(7);
-    DECLARE_INIT_VALUES(2);
-
     SET_SIM_CODE(
         "if ($(RefracTime) <= 0.0)\n"
         "{\n"

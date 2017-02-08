@@ -3,12 +3,9 @@
 //----------------------------------------------------------------------------
 // IzhikevichVS
 //----------------------------------------------------------------------------
-class IzhikevichV : public NeuronModels::BaseSingleton<IzhikevichV>
+class IzhikevichV : public NeuronModels::BaseSingleton<IzhikevichV, 1, 6>
 {
 public:
-    DECLARE_PARAM_VALUES(1);
-    DECLARE_INIT_VALUES(6);
-
     SET_SIM_CODE(
         "    if ($(V) >= 30.0){\n"
         "      $(V)=$(c);\n"
