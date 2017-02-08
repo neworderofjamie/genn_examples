@@ -40,22 +40,11 @@ public:
         "Ioffset",    // Offset current
         "TauRefrac"});
 
-    SET_DERIVED_PARAM_NAMES({"ExpTC", "Rmembrane"});
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const vector<double> &pars, double dt){ return  pars[1] / pars[0]; }}});
 
     SET_INIT_VALS({{"V", "scalar"}, {"RefracTime", "scalar"}});
-
-    virtual double CalculateDerivedParam(int index, const vector<double> &pars, double dt = 1.0) const
-    {
-        switch (index)
-        {
-        case 0: // ExpTC
-            return std::exp(-dt / pars[1]);
-        case 1: // Rmembrane
-            return pars[1] / pars[0];
-
-        }
-        return -1;
-    }
 };
 
 void modelDefinition(NNmodel &model)
