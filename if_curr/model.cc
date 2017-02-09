@@ -42,7 +42,7 @@ public:
 
     SET_DERIVED_PARAMS({
         {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"Rmembrane", [](const vector<double> &pars, double dt){ return  pars[1] / pars[0]; }}});
+        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
 
     SET_INIT_VALS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 };
