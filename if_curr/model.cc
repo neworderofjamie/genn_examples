@@ -6,11 +6,10 @@
 //----------------------------------------------------------------------------
 // ClosedFormLIF
 //----------------------------------------------------------------------------
-class ClosedFormLIF : public NeuronModels::BaseSingleton<ClosedFormLIF>
+class ClosedFormLIF : public NeuronModels::Base
 {
 public:
-    DECLARE_PARAM_VALUES(7);
-    DECLARE_INIT_VALUES(2);
+    DECLARE_MODEL(ClosedFormLIF, 7, 2);
 
     SET_SIM_CODE(
         "if ($(RefracTime) <= 0.0)\n"
@@ -46,6 +45,27 @@ public:
 
     SET_INIT_VALS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 };
+
+IMPLEMENT_MODEL(ClosedFormLIF);
+
+//----------------------------------------------------------------------------
+// ExpCurr
+//----------------------------------------------------------------------------
+class ExpCurr : PostsynapticModels::Base
+{
+public:
+    DECLARE_MODEL(ExpCurr, 1, 0);
+
+    SET_DECAY_CODE("$(inSyn)*=$(expDecay);");
+
+    SET_CURRENT_CONVERTER_CODE("$(inSyn)");
+
+    SET_PARAM_NAMES({"tau"});
+
+    SET_DERIVED_PARAMS({{"expDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }}});
+};
+
+IMPLEMENT_MODEL(ExpCurr);
 
 void modelDefinition(NNmodel &model)
 {

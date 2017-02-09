@@ -3,11 +3,10 @@
 //----------------------------------------------------------------------------
 // IzhikevichVS
 //----------------------------------------------------------------------------
-class IzhikevichV : public NeuronModels::BaseSingleton<IzhikevichV>
+class IzhikevichV : public NeuronModels::Izhikevich
 {
 public:
-    DECLARE_PARAM_VALUES(1);
-    DECLARE_INIT_VALUES(6);
+    DECLARE_MODEL(IzhikevichV, 1, 6);
 
     SET_SIM_CODE(
         "    if ($(V) >= 30.0){\n"
@@ -22,13 +21,12 @@ public:
         "   //  $(V)=30.0; \n"
         "   //}\n"
     );
-
-    SET_THRESHOLD_CONDITION_CODE("$(V) >= 29.99");
-
+    
     SET_PARAM_NAMES({"Ioffset"});
 
     SET_INIT_VALS({{"V","scalar"}, {"U", "scalar"}, {"a", "scalar"}, {"b", "scalar"}, {"c", "scalar"}, {"d", "scalar"}});
 };
+IMPLEMENT_MODEL(IzhikevichV);
 
 void modelDefinition(NNmodel &model)
 {
