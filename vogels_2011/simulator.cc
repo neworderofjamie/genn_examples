@@ -4,12 +4,16 @@
 #include "model.cc"
 #include "vogels_2011_CODE/definitions.h"
 
+typedef void (*allocateFn)(unsigned int);
+
 template<typename Generator>
 void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost, float probability,
-                                       SparseProjection &projection, bool plastic, Generator &gen)
+                                       SparseProjection &projection, allocateFn allocate, Generator &gen)
 {
   // Allocate memory for indices
-  projection.indInG = new unsigned int[numPre + 1];
+  //projection.indInG = new unsigned int[numPre + 1];
+  std::vector<unsigned int> tempIndInG;
+  tempIndInG.reserve(numPre + 1);
 
   // Reserve a temporary vector to store indices
   std::vector<unsigned int> tempInd;
@@ -22,7 +26,7 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
   for(unsigned int i = 0; i < numPre; i++)
   {
     // Connections from this neuron start at current end of indices
-    projection.indInG[i] = tempInd.size();
+    tempIndInG[i] = tempInd.size();
 
     // Loop through post neurons
     for(unsigned int j = 0; j < numPost; j++)
@@ -35,22 +39,13 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
     }
   }
 
-  projection.connN = tempInd.size();
-  projection.indInG[numPre] = projection.connN;
+  // Allocate SparseProjection arrays
+  // **NOTE** shouldn't do directly as underneath it may use CUDA or host functions
+  allocate(tempInd.size());
 
-
-  // Allocate memory for indices and copy in temporary indices
-  projection.ind = new unsigned int[projection.connN];
+  // Copy indices
+  std::copy(tempIndInG.begin(), tempIndInG.end(), &projection.indInG[0]);
   std::copy(tempInd.begin(), tempInd.end(), &projection.ind[0]);
-
-  // If connection is plastic, allocate extra data
-  // structures to allow lookup by postsynaptic index
-  if(plastic)
-  {
-    projection.revIndInG = new unsigned int[numPost + 1];
-    projection.revInd= new unsigned int[projection.connN];
-    projection.remap= new unsigned int[projection.connN];
-  }
 }
 
 int main()
@@ -63,19 +58,15 @@ int main()
   std::mt19937 gen(rd());
 
   build_fixed_probability_connector(500, 500, 0.02f,
-                                    CII, false, gen);
+                                    CII, &allocateII, gen);
   build_fixed_probability_connector(500, 2000, 0.02f,
-                                    CIE, true, gen);
+                                    CIE, &allocateIE, gen);
   build_fixed_probability_connector(2000, 2000, 0.02f,
-                                    CEE, false, gen);
+                                    CEE, &allocateEE, gen);
   build_fixed_probability_connector(2000, 500, 0.02f,
-                                    CEI, false, gen);
+                                    CEI, &allocateEI, gen);
 
-  // Allocate synapse conductances
-  gII = new float[CII.connN];
-  gIE = new float[CIE.connN];
-  gEE = new float[CEE.connN];
-  gEI = new float[CEI.connN];
+  // Copy conductances
   std::fill(&gII[0], &gII[CII.connN], -0.03);
   std::fill(&gIE[0], &gIE[CIE.connN], 0.0);
   std::fill(&gEE[0], &gEE[CEE.connN], 0.03);
