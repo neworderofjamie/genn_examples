@@ -11,9 +11,9 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
                                        SparseProjection &projection, allocateFn allocate, Generator &gen)
 {
   // Allocate memory for indices
-  //projection.indInG = new unsigned int[numPre + 1];
+  // **NOTE** RESIZE as this vector is populated by index
   std::vector<unsigned int> tempIndInG;
-  tempIndInG.reserve(numPre + 1);
+  tempIndInG.resize(numPre + 1);
 
   // Reserve a temporary vector to store indices
   std::vector<unsigned int> tempInd;
@@ -38,6 +38,9 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
       }
     }
   }
+
+  // Add final index
+  tempIndInG[numPre] = tempInd.size();
 
   // Allocate SparseProjection arrays
   // **NOTE** shouldn't do directly as underneath it may use CUDA or host functions
