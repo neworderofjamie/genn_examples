@@ -3,23 +3,109 @@
 
 #include "modelSpec.h"
 
-class ClosedFormLIF : public dpclass
+
+//----------------------------------------------------------------------------
+// ClosedFormLIF
+//----------------------------------------------------------------------------
+class ClosedFormLIF : public NeuronModels::Base
 {
 public:
-    virtual double calculateDerivedParameter(int index, vector<double> pars, double dt = 1.0)
-    {
-        switch (index)
-        {
-        case 0: // ExpTC
-            return std::exp(-dt / pars[1]);
-        case 1: // Rmembrane
-            return pars[1] / pars[0];
+    DECLARE_MODEL(ClosedFormLIF, 7, 2);
 
-        }
-        return -1;
-    }
+    SET_SIM_CODE(
+        "if ($(RefracTime) <= 0.0)\n"
+        "{\n"
+        "  if ($(V) >= $(Vthresh))\n"
+        "  {\n"
+        "    $(V) = $(Vreset);\n"
+        "    $(RefracTime) = $(TauRefrac);\n"
+        "  }\n"
+        "  scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);\n"
+        "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
+        "}\n"
+        "else\n"
+        "{\n"
+        "  $(RefracTime) -= DT;\n"
+        "}\n"
+    );
+
+    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
+
+    SET_PARAM_NAMES({
+        "C",          // Membrane capacitance
+        "TauM",       // Membrane time constant [ms]
+        "Vrest",      // Resting membrane potential [mV]
+        "Vreset",     // Reset voltage [mV]
+        "Vthresh",    // Spiking threshold [mV]
+        "Ioffset",    // Offset current
+        "TauRefrac"});
+
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
+
+    SET_INIT_VALS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 };
 
+IMPLEMENT_MODEL(ClosedFormLIF);
+
+//----------------------------------------------------------------------------
+// ExpCurr
+//----------------------------------------------------------------------------
+class ExpCurr : PostsynapticModels::Base
+{
+public:
+    DECLARE_MODEL(ExpCurr, 1, 0);
+
+    SET_DECAY_CODE("$(inSyn)*=$(expDecay);");
+
+    SET_CURRENT_CONVERTER_CODE("$(inSyn)");
+
+    SET_PARAM_NAMES({"tau"});
+
+    SET_DERIVED_PARAMS({{"expDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }}});
+};
+
+IMPLEMENT_MODEL(ExpCurr);
+
+//----------------------------------------------------------------------------
+// STDPAdditive
+//----------------------------------------------------------------------------
+class STDPAdditive : WeightUpdateModels::Base
+{
+public:
+    DECLARE_MODEL(STDPAdditive, 6, 1);
+
+    SET_PARAM_NAMES({
+      "tauPlus",  // 0 - Potentiation time constant (ms)
+      "tauMinus", // 1 - Depression time constant (ms)
+      "Aplus",    // 2 - Rate of potentiation
+      "Aminus",   // 3 - Rate of depression
+      "Wmin",     // 4 - Minimum weight
+      "Wmax",     // 5 - Maximum weight
+    });
+
+    SET_INIT_VALS({{"g", "scalar"}};
+
+    SET_SIM_CODE(
+        "$(addtoinSyn) = $(g);\n"
+        "$(updatelinsyn);\n"
+        "scalar dt = $(t) - $(sT_post); \n"
+        "if (dt > 0)\n"
+        "{\n"
+        "    scalar timing = exp(-dt / $(tauMinus));\n"
+        "    scalar newWeight = $(g) - ($(Aminus) * timing);\n"
+        "    $(g) = (newWeight < $(Wmin)) ? $(Wmin) : newWeight;\n"
+        "}\n");
+    SET_LEARN_POST_CODE(
+        "scalar dt = $(t) - $(sT_pre);\n"
+        "if (dt > 0)\n"
+        "{\n"
+        "    scalar timing = exp(-dt / $(tauPlus));\n"
+        "    scalar newWeight = $(g) + ($(Aplus) * timing);\n"
+        "    $(g) = (newWeight > $(Wmax)) ? $(Wmax) : newWeight;\n"
+        "}\n");
+};
 
 void modelDefinition(NNmodel &model)
 {
@@ -28,185 +114,58 @@ void modelDefinition(NNmodel &model)
   model.setName("stdp_curve");
 
   //---------------------------------------------------------------------------
-  // Create LIF neuron
-  //---------------------------------------------------------------------------
-  const unsigned int MY_LIF = nModels.size();
-  nModels.push_back(neuronModel());
-
-  nModels.back().varNames.reserve(2);
-  nModels.back().varNames = {"V", "RefracTime"};
-
-  nModels.back().varTypes.reserve(2);
-  nModels.back().varTypes = {"scalar", "scalar"};
-
-  nModels.back().pNames.reserve(7);
-  nModels.back().pNames =
-  {
-    "C",          // Membrane capacitance
-    "TauM",       // Membrane time constant [ms]
-    "Vrest",      // Resting membrane potential [mV]
-    "Vreset",     // Reset voltage [mV]
-    "Vthresh",    // Spiking threshold [mV]
-    "Ioffset",    // Offset current
-    "TauRefrac",  // Refractory time [ms]
-  };
-
-  nModels.back().dpNames.reserve(2);
-  nModels.back().dpNames = {"ExpTC", "Rmembrane"};
-  nModels.back().dps = new ClosedFormLIF();
-
-  //TODO: replace the resetting in the following with BRIAN-like threshold and resetting
-  nModels.back().simCode =
-    "if ($(RefracTime) <= 0.0)\n"
-    "{\n"
-    "  if ($(V) >= $(Vthresh))\n"
-    "  {\n"
-    "    $(V) = $(Vreset);\n"
-    "    $(RefracTime) = $(TauRefrac);\n"
-    "  }\n"
-    "  scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);\n"
-    "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
-    "}\n"
-    "else\n"
-    "{\n"
-    "  $(RefracTime) -= DT;\n"
-    "}\n";
-
-  nModels.back().thresholdConditionCode = "$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)";
-
-
-  //---------------------------------------------------------------------------
-  // Create exponential current postsynaptic mechanism
-  //---------------------------------------------------------------------------
-  const unsigned int MY_EXP_CURR = postSynModels.size();
-  postSynModels.push_back(postSynModel());
-
-  postSynModels.back().pNames.reserve(1);
-  postSynModels.back().pNames = {"tau"};
-
-  postSynModels.back().dpNames.reserve(1);
-  postSynModels.back().dpNames = {"expDecay"};
-  postSynModels.back().dps = new expDecayDp;
-
-  postSynModels.back().postSynDecay= "$(inSyn)*=$(expDecay);\n";
-  postSynModels.back().postSyntoCurrent= "$(inSyn)";
-
-  //---------------------------------------------------------------------------
-  // Create STDP rule
-  //---------------------------------------------------------------------------
-  const unsigned int MY_ADDITIVE_STDP = weightUpdateModels.size();
-  weightUpdateModels.push_back(weightUpdateModel());
-
-  weightUpdateModels.back().pNames.reserve(6);
-  weightUpdateModels.back().pNames =
-  {
-    "tauPlus",  // 0 - Potentiation time constant (ms)
-    "tauMinus", // 1 - Depression time constant (ms)
-    "Aplus",    // 2 - Rate of potentiation
-    "Aminus",   // 3 - Rate of depression
-    "Wmin",     // 4 - Minimum weight
-    "Wmax",     // 5 - Maximum weight
-  };
-
-  weightUpdateModels.back().varNames.reserve(1);
-  weightUpdateModels.back().varNames =
-  {
-    "g",        // 0 - conductance
-  };
-
-  weightUpdateModels.back().varTypes.reserve(1);
-  weightUpdateModels.back().varTypes = {"scalar"};
-
-  // Presynaptic spike update code
-  weightUpdateModels.back().simCode =
-    "$(addtoinSyn) = $(g);\n"
-    "$(updatelinsyn);\n"
-    "scalar dt = $(t) - $(sT_post); \n"
-    "if (dt > 0)\n"
-    "{\n"
-    "  scalar timing = exp(-dt / $(tauMinus));\n"
-    "  scalar newWeight = $(g) - ($(Aminus) * timing);\n"
-    "  $(g) = (newWeight < $(Wmin)) ? $(Wmin) : newWeight;\n"
-    "}\n";
-
-  // code for post-synaptic spike
-  weightUpdateModels.back().simLearnPost =
-    "scalar dt = $(t) - $(sT_pre);\n"
-    "if (dt > 0)\n"
-    "{\n"
-    "  scalar timing = exp(-dt / $(tauPlus));\n"
-    "  scalar newWeight = $(g) + ($(Aplus) * timing);\n"
-    "  $(g) = (newWeight > $(Wmax)) ? $(Wmax) : newWeight;\n"
-    "}\n";
-
-  // STDP rule requires pre and postsynaptic spike times
-  weightUpdateModels.back().needPreSt = true;
-  weightUpdateModels.back().needPostSt = true;
-
-  //---------------------------------------------------------------------------
   // Build model
   //---------------------------------------------------------------------------
   // LIF model parameters
-  double lifParams[7] =
-  {
-    1.0,    // 0 - C
-    20.0,   // 1 - TauM
-    -70.0,  // 2 - Vrest
-    -70.0,  // 3 - Vreset
-    -51.0,  // 4 - Vthresh
-    0.0,   // 5 - Ioffset
-    2.0,    // 6 - TauRefrac
-  };
+  ClosedFormLIF::ParamValues lifParams(
+      1.0,    // 0 - C
+      20.0,   // 1 - TauM
+      -70.0,  // 2 - Vrest
+      -70.0,  // 3 - Vreset
+      -51.0,  // 4 - Vthresh
+      0.0,   // 5 - Ioffset
+      2.0);  // 6 - TauRefrac
 
   // LIF initial conditions
-  double lifInit[2] =
-  {
-    -70.0,  // 0 - V
-    0.0,    // 1 - RefracTime
-  };
+  ClosedFormLIF::InitValues lifInit(
+      -70.0,  // 0 - V
+      0.0);    // 1 - RefracTime
 
-  // Static synapse parameters
-  double staticSynapseInit[1] =
-  {
-    1.0,    // 0 - Wij (nA)
-  };
+  WeightUpdateModels::StaticPulse::InitValues staticSynapseInit(
+      1.0);    // 0 - Wij (nA)
 
   // Additive STDP synapse parameters
-  double additiveSTDPParams[6] =
-  {
-    16.7,   // 0 - TauPlus
-    33.7,   // 1 - TauMinus
-    0.005,  // 2 - APlus
-    0.005,  // 3 - AMinus
-    0.0,    // 4 - Wmin
-    1.0,    // 5 - Wmax
-  };
+  STDPAdditive::ParamValues additiveSTDPParams(
+      16.7,   // 0 - TauPlus
+      33.7,   // 1 - TauMinus
+      0.005,  // 2 - APlus
+      0.005,  // 3 - AMinus
+      0.0,    // 4 - Wmin
+      1.0);    // 5 - Wmax
 
-  double additiveSTDPInit[1] =
-  {
-    0.5,  // 0 - g
-  };
+  STDPAdditive::InitValues additiveSTDPInit(
+      0.5);  // 0 - g
 
   // Exponential current parameters
-  double expCurrParams[1] =
-  {
-    5.0,  // 0 - TauSyn (ms)
-  };
+  ExpCurr::ParamValues expCurrParams(
+      5.0);  // 0 - TauSyn (ms)
+
 
   // Create IF_curr neuron
-  model.addNeuronPopulation("PreStim", 14, SPIKESOURCE, {}, {});
-  model.addNeuronPopulation("PostStim", 14, SPIKESOURCE, {}, {});
-  model.addNeuronPopulation("Excitatory", 14, MY_LIF,
-                            lifParams, lifInit);
+  model.addNeuronPopulation<NeuronModels::SpikeSource>("PreStim", 14, {}, {});
+  model.addNeuronPopulation<NeuronModels::SpikeSource>("PostStim", 14, {}, {});
+  model.addNeuronPopulation<ClosedFormLIF>("Excitatory", 14, lifParams, lifInit);
 
-  model.addSynapsePopulation("PreStimToExcitatory", MY_ADDITIVE_STDP, SPARSE, INDIVIDUALG, NO_DELAY, IZHIKEVICH_PS,
-                             "PreStim", "Excitatory",
-                             additiveSTDPInit, additiveSTDPParams,
-                             NULL, NULL);
-  model.addSynapsePopulation("PostStimToExcitatory", NSYNAPSE, SPARSE, INDIVIDUALG, NO_DELAY, MY_EXP_CURR,
-                             "PostStim", "Excitatory",
-                             staticSynapseInit, NULL,
-                             NULL, expCurrParams);
+  model.addSynapsePopulation<STDPAdditive, PostsynapticModels::Izhikevich>(
+          "PreStimToExcitatory", SPARSE, INDIVIDUALG, NO_DELAY,
+          "PreStim", "Excitatory",
+          additiveSTDPInit, additiveSTDPParams,
+          {}, {});
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+          "PostStimToExcitatory", SPARSE, INDIVIDUALG, NO_DELAY,
+          "PostStim", "Excitatory",
+          staticSynapseInit, {},
+          {}, expCurrParams);
 
   model.finalize();
 }
