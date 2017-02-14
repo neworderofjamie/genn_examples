@@ -52,7 +52,7 @@ IMPLEMENT_MODEL(ClosedFormLIF);
 //----------------------------------------------------------------------------
 // ExpCurr
 //----------------------------------------------------------------------------
-class ExpCurr : PostsynapticModels::Base
+class ExpCurr : public PostsynapticModels::Base
 {
 public:
     DECLARE_MODEL(ExpCurr, 1, 0);
@@ -71,7 +71,7 @@ IMPLEMENT_MODEL(ExpCurr);
 //----------------------------------------------------------------------------
 // STDPAdditive
 //----------------------------------------------------------------------------
-class STDPAdditive : WeightUpdateModels::Base
+class STDPAdditive : public WeightUpdateModels::Base
 {
 public:
     DECLARE_MODEL(STDPAdditive, 6, 1);
@@ -85,7 +85,7 @@ public:
       "Wmax",     // 5 - Maximum weight
     });
 
-    SET_INIT_VALS({{"g", "scalar"}};
+    SET_INIT_VALS({{"g", "scalar"}});
 
     SET_SIM_CODE(
         "$(addtoinSyn) = $(g);\n"
@@ -159,13 +159,13 @@ void modelDefinition(NNmodel &model)
   model.addSynapsePopulation<STDPAdditive, PostsynapticModels::Izhikevich>(
           "PreStimToExcitatory", SPARSE, INDIVIDUALG, NO_DELAY,
           "PreStim", "Excitatory",
-          additiveSTDPInit, additiveSTDPParams,
+          additiveSTDPParams,  additiveSTDPInit,
           {}, {});
   model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
           "PostStimToExcitatory", SPARSE, INDIVIDUALG, NO_DELAY,
           "PostStim", "Excitatory",
-          staticSynapseInit, {},
-          {}, expCurrParams);
+          {}, staticSynapseInit,
+          expCurrParams, {});
 
   model.finalize();
 }
