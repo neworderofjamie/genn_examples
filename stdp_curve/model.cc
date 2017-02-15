@@ -105,7 +105,12 @@ public:
         "    scalar newWeight = $(g) + ($(Aplus) * timing);\n"
         "    $(g) = (newWeight > $(Wmax)) ? $(Wmax) : newWeight;\n"
         "}\n");
+
+    SET_NEEDS_PRE_SPIKE_TIME(true);
+    SET_NEEDS_POST_SPIKE_TIME(true);
 };
+
+IMPLEMENT_MODEL(STDPAdditive);
 
 void modelDefinition(NNmodel &model)
 {
