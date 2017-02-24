@@ -100,7 +100,14 @@ int main()
   for(unsigned int t = 0; t < 10000; t++)
   {
     // Simulate
+#ifndef CPU_ONLY
+    stepTimeGPU();
+
+    pullECurrentSpikesFromDevice();
+    pullIEStateFromDevice();
+#else
     stepTimeCPU();
+#endif
 
     // Write spike times to file
     for(unsigned int i = 0; i < glbSpkCntE[0]; i++)
