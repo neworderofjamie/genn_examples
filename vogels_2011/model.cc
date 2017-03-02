@@ -192,5 +192,14 @@ void modelDefinition(NNmodel &model)
                              "I", "E",
                              staticSynapseInit, NULL,
                              NULL, inhibitoryExpCurrParams);*/
+  /*model.setSpanTypeToPre("EE");
+  model.setSpanTypeToPre("EI");
+  model.setSpanTypeToPre("II");
+  model.setSpanTypeToPre("IE");*/
+
+  // Use zero-copy for spikes and weights as we want to record them every timestep
+  model.setNeuronSpikeZeroCopy("E");
+  model.setSynapseWeightUpdateInitValZeroCopy("IE", "g");
+
   model.finalize();
 }

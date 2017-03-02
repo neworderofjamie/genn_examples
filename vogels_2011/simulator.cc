@@ -1,5 +1,6 @@
 #include <algorithm>
-#include<random>
+#include <chrono>
+#include <random>
 
 #include "model.cc"
 #include "vogels_2011_CODE/definitions.h"
@@ -53,8 +54,12 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
 
 int main()
 {
+  auto  allocStart = chrono::steady_clock::now();
   allocateMem();
+  auto  allocEnd = chrono::steady_clock::now();
+  printf("Allocation %llums\n", chrono::duration_cast<chrono::milliseconds>(allocEnd - allocStart).count());
 
+  auto  initStart = chrono::steady_clock::now(); 
   initialize();
 
   std::random_device rd;
@@ -89,13 +94,15 @@ int main()
   {
     VI[i] = dis(gen);
   }
+  auto  initEnd = chrono::steady_clock::now();
+  printf("Init %llums\n", chrono::duration_cast<chrono::milliseconds>(initEnd - initStart).count());
 
   // Open CSV output files
   FILE *spikes = fopen("spikes.csv", "w");
   fprintf(spikes, "Time(ms), Neuron ID\n");
   FILE *weights = fopen("weights.csv", "w");
   fprintf(weights, "Time(ms), Weight (nA)\n");
-
+  auto simStart = chrono::steady_clock::now();
   // Loop through timesteps
   for(unsigned int t = 0; t < 10000; t++)
   {
@@ -104,7 +111,7 @@ int main()
     stepTimeGPU();
 
     pullECurrentSpikesFromDevice();
-    pullIEStateFromDevice();
+    //pullIEStateFromDevice();
 #else
     stepTimeCPU();
 #endif
@@ -120,6 +127,8 @@ int main()
     fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)CIE.connN);
 
   }
+  auto simEnd = chrono::steady_clock::now();
+  printf("Simulation %llums\n", chrono::duration_cast<chrono::milliseconds>(simEnd - simStart).count());
 
   // Close files
   fclose(spikes);
