@@ -24,7 +24,7 @@ public:
     
     SET_PARAM_NAMES({"Ioffset"});
 
-    SET_INIT_VALS({{"V","scalar"}, {"U", "scalar"}, {"a", "scalar"}, {"b", "scalar"}, {"c", "scalar"}, {"d", "scalar"}});
+    SET_VARS({{"V","scalar"}, {"U", "scalar"}, {"a", "scalar"}, {"b", "scalar"}, {"c", "scalar"}, {"d", "scalar"}});
 };
 IMPLEMENT_MODEL(IzhikevichV);
 

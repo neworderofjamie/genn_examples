@@ -44,7 +44,7 @@ public:
         {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
         {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
 
-    SET_INIT_VALS({{"V", "scalar"}, {"RefracTime", "scalar"}});
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 };
 
 IMPLEMENT_MODEL(ClosedFormLIF);

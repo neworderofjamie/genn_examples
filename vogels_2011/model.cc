@@ -43,7 +43,7 @@ public:
         {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
         {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
 
-    SET_INIT_VALS({{"V", "scalar"}, {"RefracTime", "scalar"}});
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 };
 
 IMPLEMENT_MODEL(ClosedFormLIF);
@@ -83,7 +83,7 @@ public:
         "Wmax",     // 4 - Maximum weight
     });
 
-    SET_INIT_VALS({{"g", "scalar"}});
+    SET_VARS({{"g", "scalar"}});
 
     SET_SIM_CODE(
         "$(addtoinSyn) = $(g);\n"
@@ -139,12 +139,12 @@ void modelDefinition(NNmodel &model)
 
   // LIF initial conditions
   // **TODO** uniform random
-  ClosedFormLIF::InitValues lifInit(
+  ClosedFormLIF::VarValues lifInit(
       -55.0,  // 0 - V
       0.0);    // 1 - RefracTime
 
   // Static synapse parameters
-  WeightUpdateModels::StaticPulse::InitValues staticSynapseInit(
+  WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
       0.03);    // 0 - Wij (nA)
 
   // Additive STDP synapse parameters
@@ -155,7 +155,7 @@ void modelDefinition(NNmodel &model)
       -1.0,    // 3 - Wmin
       0.0);    // 4 - Wmax
 
-  Vogels2011::InitValues vogels2011AdditiveSTDPInit(
+  Vogels2011::VarValues vogels2011AdditiveSTDPInit(
       0.0);  // 0 - g
 
   // Exponential current parameters
@@ -199,7 +199,7 @@ void modelDefinition(NNmodel &model)
 
   // Use zero-copy for spikes and weights as we want to record them every timestep
   model.setNeuronSpikeZeroCopy("E");
-  model.setSynapseWeightUpdateInitValZeroCopy("IE", "g");
+  model.setSynapseWeightUpdateVarZeroCopy("IE", "g");
 
   model.finalize();
 }
