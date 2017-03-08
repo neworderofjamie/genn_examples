@@ -57,7 +57,7 @@ int main()
   auto  allocStart = chrono::steady_clock::now();
   allocateMem();
   auto  allocEnd = chrono::steady_clock::now();
-  printf("Allocation %llums\n", chrono::duration_cast<chrono::milliseconds>(allocEnd - allocStart).count());
+  printf("Allocation %ldms\n", chrono::duration_cast<chrono::milliseconds>(allocEnd - allocStart).count());
 
   auto  initStart = chrono::steady_clock::now(); 
   initialize();
@@ -95,7 +95,7 @@ int main()
     VI[i] = dis(gen);
   }
   auto  initEnd = chrono::steady_clock::now();
-  printf("Init %llums\n", chrono::duration_cast<chrono::milliseconds>(initEnd - initStart).count());
+  printf("Init %ldms\n", chrono::duration_cast<chrono::milliseconds>(initEnd - initStart).count());
 
   // Open CSV output files
   FILE *spikes = fopen("spikes.csv", "w");
@@ -128,7 +128,7 @@ int main()
 
   }
   auto simEnd = chrono::steady_clock::now();
-  printf("Simulation %llums\n", chrono::duration_cast<chrono::milliseconds>(simEnd - simStart).count());
+  printf("Simulation %ldms\n", chrono::duration_cast<chrono::milliseconds>(simEnd - simStart).count());
 
   // Close files
   fclose(spikes);
