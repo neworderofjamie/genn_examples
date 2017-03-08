@@ -52,6 +52,8 @@ void build_fixed_probability_connector(unsigned int numPre, unsigned int numPost
     std::copy(tempInd.begin(), tempInd.end(), &projection.ind[0]);
 }
 
+//void build_fixed_probability_connector_dense(
+
 int main()
 {
     auto  allocStart = chrono::steady_clock::now();
@@ -65,11 +67,15 @@ int main()
     std::random_device rd;
     std::mt19937 gen(rd());
 
-    build_fixed_probability_connector(NUM_PRE_NEURONS, NUM_POST_NEURONS, 0.1f,
+#ifdef SPARSE_MATRIX
+    build_fixed_probability_connector(NUM_PRE_NEURONS, NUM_POST_NEURONS, 0.5f,
                                       CSyn, &allocateSyn, gen);
 
     // Copy conductances
-    std::fill(&gSyn[0], &gSyn[CSyn.connN], 0.0);
+    std::fill(&gSyn[0], &gSyn[CSyn.connN], 0.0f);
+#else
+    std::fill(&gSyn[0], &gSyn[NUM_PRE_NEURONS * NUM_POST_NEURONS], 0.0f);
+#endif
 
     // Convert input rate into a RNG threshold and fill
     float inputRate = 10E-3f;

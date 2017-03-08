@@ -3,8 +3,9 @@
 
 #include "modelSpec.h"
 
-#define NUM_PRE_NEURONS 80000
-#define NUM_POST_NEURONS 32
+#define NUM_PRE_NEURONS 5000
+#define NUM_POST_NEURONS 10000
+//#define SPARSE_MATRIX
 
 //----------------------------------------------------------------------------
 // ClosedFormLIF
@@ -46,7 +47,7 @@ public:
         {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
         {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
 
-    SET_INIT_VALS({{"V", "scalar"}, {"RefracTime", "scalar"}});
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 };
 
 IMPLEMENT_MODEL(ClosedFormLIF);
@@ -92,7 +93,7 @@ void modelDefinition(NNmodel &model)
 
     // LIF initial conditions
     // **TODO** uniform random
-    ClosedFormLIF::InitValues lifInit(
+    ClosedFormLIF::VarValues lifInit(
         -55.0,  // 0 - V
         0.0);    // 1 - RefracTime
 
@@ -102,30 +103,37 @@ void modelDefinition(NNmodel &model)
         20.0,       // 2 - Vspike
         -60.0);       // 3 - Vrest
 
-    NeuronModels::Poisson::InitValues poissonInit(
+    NeuronModels::Poisson::VarValues poissonInit(
         -60.0,        // 0 - V
         0,           // 1 - seed
         -10.0);     // 2 - SpikeTime
 
-  // Static synapse parameters
-  WeightUpdateModels::StaticPulse::InitValues staticSynapseInit(
-      0.00);    // 0 - Wij (nA)
+    // Static synapse parameters
+    WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
+        0.00);    // 0 - Wij (nA)
 
-  // Exponential current parameters
-  ExpCurr::ParamValues expCurrParams(
-      5.0);  // 0 - TauSyn (ms)
+    // Exponential current parameters
+    ExpCurr::ParamValues expCurrParams(
+        5.0);  // 0 - TauSyn (ms)
 
-  // Create IF_curr neuron
-  model.addNeuronPopulation<NeuronModels::Poisson>("Stim", NUM_PRE_NEURONS,
-                            poissonParams, poissonInit);
-  model.addNeuronPopulation<ClosedFormLIF>("Neurons", NUM_POST_NEURONS,
-                            lifParams, lifInit);
+    // Create IF_curr neuron
+    model.addNeuronPopulation<NeuronModels::Poisson>("Stim", NUM_PRE_NEURONS,
+                                poissonParams, poissonInit);
+    model.addNeuronPopulation<ClosedFormLIF>("Neurons", NUM_POST_NEURONS,
+                                lifParams, lifInit);
 
-  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SPARSE, INDIVIDUALG, NO_DELAY,
+#ifdef SPARSE_MATRIX
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SPARSE, INDIVIDUALG, NO_DELAY,
                              "Stim", "Neurons",
                              {}, staticSynapseInit,
                              expCurrParams, {});
+  model.setSpanTypeToPre("Syn");
+#else
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", DENSE, INDIVIDUALG, NO_DELAY,
+                             "Stim", "Neurons",
+                             {}, staticSynapseInit,
+                             expCurrParams, {});
+#endif
 
-  /*model.setSpanTypeToPre("EE");*/
   model.finalize();
 }
