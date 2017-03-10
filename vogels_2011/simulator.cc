@@ -75,10 +75,7 @@ int main()
                                     CEI, &allocateEI, gen);
 
   // Copy conductances
-  std::fill(&gII[0], &gII[CII.connN], -0.03);
   std::fill(&gIE[0], &gIE[CIE.connN], 0.0);
-  std::fill(&gEE[0], &gEE[CEE.connN], 0.03);
-  std::fill(&gEI[0], &gEI[CEI.connN], 0.03);
 
   // Setup reverse connection indices for STDP
   initvogels_2011();

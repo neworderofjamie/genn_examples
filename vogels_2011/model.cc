@@ -144,8 +144,11 @@ void modelDefinition(NNmodel &model)
       0.0);    // 1 - RefracTime
 
   // Static synapse parameters
-  WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
+  WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
       0.03);    // 0 - Wij (nA)
+
+  WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
+      -0.03);    // 0 - Wij (nA)
 
   // Additive STDP synapse parameters
   Vogels2011::ParamValues vogels2011AdditiveSTDPParams(
@@ -171,17 +174,17 @@ void modelDefinition(NNmodel &model)
   model.addNeuronPopulation<ClosedFormLIF>("I", 500,
                             lifParams, lifInit);
 
-  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("EE", SPARSE, INDIVIDUALG, NO_DELAY,
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("EE", SPARSE, GLOBALG, NO_DELAY,
                              "E", "E",
-                             {}, staticSynapseInit,
+                             {}, excitatoryStaticSynapseInit,
                              excitatoryExpCurrParams, {});
-  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("EI", SPARSE, INDIVIDUALG, NO_DELAY,
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("EI", SPARSE, GLOBALG, NO_DELAY,
                              "E", "I",
-                             {}, staticSynapseInit,
+                             {}, excitatoryStaticSynapseInit,
                              excitatoryExpCurrParams, {});
-  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("II", SPARSE, INDIVIDUALG, NO_DELAY,
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("II", SPARSE, GLOBALG, NO_DELAY,
                              "I", "I",
-                             {}, staticSynapseInit,
+                             {}, inhibitoryStaticSynapseInit,
                              inhibitoryExpCurrParams, {});
   model.addSynapsePopulation<Vogels2011, ExpCurr>("IE", SPARSE, INDIVIDUALG, NO_DELAY,
                              "I", "E",
