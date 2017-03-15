@@ -85,7 +85,7 @@ public:
       "Wmax",     // 5 - Maximum weight
     });
 
-    SET_INIT_VALS({{"g", "scalar"}});
+    SET_VARS({{"g", "scalar"}});
 
     SET_SIM_CODE(
         "$(addtoinSyn) = $(g);\n"
@@ -132,11 +132,11 @@ void modelDefinition(NNmodel &model)
       2.0);  // 6 - TauRefrac
 
   // LIF initial conditions
-  ClosedFormLIF::InitValues lifInit(
+  ClosedFormLIF::VarValues lifInit(
       -70.0,  // 0 - V
       0.0);    // 1 - RefracTime
 
-  WeightUpdateModels::StaticPulse::InitValues staticSynapseInit(
+  WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
       1.0);    // 0 - Wij (nA)
 
   // Additive STDP synapse parameters
@@ -148,7 +148,7 @@ void modelDefinition(NNmodel &model)
       0.0,    // 4 - Wmin
       1.0);    // 5 - Wmax
 
-  STDPAdditive::InitValues additiveSTDPInit(
+  STDPAdditive::VarValues additiveSTDPInit(
       0.5);  // 0 - g
 
   // Exponential current parameters
@@ -162,12 +162,12 @@ void modelDefinition(NNmodel &model)
   model.addNeuronPopulation<ClosedFormLIF>("Excitatory", 14, lifParams, lifInit);
 
   model.addSynapsePopulation<STDPAdditive, PostsynapticModels::Izhikevich>(
-          "PreStimToExcitatory", SPARSE, INDIVIDUALG, NO_DELAY,
+          "PreStimToExcitatory", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
           "PreStim", "Excitatory",
           additiveSTDPParams,  additiveSTDPInit,
           {}, {});
   model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-          "PostStimToExcitatory", SPARSE, INDIVIDUALG, NO_DELAY,
+          "PostStimToExcitatory", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
           "PostStim", "Excitatory",
           {}, staticSynapseInit,
           expCurrParams, {});

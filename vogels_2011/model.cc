@@ -174,19 +174,19 @@ void modelDefinition(NNmodel &model)
   model.addNeuronPopulation<ClosedFormLIF>("I", 500,
                             lifParams, lifInit);
 
-  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("EE", SPARSE, GLOBALG, NO_DELAY,
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
                              "E", "E",
                              {}, excitatoryStaticSynapseInit,
                              excitatoryExpCurrParams, {});
-  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("EI", SPARSE, GLOBALG, NO_DELAY,
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
                              "E", "I",
                              {}, excitatoryStaticSynapseInit,
                              excitatoryExpCurrParams, {});
-  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("II", SPARSE, GLOBALG, NO_DELAY,
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
                              "I", "I",
                              {}, inhibitoryStaticSynapseInit,
                              inhibitoryExpCurrParams, {});
-  model.addSynapsePopulation<Vogels2011, ExpCurr>("IE", SPARSE, INDIVIDUALG, NO_DELAY,
+  model.addSynapsePopulation<Vogels2011, ExpCurr>("IE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
                              "I", "E",
                              vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
                              inhibitoryExpCurrParams, {});

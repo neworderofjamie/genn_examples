@@ -94,7 +94,7 @@ void modelDefinition(NNmodel &model)
   //---------------------------------------------------------------------------
   // LIF model parameters
   auto lifParamVals = ClosedFormLIF::ParamValues(1.0, 20.0, -70.0, -70.0, -51.0, 0.0, 2.0);
-  auto lifInitVals = ClosedFormLIF::InitValues(-70.0, 0.0);
+  auto lifInitVals = ClosedFormLIF::VarValues(-70.0, 0.0);
 
   // Static synapse parameters
   double staticSynapseInit[1] =

@@ -3,8 +3,8 @@
 
 #include "modelSpec.h"
 
-#define NUM_PRE_NEURONS 5000
-#define NUM_POST_NEURONS 10000
+#define NUM_PRE_NEURONS 10000
+#define NUM_POST_NEURONS 20000
 //#define SPARSE_MATRIX
 
 //----------------------------------------------------------------------------
@@ -123,13 +123,13 @@ void modelDefinition(NNmodel &model)
                                 lifParams, lifInit);
 
 #ifdef SPARSE_MATRIX
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SPARSE, INDIVIDUALG, NO_DELAY,
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
                              "Stim", "Neurons",
                              {}, staticSynapseInit,
                              expCurrParams, {});
   model.setSpanTypeToPre("Syn");
 #else
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", DENSE, INDIVIDUALG, NO_DELAY,
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
                              "Stim", "Neurons",
                              {}, staticSynapseInit,
                              expCurrParams, {});
