@@ -3,7 +3,6 @@
 #include <numeric>
 #include <random>
 
-#include "model.cc"
 #include "vogels_2011_CODE/definitions.h"
 
 typedef void (*allocateFn)(unsigned int);
