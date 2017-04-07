@@ -51,7 +51,7 @@ IMPLEMENT_MODEL(ClosedFormLIF);
 //----------------------------------------------------------------------------
 // ExpCurr
 //----------------------------------------------------------------------------
-class ExpCurr : PostsynapticModels::Base
+class ExpCurr : public PostsynapticModels::Base
 {
 public:
     DECLARE_MODEL(ExpCurr, 1, 0);
@@ -74,48 +74,24 @@ void modelDefinition(NNmodel &model)
   model.setName("if_curr");
 
   //---------------------------------------------------------------------------
-  // Create exponential current postsynaptic mechanism
-  //---------------------------------------------------------------------------
-  const unsigned int MY_EXP_CURR = postSynModels.size();
-  postSynModels.push_back(postSynModel());
-
-  postSynModels.back().pNames.reserve(1);
-  postSynModels.back().pNames = {"tau"};
-
-  postSynModels.back().dpNames.reserve(1);
-  postSynModels.back().dpNames = {"expDecay"};
-  postSynModels.back().dps = new expDecayDp;
-
-  postSynModels.back().postSynDecay= "$(inSyn)*=$(expDecay);\n";
-  postSynModels.back().postSyntoCurrent= "$(inSyn)";
-
-  //---------------------------------------------------------------------------
   // Build model
   //---------------------------------------------------------------------------
   // LIF model parameters
-  auto lifParamVals = ClosedFormLIF::ParamValues(1.0, 20.0, -70.0, -70.0, -51.0, 0.0, 2.0);
-  auto lifInitVals = ClosedFormLIF::VarValues(-70.0, 0.0);
+  ClosedFormLIF::ParamValues lifParamVals(1.0, 20.0, -70.0, -70.0, -51.0, 0.0, 2.0);
+  ClosedFormLIF::VarValues lifInitVals(-70.0, 0.0);
 
-  // Static synapse parameters
-  double staticSynapseInit[1] =
-  {
-    1.0,    // 0 - Wij (nA)
-  };
-
-  // Exponential current parameters
-  double expCurrParams[1] =
-  {
-    5.0,  // 0 - TauSyn (ms)
-  };
-
+  ExpCurr::ParamValues expCurrParams(5.0);
+  
+  WeightUpdateModels::StaticPulse::VarValues staticSynapseInitVals(1.0);
+  
   // Create IF_curr neuron
   model.addNeuronPopulation<NeuronModels::SpikeSource>("Stim", 1, {}, {});
   model.addNeuronPopulation<ClosedFormLIF>("Excitatory", 1, lifParamVals, lifInitVals);
 
-  model.addSynapsePopulation("StimToExcitatory", NSYNAPSE, ALLTOALL, INDIVIDUALG, NO_DELAY, MY_EXP_CURR,
-                             "Stim", "Excitatory",
-                             staticSynapseInit, NULL,
-                             NULL, expCurrParams);
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("StimToExcitatory", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY, 
+                                                                       "Stim", "Excitatory",
+                                                                       {}, staticSynapseInitVals,
+                                                                       expCurrParams, {});
 
   model.finalize();
 }

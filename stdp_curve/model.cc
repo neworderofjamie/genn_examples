@@ -161,7 +161,7 @@ void modelDefinition(NNmodel &model)
   model.addNeuronPopulation<NeuronModels::SpikeSource>("PostStim", 14, {}, {});
   model.addNeuronPopulation<ClosedFormLIF>("Excitatory", 14, lifParams, lifInit);
 
-  model.addSynapsePopulation<STDPAdditive, PostsynapticModels::Izhikevich>(
+  model.addSynapsePopulation<STDPAdditive, PostsynapticModels::DeltaCurr>(
           "PreStimToExcitatory", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
           "PreStim", "Excitatory",
           additiveSTDPParams,  additiveSTDPInit,
