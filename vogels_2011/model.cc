@@ -3,118 +3,9 @@
 
 #include "modelSpec.h"
 
-//----------------------------------------------------------------------------
-// ClosedFormLIF
-//----------------------------------------------------------------------------
-class ClosedFormLIF : public NeuronModels::Base
-{
-public:
-    DECLARE_MODEL(ClosedFormLIF, 7, 2);
-
-    SET_SIM_CODE(
-        "if ($(RefracTime) <= 0.0)\n"
-        "{\n"
-        "  if ($(V) >= $(Vthresh))\n"
-        "  {\n"
-        "    $(V) = $(Vreset);\n"
-        "    $(RefracTime) = $(TauRefrac);\n"
-        "  }\n"
-        "  scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);\n"
-        "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
-        "}\n"
-        "else\n"
-        "{\n"
-        "  $(RefracTime) -= DT;\n"
-        "}\n"
-    );
-
-    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
-
-    SET_PARAM_NAMES({
-        "C",          // Membrane capacitance
-        "TauM",       // Membrane time constant [ms]
-        "Vrest",      // Resting membrane potential [mV]
-        "Vreset",     // Reset voltage [mV]
-        "Vthresh",    // Spiking threshold [mV]
-        "Ioffset",    // Offset current
-        "TauRefrac"});
-
-    SET_DERIVED_PARAMS({
-        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
-
-    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}});
-};
-
-IMPLEMENT_MODEL(ClosedFormLIF);
-
-//----------------------------------------------------------------------------
-// ExpCurr
-//----------------------------------------------------------------------------
-class ExpCurr : public PostsynapticModels::Base
-{
-public:
-    DECLARE_MODEL(ExpCurr, 1, 0);
-
-    SET_DECAY_CODE("$(inSyn)*=$(expDecay);");
-
-    SET_CURRENT_CONVERTER_CODE("$(inSyn)");
-
-    SET_PARAM_NAMES({"tau"});
-
-    SET_DERIVED_PARAMS({{"expDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }}});
-};
-
-IMPLEMENT_MODEL(ExpCurr);
-
-//----------------------------------------------------------------------------
-// Vogels2011
-//----------------------------------------------------------------------------
-class Vogels2011 : public WeightUpdateModels::Base
-{
-public:
-    DECLARE_MODEL(Vogels2011, 5, 1);
-
-    SET_PARAM_NAMES({
-        "tau",      // 0 - Plasticity time constant (ms)
-        "rho",      // 1 - Target rate
-        "eta",      // 2 - Learning rate
-        "Wmin",     // 3 - Minimum weight
-        "Wmax",     // 4 - Maximum weight
-    });
-
-    SET_VARS({{"g", "scalar"}});
-
-    SET_SIM_CODE(
-        "$(addtoinSyn) = $(g);\n"
-        "$(updatelinsyn);\n"
-        "scalar dt = $(t) - $(sT_post); \n"
-        "scalar timing = exp(-dt / $(tau)) - $(rho);\n"
-        "scalar newWeight = $(g) - ($(eta) * timing);\n"
-        "if(newWeight < $(Wmin))\n"
-        "{\n"
-        "  $(g) = $(Wmin);\n"
-        "}\n"
-        "else if(newWeight > $(Wmax))\n"
-        "{\n"
-        "  $(g) = $(Wmax);\n"
-        "}\n"
-        "else\n"
-        "{\n"
-        "  $(g) = newWeight;\n"
-        "}\n");
-
-    SET_LEARN_POST_CODE(
-        "scalar dt = $(t) - $(sT_pre);\n"
-        "scalar timing = exp(-dt / $(tau));\n"
-        "scalar newWeight = $(g) - ($(eta) * timing);\n"
-        "$(g) = (newWeight < $(Wmin)) ? $(Wmin) : newWeight;\n");
-
-    SET_NEEDS_PRE_SPIKE_TIME(true);
-    SET_NEEDS_POST_SPIKE_TIME(true);
-};
-
-IMPLEMENT_MODEL(Vogels2011);
+#include "../common/exp_curr.h"
+#include "../common/lif.h"
+#include "../common/vogels_2011.h"
 
 
 void modelDefinition(NNmodel &model)
@@ -128,7 +19,7 @@ void modelDefinition(NNmodel &model)
     // Build model
     //---------------------------------------------------------------------------
     // LIF model parameters
-    ClosedFormLIF::ParamValues lifParams(
+    LIF::ParamValues lifParams(
         0.2,    // 0 - C
         20.0,   // 1 - TauM
         -60.0,  // 2 - Vrest
@@ -138,8 +29,7 @@ void modelDefinition(NNmodel &model)
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
-    // **TODO** uniform random
-    ClosedFormLIF::VarValues lifInit(
+    LIF::VarValues lifInit(
         -55.0,  // 0 - V
         0.0);    // 1 - RefracTime
 
@@ -169,10 +59,8 @@ void modelDefinition(NNmodel &model)
         10.0);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
-    auto *e = model.addNeuronPopulation<ClosedFormLIF>("E", 2000,
-                                                       lifParams, lifInit);
-    model.addNeuronPopulation<ClosedFormLIF>("I", 500,
-                                             lifParams, lifInit);
+    auto *e = model.addNeuronPopulation<LIF>("E", 2000, lifParams, lifInit);
+    model.addNeuronPopulation<LIF>("I", 500, lifParams, lifInit);
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
