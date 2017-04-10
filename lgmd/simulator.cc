@@ -1,6 +1,11 @@
 #include "lgmd_CODE/definitions.h"
 
 #include <fstream>
+#include <limits>
+#include <sstream>
+#include <vector>
+
+#include <cstdlib>
 
 #include "parameters.h"
 
@@ -50,7 +55,6 @@ void build_one_to_one_connection(unsigned int pop_size,
     }
 
     projection.indInG[pop_size] = pop_size;
-
 }
 
 void build_centre_to_one_connection(unsigned int pre_size, unsigned int centre_size,
@@ -160,14 +164,55 @@ void build_i_s_connections(unsigned int pop_size, unsigned int centre_size,
 
 
 }
-/*void read_p_input(std::ifstream &stream)
+
+unsigned read_p_input(unsigned int output_resolution, unsigned int original_resolution,
+                      std::ifstream &stream, std::vector<unsigned int> &indices)
 {
+    // Calculate resolution scale
+    const double scale = (double)original_resolution / (double)output_resolution;
+
+    // Read lines into string
+    std::string line;
+    std::getline(stream, line);
+
+    if(line.empty()) {
+        return std::numeric_limits<unsigned int>::max();
+    }
+
+    // Create string stream from line
+    std::stringstream lineStream(line);
+
     // Read time from start of line
-    std::string time;
-    std::getline(stream, time, ';');
+    std::string nextTimeString;
+    std::getline(lineStream, nextTimeString, ';');
+    unsigned int nextTime = (unsigned int)std::stoul(nextTimeString);
+    //std::cout << "Next time:" << nextTime << " - ";
 
+    // Clear existing times
+    indices.clear();
 
-}*/
+    while(lineStream.good()) {
+        // Read input spike index
+        std::string inputIndexString;
+        std::getline(lineStream, inputIndexString, ',');
+        const int input_index = std::stoi(inputIndexString);
+
+        // Convert this into x and y
+        const div_t input_coord = std::div(input_index, original_resolution);
+
+        //std::cout << input_index << "(" << input_coord.quot << "," << input_coord.rem << "),";
+
+        // Scale into output resolution
+        const unsigned int output_x = (unsigned int)std::round((double)input_coord.quot / scale);
+        const unsigned int output_y = (unsigned int)std::round((double)input_coord.rem / scale);
+
+        // Add to indices
+        indices.push_back((output_x * output_resolution) + output_y);
+    }
+
+    //std::cout << std::endl;
+    return nextTime;
+}
 }
 
 int main(int argc, char *argv[])
@@ -190,38 +235,36 @@ int main(int argc, char *argv[])
 
     initlgmd();
 
-
-    // Open CSV output files
-    FILE *spikes = fopen("spikes.csv", "w");
-    fprintf(spikes, "Time(ms), Neuron ID\n");
+    std::vector<unsigned int> inputIndices;
+    unsigned int nextInputTime = read_p_input(Parameters::input_size, 128, spikeInput, inputIndices);
 
     // Loop through timesteps
     for(unsigned int t = 0; t < 10000; t++)
     {
+        // If we should supply input this timestep
+        if(nextInputTime == t) {
+            // Copy into spike source
+            glbSpkCntP[0] = inputIndices.size();
+            std::copy(inputIndices.cbegin(), inputIndices.cend(), &glbSpkP[0]);
+
+            // Read NEXT input
+            nextInputTime = read_p_input(Parameters::input_size, 128, spikeInput, inputIndices);
+        }
+
         // Simulate
 #ifndef CPU_ONLY
         stepTimeGPU();
 
-        //pullECurrentSpikesFromDevice();
-        //pullIEStateFromDevice();
+        pullLGMDSpikesFromDevice();
 #else
         stepTimeCPU();
 #endif
 
-        // Write spike times to file
-        /*for(unsigned int i = 0; i < glbSpkCntE[0]; i++)
-        {
-        fprintf(spikes, "%f, %u\n", 1.0 * (double)t, glbSpkE[i]);
+        if(glbSpkCntLGMD[0] > 0) {
+            std::cout << "LGMD SPIKE!" << std::endl;
         }
-
-        // Calculate mean IE weights
-        float totalWeight = std::accumulate(&gIE[0], &gIE[CIE.connN], 0.0f);
-        fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)CIE.connN);*/
-
     }
 
-    // Close files
-    fclose(spikes);
 
   return 0;
 }
