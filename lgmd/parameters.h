@@ -10,7 +10,7 @@ namespace Parameters
     const unsigned int input_size = 32;
     const unsigned int centre_size = 20;
 
-    const double convergent_strength = 0.04 * ((16.0 * 16.0) / ((double)centre_size * (double)centre_size));
+    const double convergent_scale =  ((16.0 * 16.0) / ((double)centre_size * (double)centre_size));
 
     const double persistance_e = 0.1;
     const double persistance_i = 0.8;
@@ -18,8 +18,8 @@ namespace Parameters
     const double persistance_f = 0.1;
     const double persistance_lgmd = 0.4;
 
-    const double i_s_magic_weight_scale = 1.0;
-    const double i_s_weight_scale = 0.2 * 2.0 * 0.04 * i_s_magic_weight_scale;
+    // **THINK** where do 2.0 and 0.04 come from
+    const double i_s_weight_scale = 0.2 * 2.0 * 0.04;
 
     const unsigned int i_s_delay_1 = 3;
     const double i_s_weight_1 = -0.4 * i_s_weight_scale;

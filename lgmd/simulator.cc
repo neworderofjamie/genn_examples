@@ -1,16 +1,22 @@
 #include "lgmd_CODE/definitions.h"
 
+// Standard C++ includes
 #include <fstream>
 #include <limits>
 #include <set>
 #include <sstream>
 #include <vector>
 
+// Standard C includes
 #include <cassert>
 #include <cstdlib>
 
+// LGMD includes
 #include "parameters.h"
 
+//----------------------------------------------------------------------------
+// Anonymous namespace
+//----------------------------------------------------------------------------
 namespace
 {
 typedef void (*allocateFn)(unsigned int);
@@ -100,6 +106,8 @@ void build_i_s_connections(unsigned int resolution, unsigned int centre_size,
                            SparseProjection &projection2, allocateFn allocate2,
                            SparseProjection &projection4, allocateFn allocate4)
 {
+    const unsigned int pop_size = resolution * resolution;
+    
     // Allocate sparse projections
     allocate1(centre_size * centre_size * 4);
     allocate2(centre_size * centre_size * 4);
@@ -109,51 +117,66 @@ void build_i_s_connections(unsigned int resolution, unsigned int centre_size,
     const unsigned int border_size = (resolution - centre_size) / 2;
     const unsigned int far_border = resolution - border_size;
 
-    // Loop through rows of pixels in centre
-    unsigned int s = 0;
-    unsigned int i = 0;
-    for(unsigned int yi = 0; yi < resolution; yi++)
+    // Create temporary vectors to hold rows
+    std::vector<std::vector<unsigned int>> projection1Map(pop_size);
+    std::vector<std::vector<unsigned int>> projection2Map(pop_size);
+    std::vector<std::vector<unsigned int>> projection4Map(pop_size);
+
+    // Loop through POSTsynaptic neurons
+    for(unsigned int xj =  border_size; xj < far_border; xj++)
     {
-        // Loop through neuron indices in remainder of row
-        for(unsigned int xi = 0; xi < resolution; xi++)
+        for(unsigned int yj = border_size; yj < far_border; yj++)
         {
-            projection1.indInG[i] = s;
-            projection2.indInG[i] = s;
-            projection4.indInG[i] = s;
-            i++;
+            const unsigned int j = get_neuron_index(resolution, xj, yj);
 
-            // If we're in the centre
-            if(xi >= border_size && xi < far_border && yi >= border_size && yi < far_border) {
-                // Add ad
-                projection1.ind[s] = get_neuron_index(resolution, xi - 1, yi);
-                projection1.ind[s + 1] = get_neuron_index(resolution, xi, yi - 1);
-                projection1.ind[s + 2] = get_neuron_index(resolution, xi + 1, yi);
-                projection1.ind[s + 3] = get_neuron_index(resolution, xi, yi + 1);
+            // Add adjacent neighbours to projection 1
+            projection1Map[get_neuron_index(resolution, xj - 1, yj)].push_back(j);
+            projection1Map[get_neuron_index(resolution, xj, yj - 1)].push_back(j);
+            projection1Map[get_neuron_index(resolution, xj + 1, yj)].push_back(j);
+            projection1Map[get_neuron_index(resolution, xj, yj + 1)].push_back(j);
 
-                projection2.ind[s] = get_neuron_index(resolution, xi - 1, yi - 1);
-                projection2.ind[s + 1] = get_neuron_index(resolution, xi + 1, yi - 1);
-                projection2.ind[s + 2] = get_neuron_index(resolution, xi + 1, yi + 1);
-                projection2.ind[s + 3] = get_neuron_index(resolution, xi - 1, yi + 1);
+            // Add diagonal neighbours to projection 2
+            projection2Map[get_neuron_index(resolution, xj - 1, yj - 1)].push_back(j);
+            projection2Map[get_neuron_index(resolution, xj + 1, yj - 1)].push_back(j);
+            projection2Map[get_neuron_index(resolution, xj + 1, yj + 1)].push_back(j);
+            projection2Map[get_neuron_index(resolution, xj - 1, yj + 1)].push_back(j);
 
-                projection4.ind[s] = get_neuron_index(resolution, xi - 2, yi);
-                projection4.ind[s + 1] = get_neuron_index(resolution, xi, yi - 2);
-                projection4.ind[s + 2] = get_neuron_index(resolution, xi + 2, yi);
-                projection4.ind[s + 3] = get_neuron_index(resolution, xi, yi + 2);
-
-                // Update s
-                s += 4;
-            }
+            // Add one away neighbours to projection 4
+            projection4Map[get_neuron_index(resolution, xj - 2, yj)].push_back(j);
+            projection4Map[get_neuron_index(resolution, xj, yj - 2)].push_back(j);
+            projection4Map[get_neuron_index(resolution, xj + 2, yj)].push_back(j);
+            projection4Map[get_neuron_index(resolution, xj, yj + 2)].push_back(j);
         }
     }
 
+    // Convert vector of vectors to GeNN format
+    unsigned int s1 = 0;
+    unsigned int s2 = 0;
+    unsigned int s4 = 0;
+    for(unsigned int i = 0; i < pop_size; i++)
+    {
+        projection1.indInG[i] = s1;
+        projection2.indInG[i] = s2;
+        projection4.indInG[i] = s4;
+
+        std::copy(projection1Map[i].cbegin(), projection1Map[i].cend(), &projection1.ind[s1]);
+        std::copy(projection2Map[i].cbegin(), projection2Map[i].cend(), &projection2.ind[s2]);
+        std::copy(projection4Map[i].cbegin(), projection4Map[i].cend(), &projection4.ind[s4]);
+
+        s1 += projection1Map[i].size();
+        s2 += projection2Map[i].size();
+        s4 += projection4Map[i].size();
+    }
+
     // Add ending entries to data structure
-    projection1.indInG[i] = s;
-    projection2.indInG[i] = s;
-    projection4.indInG[i] = s;
+    projection1.indInG[pop_size] = s1;
+    projection2.indInG[pop_size] = s2;
+    projection4.indInG[pop_size] = s4;
 
     // Check
-    assert(s == (centre_size * centre_size * 4));
-    assert(i == (resolution * resolution));
+    assert(s1 == (centre_size * centre_size * 4));
+    assert(s2 == (centre_size * centre_size * 4));
+    assert(s4 == (centre_size * centre_size * 4));
 }
 
 unsigned read_p_input(unsigned int output_resolution, unsigned int original_resolution,
@@ -225,8 +248,13 @@ int main(int argc, char *argv[])
 
     initlgmd();
 
+    // Read first line of input
     std::vector<unsigned int> inputIndices;
     unsigned int nextInputTime = read_p_input(Parameters::input_size, 128, spikeInput, inputIndices);
+
+    // Open spike output file
+    std::ofstream s_spikes("s_spikes.csv");
+    s_spikes << "Time [ms], Neuron ID [ms]" << std::endl;
 
     // Loop through timesteps
     for(unsigned int t = 0; t < 10000; t++)
@@ -251,9 +279,15 @@ int main(int argc, char *argv[])
         stepTimeGPU();
 
         pullLGMDCurrentSpikesFromDevice();
+        pullSCurrentSpikesFromDevice();
 #else
         stepTimeCPU();
 #endif
+
+        for(unsigned int i = 0; i < spikeCount_S; i++) {
+            s_spikes << t << "," << spike_S[i] << std::endl;
+        }
+
 
         if(spikeCount_LGMD > 0) {
             std::cout << "LGMD SPIKE!" << std::endl;

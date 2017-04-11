@@ -26,7 +26,7 @@ void modelDefinition(NNmodel &model)
     model.setDT(Parameters::timestep);
     model.setName("lgmd");
 
-    std::cout << "Convergent strength:" << Parameters::convergent_strength << std::endl;
+    std::cout << "Convergent scale:" << Parameters::convergent_scale << std::endl;
 
     // Convert persistences to taus
     const double scale = 10.0;
@@ -68,11 +68,13 @@ void modelDefinition(NNmodel &model)
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues p_f_lgmd_static_syn_init(
-        -Parameters::convergent_strength * 5.0 * 0.2);      // 0 - Wij (nA)
+        -Parameters::convergent_scale * 0.04 * 5.0 * 0.2);      // 0 - Wij (nA)
 
+    // **THINK** where did 4.0 come from?
     WeightUpdateModels::StaticPulse::VarValues s_lgmd_static_syn_init(
-        Parameters::convergent_strength * 2.0 * 4.0);     // 0 - Wij (nA)
+        Parameters::convergent_scale * 0.04 * 2.0 * 4.0);     // 0 - Wij (nA)
 
+    // **THINK** where did 2.0 come from
     WeightUpdateModels::StaticPulse::VarValues p_e_s_static_syn_init(
         0.6 * 2.0);     // 0 - Wij (nA)
 
@@ -89,6 +91,7 @@ void modelDefinition(NNmodel &model)
     ExpCurr::ParamValues p_f_lgmd_exp_curr_params(
         tau_f);         // 0 - TauSyn (ms)
 
+    // **THINK** this really should be delta curr
     ExpCurr::ParamValues s_lgmd_exp_curr_params(
         4.0);       // 0 - TauSyn (ms)
 
