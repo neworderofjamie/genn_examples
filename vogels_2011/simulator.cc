@@ -3,6 +3,8 @@
 #include <numeric>
 #include <random>
 
+#include "../common/spike_csv_recorder.h"
+
 #include "vogels_2011_CODE/definitions.h"
 
 typedef void (*allocateFn)(unsigned int);
@@ -95,8 +97,8 @@ int main()
   printf("Init %ldms\n", chrono::duration_cast<chrono::milliseconds>(initEnd - initStart).count());
 
   // Open CSV output files
-  FILE *spikes = fopen("spikes.csv", "w");
-  fprintf(spikes, "Time(ms), Neuron ID\n");
+  SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
+
   FILE *weights = fopen("weights.csv", "w");
   fprintf(weights, "Time(ms), Weight (nA)\n");
   auto simStart = chrono::steady_clock::now();
@@ -113,11 +115,8 @@ int main()
     stepTimeCPU();
 #endif
 
-    // Write spike times to file
-    for(unsigned int i = 0; i < glbSpkCntE[0]; i++)
-    {
-      fprintf(spikes, "%f, %u\n", 1.0 * (double)t, glbSpkE[i]);
-    }
+    spikes.record(t);
+
 
     // Calculate mean IE weights
     float totalWeight = std::accumulate(&gIE[0], &gIE[CIE.connN], 0.0f);
@@ -128,7 +127,6 @@ int main()
   printf("Simulation %ldms\n", chrono::duration_cast<chrono::milliseconds>(simEnd - simStart).count());
 
   // Close files
-  fclose(spikes);
   fclose(weights);
 
   return 0;

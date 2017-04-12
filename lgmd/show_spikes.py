@@ -24,6 +24,10 @@ def read_input_spikes(filename, num_frames):
             time = int(time_string)
             frame = time // timesteps_per_frame
             
+            if frame >= num_frames:
+                print("Warning: input overruns %u/%u frames" % (frame, num_frames))
+                continue
+                
             # Load spikes into numpy array 
             frame_input_spikes = np.asarray(keys_string.split(","), dtype=int)
             
@@ -42,32 +46,6 @@ def read_input_spikes(filename, num_frames):
             # Add this to correct frame of image
             timestep_inputs[:,:,frame] += frame_input_image
         return timestep_inputs
-
-def read_s_spikes():
-    with open("s_spikes.csv", "rb") as s_spike_file:
-        # Create CSV reader
-        s_spike_csv_reader = csv.reader(s_spike_file, delimiter = ",")
-        
-        # Skip headers
-        s_spike_csv_reader.next()
-
-        # Read data and zip into columns
-        s_spike_columns = zip(*s_spike_csv_reader)
-        
-        # Convert CSV columns to numpy
-        s_spike_times = np.asarray(s_spike_columns[0], dtype=float)
-        s_spike_neuron_id = np.asarray(s_spike_columns[1], dtype=int)
-        
-        # Scale time into frames and x and y into output resolution
-        s_spike_frames = np.floor_divide(s_spike_times, timesteps_per_frame)
-        s_spike_x = np.floor_divide(s_spike_neuron_id, output_resolution)
-        s_spike_y = np.remainder(s_spike_neuron_id, output_resolution)
-        
-        # Build 3D histogram i.e. video frames from this data
-        return np.histogramdd((s_spike_x, s_spike_y, s_spike_frames), 
-                              bins=(np.arange(output_resolution + 1), 
-                                    np.arange(output_resolution + 1),
-                                    np.arange(num_frames + 1)))[0]
 
 def read_s_voltage():
     with open("s_voltages.csv", "rb") as s_v_file:
@@ -88,7 +66,7 @@ def read_s_voltage():
         
 
 def read_lgmd_voltage():
-    with open("lgmd_voltage.csv", "rb") as lgmd_v_file:
+    with open("lgmd_voltages.csv", "rb") as lgmd_v_file:
         # Create CSV reader
         lgmd_v_csv_reader = csv.reader(lgmd_v_file, delimiter = ",")
         
@@ -99,13 +77,28 @@ def read_lgmd_voltage():
         lgmd_v_columns = zip(*lgmd_v_csv_reader)
         
          # Convert CSV columns to numpy
-        return np.asarray(lgmd_v_columns[1], dtype=float)
+        return np.asarray(lgmd_v_columns[2], dtype=float)
+
+def read_lgmd_spikes():
+    with open("lgmd_spikes.csv", "rb") as lgmd_spike_file:
+        # Create CSV reader
+        lgmd_spike_csv_reader = csv.reader(lgmd_spike_file, delimiter = ",")
+        
+        # Skip headers
+        lgmd_spike_csv_reader.next()
+
+        # Read data and zip into columns
+        lgmd_spike_columns = zip(*lgmd_spike_csv_reader)
+        
+         # Convert CSV columns to numpy
+        return np.asarray(lgmd_spike_columns[0], dtype=float)
 
 s_output = read_s_voltage()
 num_frames = int(np.ceil(float(s_output.shape[0]) / float(timesteps_per_frame)))
 
 timestep_inputs = read_input_spikes(sys.argv[1], num_frames)
 lgmd_output = read_lgmd_voltage()
+lgmd_spikes = read_lgmd_spikes()
 
 fig = plt.figure()
 
@@ -117,8 +110,11 @@ s_axis.set_title("Summing population membrane voltage")
 
 lgmd_axis = plt.subplot2grid((3, 4), (2, 0), colspan=4)
 lgmd_axis.set_title("LGMD membrane voltage")
-#lgmd_axis.set_ylim((0.0, 0.25))
+lgmd_axis.set_ylim((-10.0, 0.25))
 lgmd_axis.plot(lgmd_output, label="LGMD")
+
+# Mark spikes
+lgmd_axis.vlines(lgmd_spikes, -10.0, 0.25, color="red")
 
 print("Maximum summing %f" % np.amax(s_output))
 
@@ -135,9 +131,10 @@ border = s_axis.add_patch(
         color="white",
         linewidth=2.0))
     
+current_time = lgmd_axis.axvline(0, 0, 1, color="black")
 
 def updatefig(frame):
-    global input_image_data, input_image, s_v_image, border, timesteps_per_frame
+    global input_image_data, input_image, s_v_image, border, timesteps_per_frame, current_time
     
     # Decay image data
     input_image_data *= 0.9
@@ -152,11 +149,13 @@ def updatefig(frame):
     s_timesteps_in_frame = s_output[frame * timesteps_per_frame:(frame + 1) * timesteps_per_frame,:,:]
     s_v_image.set_array(np.average(s_timesteps_in_frame, axis = 0))
     
+    current_time.set_xdata([frame * timesteps_per_frame])
+    
     # Return list of artists which we have updated
     # **YUCK** order of these dictates sort order
     # **YUCK** score_text must be returned whether it has
     # been updated or not to prevent overdraw
-    return [input_image, s_v_image, border]
+    return [input_image, s_v_image, border, current_time]
 
 # Play animation
 ani = animation.FuncAnimation(fig, updatefig, range(timestep_inputs.shape[2]), interval=timesteps_per_frame, blit=True, repeat=True)

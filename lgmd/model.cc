@@ -11,7 +11,9 @@
 // LGMD includes
 #include "parameters.h"
 
+//------------------------------------------------------------------------
 // Anonymous namespace
+//------------------------------------------------------------------------
 namespace
 {
 double persistance_to_tc(double timestep, double persistance)
@@ -63,20 +65,19 @@ void modelDefinition(NNmodel &model)
 
     // LIF initial conditions
     LIF::VarValues lif_init(
-        0.0,        // 0 - V
+        -60.0,        // 0 - V
         0.0);       // 1 - RefracTime
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues p_f_lgmd_static_syn_init(
         -Parameters::convergent_scale * 0.04 * 5.0 * 0.2);      // 0 - Wij (nA)
 
-    // **THINK** where did 4.0 come from?
+    // **THINK** final constant is magic scale factor
     WeightUpdateModels::StaticPulse::VarValues s_lgmd_static_syn_init(
-        Parameters::convergent_scale * 0.04 * 2.0 * 4.0);     // 0 - Wij (nA)
+        Parameters::convergent_scale * 0.04 * 2.0 * 5.0);     // 0 - Wij (nA)
 
-    // **THINK** where did 2.0 come from
     WeightUpdateModels::StaticPulse::VarValues p_e_s_static_syn_init(
-        0.6 * 2.0);     // 0 - Wij (nA)
+        0.6);     // 0 - Wij (nA)
 
     WeightUpdateModels::StaticPulse::VarValues p_i_s_1_static_syn_init(
         Parameters::i_s_weight_1);     // 0 - Wij (nA)
@@ -88,12 +89,10 @@ void modelDefinition(NNmodel &model)
         Parameters::i_s_weight_4);     // 0 - Wij (nA)
 
     // Exponential current parameters
+    // **NOTE** exponential synapse shaping is used instead
+    // of layers of non-spiking linear neurons in original model
     ExpCurr::ParamValues p_f_lgmd_exp_curr_params(
         tau_f);         // 0 - TauSyn (ms)
-
-    // **THINK** this really should be delta curr
-    ExpCurr::ParamValues s_lgmd_exp_curr_params(
-        4.0);       // 0 - TauSyn (ms)
 
     ExpCurr::ParamValues p_e_s_exp_curr_params(
         tau_e);       // 0 - TauSyn (ms)
@@ -120,13 +119,13 @@ void modelDefinition(NNmodel &model)
         "P_F_LGMD", SynapseMatrixType::SPARSE_GLOBALG, 3,
         "P", "LGMD",
         {}, p_f_lgmd_static_syn_init,
-        p_f_lgmd_exp_curr_params, {});
+        p_f_lgmd_exp_curr_pa5rams, {});
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "S_LGMD", SynapseMatrixType::SPARSE_GLOBALG, 1,
         "S", "LGMD",
         {}, s_lgmd_static_syn_init,
-        s_lgmd_exp_curr_params, {});
+        {}, {});
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "P_E_S", SynapseMatrixType::SPARSE_GLOBALG, 2,

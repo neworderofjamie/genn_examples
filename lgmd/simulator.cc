@@ -11,6 +11,10 @@
 #include <cassert>
 #include <cstdlib>
 
+// Common example includes
+#include "../common/analogue_csv_recorder.h"
+#include "../common/spike_csv_recorder.h"
+
 // LGMD includes
 #include "parameters.h"
 
@@ -244,20 +248,17 @@ int main(int argc, char *argv[])
     std::vector<unsigned int> inputIndices;
     unsigned int nextInputTime = read_p_input(Parameters::input_size, 128, spikeInput, inputIndices);
 
-    // Open spike output file
-    std::ofstream s_voltages("s_voltages.csv");
-    s_voltages << "Time [ms], Neuron ID [ms], Voltage [mV]" << std::endl;
-
-    std::ofstream lgmd_voltage("lgmd_voltage.csv");
-    lgmd_voltage << "Time [ms], Voltage [mV]" << std::endl;
+    SpikeCSVRecorder lgmdSpikeRecorder("lgmd_spikes.csv", glbSpkCntLGMD, glbSpkLGMD);
+    AnalogueCSVRecorder<scalar> sVoltageRecorder("s_voltages.csv", VS, Parameters::input_size * Parameters::input_size, "Voltage [mV]");
+    AnalogueCSVRecorder<scalar> lgmdVoltageRecorder("lgmd_voltages.csv", VLGMD, 1, "Voltage [mV]");
 
     // Loop through timesteps until there is no more import
     unsigned int numS = 0;
     unsigned int numL = 0;
-    for(unsigned int t = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); t++)
+    for(unsigned int i = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); i++)
     {
         // If we should supply input this timestep
-        if(nextInputTime == t) {
+        if(nextInputTime == i) {
             // Copy into spike source
             spikeCount_P = inputIndices.size();
             std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_P[0]);
@@ -286,13 +287,9 @@ int main(int argc, char *argv[])
         numS += spikeCount_S;
         numL += spikeCount_LGMD;
 
-        // Write membrane voltage of S population
-        for(unsigned int i = 0; i < Parameters::input_size * Parameters::input_size; i++) {
-            s_voltages << t << "," << i << "," << VS[i] << std::endl;
-        }
-
-        // Write membrane voltage of LGMD
-        lgmd_voltage << t << "," << VLGMD[0] << std::endl;
+        sVoltageRecorder.record(t);
+        lgmdVoltageRecorder.record(t);
+        lgmdSpikeRecorder.record(t);
     }
 
     std::cout << numS << " S spikes, " << numL << " LGMD spikes" << std::endl;
