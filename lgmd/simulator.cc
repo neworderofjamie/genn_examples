@@ -231,6 +231,7 @@ unsigned read_p_input(unsigned int output_resolution, unsigned int original_reso
 int main(int argc, char *argv[])
 {
     std::ifstream spikeInput(argv[1]);
+    assert(spikeInput.good());
 
     allocateMem();
     initialize();
