@@ -15,11 +15,6 @@ public:
     SET_SIM_CODE(
         "if ($(RefracTime) <= 0.0)\n"
         "{\n"
-        "  if ($(V) >= $(Vthresh))\n"
-        "  {\n"
-        "    $(V) = $(Vreset);\n"
-        "    $(RefracTime) = $(TauRefrac);\n"
-        "  }\n"
         "  scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);\n"
         "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
         "}\n"
@@ -30,6 +25,10 @@ public:
     );
 
     SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
+
+    SET_RESET_CODE(
+        "$(V) = $(Vreset);\n"
+        "$(RefracTime) = $(TauRefrac);\n");
 
     SET_PARAM_NAMES({
         "C",          // Membrane capacitance
