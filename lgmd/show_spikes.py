@@ -1,7 +1,8 @@
 import csv
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 import sys
 
 original_resolution = 128
@@ -67,19 +68,33 @@ with open(sys.argv[1], "r") as input_spike_file, open("s_spikes.csv", "rb") as s
                                     np.arange(output_resolution + 1),
                                     np.arange(num_frames + 1)))[0]
 
+print("Num S spikes in centre:%u" % np.sum(s_output[6:26,6:26,:]))
+
 fig, axes = plt.subplots(1, 2)
 input_image_data = timestep_inputs[:,:,0]
 s_image_data = s_output[:,:,0]
 input_image = axes[0].imshow(input_image_data, interpolation="nearest", vmin=0.0, vmax=float(timesteps_per_frame))
 s_spike_image = axes[1].imshow(s_image_data, interpolation="nearest", vmin=0.0, vmax=float(timesteps_per_frame))
 
+axes[0].set_title("DVS input")
+axes[1].set_title("S layer output")
+
+border = axes[1].add_patch(
+    patches.Rectangle(
+        (6, 6),   # (x,y)
+        20,          # width
+        20,          # height
+        fill=False,
+        color="white",
+        linewidth=2.0))
+    
 
 def updatefig(frame):
-    global input_image_data, s_image_data, input_image, s_spike_image
+    global input_image_data, s_image_data, input_image, s_spike_image, border
     
     # Decay image data
-    input_image_data *= 0.75
-    s_image_data *= 0.75
+    input_image_data *= 0.9
+    s_image_data *= 0.9
     
     # Loop through all timesteps that occur within frame
     input_image_data += timestep_inputs[:,:,frame]
@@ -88,7 +103,12 @@ def updatefig(frame):
     # Set image data
     input_image.set_array(input_image_data)
     s_spike_image.set_array(s_image_data)
-    return [input_image, s_spike_image]
+    
+    # Return list of artists which we have updated
+    # **YUCK** order of these dictates sort order
+    # **YUCK** score_text must be returned whether it has
+    # been updated or not to prevent overdraw
+    return [input_image, s_spike_image, border]
 
 # Play animation
 ani = animation.FuncAnimation(fig, updatefig, range(timestep_inputs.shape[2]), interval=timesteps_per_frame, blit=True, repeat=False)
