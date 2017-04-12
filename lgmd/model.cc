@@ -119,7 +119,7 @@ void modelDefinition(NNmodel &model)
         "P_F_LGMD", SynapseMatrixType::SPARSE_GLOBALG, 3,
         "P", "LGMD",
         {}, p_f_lgmd_static_syn_init,
-        p_f_lgmd_exp_curr_pa5rams, {});
+        p_f_lgmd_exp_curr_params, {});
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "S_LGMD", SynapseMatrixType::SPARSE_GLOBALG, 1,
