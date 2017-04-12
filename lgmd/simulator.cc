@@ -26,15 +26,6 @@ unsigned int get_neuron_index(unsigned int resolution, unsigned int x, unsigned 
     return x + (y * resolution);
 }
 
-unsigned int get_distance_squared(unsigned int xi, unsigned int yi,
-                                  unsigned int xj, unsigned int yj)
-{
-    const unsigned int delta_x = xi - xj;
-    const unsigned int delta_y = yi - yj;
-
-    return (delta_x * delta_x) + (delta_y * delta_y);
-}
-
 void print_sparse_matrix(unsigned int pre_resolution, const SparseProjection &projection)
 {
     const unsigned int pre_size = pre_resolution * pre_resolution;
@@ -254,11 +245,16 @@ int main(int argc, char *argv[])
     unsigned int nextInputTime = read_p_input(Parameters::input_size, 128, spikeInput, inputIndices);
 
     // Open spike output file
-    std::ofstream s_spikes("s_spikes.csv");
-    s_spikes << "Time [ms], Neuron ID [ms]" << std::endl;
+    std::ofstream s_voltages("s_voltages.csv");
+    s_voltages << "Time [ms], Neuron ID [ms], Voltage [mV]" << std::endl;
 
-    // Loop through timesteps
-    for(unsigned int t = 0; t < 10000; t++)
+    std::ofstream lgmd_voltage("lgmd_voltage.csv");
+    lgmd_voltage << "Time [ms], Voltage [mV]" << std::endl;
+
+    // Loop through timesteps until there is no more import
+    unsigned int numS = 0;
+    unsigned int numL = 0;
+    for(unsigned int t = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); t++)
     {
         // If we should supply input this timestep
         if(nextInputTime == t) {
@@ -279,21 +275,27 @@ int main(int argc, char *argv[])
 #ifndef CPU_ONLY
         stepTimeGPU();
 
+        pullLGMDStateFromDevice();
         pullLGMDCurrentSpikesFromDevice();
+        pullSStateFromDevice();
         pullSCurrentSpikesFromDevice();
 #else
         stepTimeCPU();
 #endif
 
-        for(unsigned int i = 0; i < spikeCount_S; i++) {
-            s_spikes << t << "," << spike_S[i] << std::endl;
+        numS += spikeCount_S;
+        numL += spikeCount_LGMD;
+
+        // Write membrane voltage of S population
+        for(unsigned int i = 0; i < Parameters::input_size * Parameters::input_size; i++) {
+            s_voltages << t << "," << i << "," << VS[i] << std::endl;
         }
 
-
-        if(spikeCount_LGMD > 0) {
-            std::cout << "LGMD SPIKE!" << std::endl;
-        }
+        // Write membrane voltage of LGMD
+        lgmd_voltage << t << "," << VLGMD[0] << std::endl;
     }
+
+    std::cout << numS << " S spikes, " << numL << " LGMD spikes" << std::endl;
 
 
   return 0;

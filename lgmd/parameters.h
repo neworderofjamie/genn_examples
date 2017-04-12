@@ -18,7 +18,6 @@ namespace Parameters
     const double persistance_f = 0.1;
     const double persistance_lgmd = 0.4;
 
-    // **THINK** where do 2.0 and 0.04 come from
     const double i_s_weight_scale = 0.2 * 2.0 * 0.04;
 
     const unsigned int i_s_delay_1 = 3;
