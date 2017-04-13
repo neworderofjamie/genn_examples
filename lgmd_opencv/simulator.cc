@@ -14,6 +14,7 @@
 
 // Common example code
 #include "../common/opencv_dvs.h"
+#include "../common/timer.h"
 
 // LGMD includes
 #include "parameters.h"
@@ -26,6 +27,7 @@
 namespace
 {
 typedef void (*allocateFn)(unsigned int);
+typedef TimerAccumulate<std::chrono::microseconds>  ProfilingTimer;
 
 unsigned int get_neuron_index(unsigned int resolution, unsigned int x, unsigned int y)
 {
@@ -208,41 +210,80 @@ int main(int argc, char *argv[])
     initlgmd_opencv();
 
     // Loop through timesteps until there is no more import
+    double dvsUpdate = 0.0;
+    double dvsRender = 0.0;
+    double simulationStep = 0.0;
+    double download = 0.0;
+    double outputRender = 0.0;
+    double eventProcessing = 0.0;
     for(unsigned int i = 0;; i++)
     {
         // Read DVS state and put result into GeNN
-        tie(inputCurrentsP, stepP) = dvs.update(i);
+        {
+            ProfilingTimer t(dvsUpdate);
+            tie(inputCurrentsP, stepP) = dvs.update(i);
+        }
 
         // Show raw frame and difference with previous
-        dvs.showDownsampledFrame("Downsampled frame", i);
-        dvs.showFrameDifference("Frame difference");
+        {
+            ProfilingTimer t(dvsRender);
+            dvs.showDownsampledFrame("Downsampled frame", i);
+            dvs.showFrameDifference("Frame difference");
+        }
         
         // Simulate
 #ifndef CPU_ONLY
-        stepTimeGPU();
+        {
+            ProfilingTimer t(simulationStep);
+            stepTimeGPU();
+        }
 
         //pullLGMDStateFromDevice();
-        pullPStateFromDevice();
-        pullSStateFromDevice();
-        pullLGMDCurrentSpikesFromDevice();
+        {
+            ProfilingTimer t(download);
+            
+            pullPStateFromDevice();
+            pullSStateFromDevice();
+            pullLGMDCurrentSpikesFromDevice();
+        }
 #else
-        stepTimeCPU();
+        {
+            ProfilingTimer t(simulationStep);
+            stepTimeCPU();
+        }
 #endif
         
-        cv::Mat wrappedPVoltage(32, 32, CV_32FC1, VP);
-        cv::imshow("P Membrane voltage", wrappedPVoltage);
-        
-        cv::Mat wrappedSVoltage(32, 32, CV_32FC1, VS);
-        cv::imshow("S Membrane voltage", wrappedSVoltage);
-        
-        if(spikeCount_LGMD > 0) {
-            std::cout << "LGMD SPIKE" << std::endl;
+        {
+            ProfilingTimer t(outputRender);
+            
+            cv::Mat wrappedPVoltage(32, 32, CV_32FC1, VP);
+            cv::imshow("P Membrane voltage", wrappedPVoltage);
+            
+            cv::Mat wrappedSVoltage(32, 32, CV_32FC1, VS);
+            cv::imshow("S Membrane voltage", wrappedSVoltage);
+            
+            if(spikeCount_LGMD > 0) {
+                std::cout << "LGMD SPIKE" << std::endl;
+            }
         }
         
         // **YUCK** required for OpenCV GUI to do anything
-        cv::waitKey(1);
+        {
+            ProfilingTimer t(eventProcessing);
+            
+            if(cv::waitKey(1) == 27) {
+                std::cout << "DVS update:" << dvsUpdate / (double)i << std::endl;
+                std::cout << "DVS render:" << dvsRender / (double)i  << std::endl;
+                std::cout << "Simulation step:" << simulationStep / (double)i  << std::endl;
+                std::cout << "Download:" << download / (double)i  << std::endl;
+                std::cout << "Output render:" << outputRender / (double)i  << std::endl;
+                std::cout << "Event processing:" << eventProcessing / (double)i  << std::endl;
+                break;
+            }
+        }
     }
-
+    
+    
 
     return 0;
 }
