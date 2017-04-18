@@ -25,95 +25,32 @@ public:
             throw std::runtime_error("Cannot open camera");
         }
         
-        // Get frame dimensions
-        const unsigned int width = m_Camera.get(CV_CAP_PROP_FRAME_WIDTH);
-        const unsigned int height = m_Camera.get(CV_CAP_PROP_FRAME_HEIGHT);
-        std::cout << "Width:" << width << ", height:" << height << std::endl;
-        
-        const unsigned int margin = (width - height) / 2;
-        const cv::Rect cameraSquare(cv::Point(margin, 0), cv::Point(width - margin, height));
-        
-        // Initialize and zero the two downsampled image
-        m_DownsampledFrames[0].create(m_Resolution, m_Resolution, CV_32FC1);
-        m_DownsampledFrames[1].create(m_Resolution, m_Resolution, CV_32FC1);
-        m_DownsampledFrames[0].setTo(0);
-        m_DownsampledFrames[1].setTo(0);
-        
-        // Create 3rd image to hold output
-        m_FrameDifference.create(m_Resolution, m_Resolution, CV_32FC1);
-        m_FrameDifference.setTo(0);
-
-        // Read first frame from camera
+         // Read first frame from camera
         readFrame();
         
         // Create square Region of Interest within raw frame
-        m_SquareROI = m_RawFrame(cameraSquare);
+        m_SquareROI = m_RawFrame(getCameraSquare());       
     }
+    
+    //----------------------------------------------------------------------------
+    // Declared virtuals
+    //----------------------------------------------------------------------------
+    virtual std::pair<float*, unsigned int> update(unsigned int i) = 0;
+    virtual void showDownsampledFrame(const char *name, unsigned int i) = 0;
+    virtual void showFrameDifference(const char *name) = 0;
+    virtual void showGreyscaleFrame(const char *name) = 0;
     
     //----------------------------------------------------------------------------
     // Public API
     //----------------------------------------------------------------------------
-    std::pair<float*, unsigned int> update(unsigned int i)
-    {
-        // Get references to current and previous down-sampled frame
-        cv::Mat &curDownSampledFrame = m_DownsampledFrames[i % 2];
-        cv::Mat &prevDownSampledFrame = m_DownsampledFrames[(i + 1) % 2];
- 
-        // Convert square frame to greyscale and then to floating-point
-        cv::cvtColor(m_SquareROI, m_GreyscaleFrame, CV_BGR2GRAY);
-        m_GreyscaleFrame.convertTo(m_GreyscaleFrame, CV_32FC1, 1.0 / 255.0);
-        
-        // Resample greyscale camera output into current down-sampled frame
-        cv::resize(m_GreyscaleFrame, curDownSampledFrame, 
-                   cv::Size(m_Resolution, m_Resolution));
-  
-        // If this isn't first frame, calculate difference with previous frame
-        if(i > 0) {
-            m_FrameDifference = curDownSampledFrame - prevDownSampledFrame;
-        }
-    
-        // Read next frame
-        readFrame();
-        
-#ifndef CPU_ONLY
-        // Upload frame difference to GPU
-        m_FrameDifferenceGPU.upload(m_FrameDifference);
-        
-        // Get low-level structure containing device pointer and stride and return
-        auto frameDifferencePtrStep = (cv::gpu::PtrStep<float>)m_FrameDifferenceGPU;
-        return std::make_pair(frameDifferencePtrStep.data,
-                              frameDifferencePtrStep.step / sizeof(float));
-#else
-        // Return frame difference data directly
-        return std::make_pair(reinterpret_cast<float*>(m_FrameDifference.data),
-                              m_Resolution);
-#endif
-    }
-    
-    void showDownsampledFrame(const char *name, unsigned int i)
-    {
-        cv::imshow(name, m_DownsampledFrames[i % 2]);
-    }
-    
-    void showFrameDifference(const char *name)
-    {
-        cv::imshow(name, m_FrameDifference);
-    }
-    
     void showRawFrame(const char *name)
     {
         cv::imshow(name, m_RawFrame);
     }
-
-    void showGreyscaleFrame(const char *name)
-    {
-        cv::imshow(name, m_GreyscaleFrame);
-    }
     
-    
-private:
+protected:
     //----------------------------------------------------------------------------
-    // Private methods
+    // Protected methods
     //----------------------------------------------------------------------------
     void readFrame()
     {
@@ -122,28 +59,215 @@ private:
         }
     }
     
+    cv::Rect getCameraSquare()
+    {
+        // Get frame dimensions
+        const unsigned int width = m_Camera.get(CV_CAP_PROP_FRAME_WIDTH);
+        const unsigned int height = m_Camera.get(CV_CAP_PROP_FRAME_HEIGHT);
+         
+        const unsigned int margin = (width - height) / 2;
+        return cv::Rect(cv::Point(margin, 0), cv::Point(width - margin, height));
+    }
+    
+    unsigned int getResolution() const
+    {
+        return m_Resolution;
+    }
+    
+    const cv::Mat &getSquareROI() const
+    {
+        return m_SquareROI;
+    }
+    
+private:
     //----------------------------------------------------------------------------
     // Members
     //----------------------------------------------------------------------------
     cv::VideoCapture m_Camera;
     
+    // Square resolution DVS operates at
     const unsigned int m_Resolution;
     
-    // Downsampled frames to calculate output from
-    cv::Mat m_DownsampledFrames[2];
-    
-    cv::Mat m_FrameDifference;
-
     // Full resolution, colour frame read directly from camera
     cv::Mat m_RawFrame;
     
     // Square region of interest within m_RawFrame used for subsequent processing
     cv::Mat m_SquareROI;
+};
+
+//----------------------------------------------------------------------------
+// OpenCVDVSCPU
+//----------------------------------------------------------------------------
+class OpenCVDVSCPU : public OpenCVDVS
+{
+public:
+    OpenCVDVSCPU(unsigned int device, unsigned int resolution)
+        : OpenCVDVS(device, resolution)
+    {
+        // Initialize and zero the two downsampled image
+        m_DownsampledFrames[0].create(getResolution(), getResolution(), CV_32FC1);
+        m_DownsampledFrames[1].create(getResolution(), getResolution(), CV_32FC1);
+        m_DownsampledFrames[0].setTo(0);
+        m_DownsampledFrames[1].setTo(0);
+        
+        // Create 3rd image to hold output
+        m_FrameDifference.create(getResolution(), getResolution(), CV_32FC1);
+        m_FrameDifference.setTo(0);
+    }
     
-    // Intermediate full-resolution, greyscale frame 
+    //----------------------------------------------------------------------------
+    // OpenCVDVS virtuals
+    //----------------------------------------------------------------------------
+    virtual std::pair<float*, unsigned int> update(unsigned int i) override
+    {
+        // Get references to current and previous down-sampled frame
+        auto &curDownSampledFrame = m_DownsampledFrames[i % 2];
+        auto &prevDownSampledFrame = m_DownsampledFrames[(i + 1) % 2];
+        
+        // Convert square frame to floating-point using CPU
+        cv::cvtColor(getSquareROI(), m_GreyscaleFrame, CV_BGR2GRAY);
+        
+        // Convert greyscale frame to floating point
+        m_GreyscaleFrame.convertTo(m_GreyscaleFrame, CV_32FC1, 1.0 / 255.0);
+
+        // Resample greyscale camera output into current down-sampled frame
+        cv::resize(m_GreyscaleFrame, curDownSampledFrame, 
+                   cv::Size(getResolution(), getResolution()));
+        
+        // If this isn't first frame, calculate difference with previous frame
+        if(i > 0) {
+            m_FrameDifference = curDownSampledFrame - prevDownSampledFrame;
+        }
+    
+        // Read next frame
+        readFrame();
+
+        // Return frame difference data directly
+        return std::make_pair(reinterpret_cast<float*>(m_FrameDifference.data),
+                              getResolution());
+    }
+    
+    virtual void showDownsampledFrame(const char *name, unsigned int i) override
+    {
+        cv::imshow(name, m_DownsampledFrames[i % 2]);
+    }
+    
+    virtual void showFrameDifference(const char *name) override
+    {
+        cv::imshow(name, m_FrameDifference);
+    }
+
+    virtual void showGreyscaleFrame(const char *name) override
+    {
+        cv::imshow(name, m_GreyscaleFrame);
+    }
+    
+private:
+    //----------------------------------------------------------------------------
+    // Members
+    //----------------------------------------------------------------------------
     cv::Mat m_GreyscaleFrame;
     
-#ifndef CPU_ONLY
-    cv::gpu::GpuMat m_FrameDifferenceGPU;
-#endif  // CPU_ONLY
+    cv::Mat m_DownsampledFrames[2];
+    cv::Mat m_FrameDifference;
 };
+
+//----------------------------------------------------------------------------
+// OpenCVDVSGPU
+//----------------------------------------------------------------------------
+#ifndef CPU_ONLY
+class OpenCVDVSGPU : public OpenCVDVS
+{
+public:
+    OpenCVDVSGPU(unsigned int device, unsigned int resolution)
+        : OpenCVDVS(device, resolution)
+    {
+        // Create GPU matrix to upload squared camera input into
+        auto cameraSquare = getCameraSquare();
+        m_SquareROIGPU.create(cameraSquare.width, cameraSquare.height, CV_8UC3);
+        
+        // Initialize and zero the two downsampled image
+        m_DownsampledFrames[0].create(getResolution(), getResolution(), CV_32FC1);
+        m_DownsampledFrames[1].create(getResolution(), getResolution(), CV_32FC1);
+        m_DownsampledFrames[0].setTo(0);
+        m_DownsampledFrames[1].setTo(0);
+        
+        // Create 3rd image to hold output
+        m_FrameDifference.create(getResolution(), getResolution(), CV_32FC1);
+        m_FrameDifference.setTo(0);
+    }
+    
+    //----------------------------------------------------------------------------
+    // OpenCVDVS virtuals
+    //----------------------------------------------------------------------------
+    virtual std::pair<float*, unsigned int> update(unsigned int i) override
+    {
+        // Get references to current and previous down-sampled frame
+        auto &curDownSampledFrame = m_DownsampledFrames[i % 2];
+        auto &prevDownSampledFrame = m_DownsampledFrames[(i + 1) % 2];
+    
+        // Upload camera data to GPU
+        m_SquareROIGPU.upload(getSquareROI());
+        
+        // Convert square frame to floating-point using GPU
+        cv::gpu::cvtColor(m_SquareROIGPU, m_GreyscaleFrame, CV_BGR2GRAY);
+        
+        // Convert greyscale frame to floating point
+        m_GreyscaleFrame.convertTo(m_GreyscaleFrame, CV_32FC1, 1.0 / 255.0);
+
+        // Resample greyscale camera output into current down-sampled frame
+        cv::gpu::resize(m_GreyscaleFrame, curDownSampledFrame, 
+                        cv::Size(getResolution(), getResolution()));
+        
+        // If this isn't first frame, calculate difference with previous frame
+        if(i > 0) {
+            cv::gpu::subtract(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
+        }
+    
+        // Read next frame
+        readFrame();
+        
+        // Get low-level structure containing device pointer and stride and return
+        auto frameDifferencePtrStep = (cv::gpu::PtrStep<float>)m_FrameDifference;
+        return std::make_pair(frameDifferencePtrStep.data,
+                              frameDifferencePtrStep.step / sizeof(float));
+    }
+    
+    virtual void showDownsampledFrame(const char *name, unsigned int i) override
+    {
+        cv::Mat downsampledFrame;
+        m_DownsampledFrames[i % 2].download(downsampledFrame);
+        
+        cv::imshow(name, downsampledFrame);
+    }
+    
+    virtual void showFrameDifference(const char *name) override
+    {
+        cv::Mat frameDifference;
+        m_FrameDifference.download(frameDifference);
+        
+        cv::imshow(name, frameDifference);
+    }
+
+    virtual void showGreyscaleFrame(const char *name) override
+    {
+        cv::Mat greyscaleFrame;
+        m_GreyscaleFrame.download(greyscaleFrame);
+        
+        cv::imshow(name, greyscaleFrame);
+    }
+    
+private:
+    //----------------------------------------------------------------------------
+    // Members
+    //----------------------------------------------------------------------------
+    // GPU matrix m_SquareROI is uploaded to 
+    cv::gpu::GpuMat m_SquareROIGPU;
+    
+    cv::gpu::GpuMat m_GreyscaleFrame;
+    
+    // Downsampled frames to calculate output from
+    cv::gpu::GpuMat m_DownsampledFrames[2];
+    cv::gpu::GpuMat m_FrameDifference;
+};
+#endif  // CPU_ONLY

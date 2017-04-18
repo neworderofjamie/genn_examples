@@ -23,7 +23,12 @@
 
 int main(int argc, char *argv[])
 {
-    OpenCVDVS dvs((argc > 1) ? std::atoi(argv[1]) : 0, 32);
+    const unsigned int device = (argc > 1) ? std::atoi(argv[1]) : 0;
+#ifndef CPU_ONLY
+    OpenCVDVSGPU dvs(device, 32);
+#else
+    OpenCVDVSCPU dvs(device, 32);
+#endif
     
     // Configure windows which will be used to show down-sampled images
     cv::namedWindow("Downsampled frame", CV_WINDOW_NORMAL);
