@@ -6,7 +6,10 @@
 // OpenCV includes
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+
+#ifndef CPU_ONLY
 #include <opencv2/gpu/gpu.hpp>
+#endif  // CPU_ONLY
 
 //----------------------------------------------------------------------------
 // OpenCVDVS
