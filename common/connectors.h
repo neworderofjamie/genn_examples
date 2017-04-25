@@ -10,14 +10,14 @@
 //----------------------------------------------------------------------------
 // Typedefines
 //----------------------------------------------------------------------------
-typedef void (*allocateFn)(unsigned int);
+typedef void (*AllocateFn)(unsigned int);
 
 //----------------------------------------------------------------------------
 // Functions
 //----------------------------------------------------------------------------
 template <typename Generator>
 void buildFixedProbabilityConnector(unsigned int numPre, unsigned int numPost, float probability,
-                                    SparseProjection &projection, allocateFn allocate, Generator &gen)
+                                    SparseProjection &projection, AllocateFn allocate, Generator &gen)
 {
   // Allocate memory for indices
   // **NOTE** RESIZE as this vector is populated by index
