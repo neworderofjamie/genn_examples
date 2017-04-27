@@ -20,8 +20,8 @@
 class OpenCVDVS
 {
 public:
-    OpenCVDVS(unsigned int device, unsigned int resolution)
-        : m_Camera(device), m_Resolution(resolution)
+    OpenCVDVS(unsigned int device, unsigned int resolution, bool absolute)
+        : m_Camera(device), m_Resolution(resolution), m_Absolute(absolute)
     {
         // Check camera has opened correctly
         if(!m_Camera.isOpened()) {
@@ -76,6 +76,11 @@ protected:
     {
         return m_Resolution;
     }
+
+    bool isAbsolute() const
+    {
+        return m_Absolute;
+    }
     
     const cv::Mat &getSquareROI() const
     {
@@ -90,6 +95,9 @@ private:
     
     // Square resolution DVS operates at
     const unsigned int m_Resolution;
+
+    // Should frame difference be absolute
+    const bool m_Absolute;
     
     // Full resolution, colour frame read directly from camera
     cv::Mat m_RawFrame;
@@ -104,8 +112,8 @@ private:
 class OpenCVDVSCPU : public OpenCVDVS
 {
 public:
-    OpenCVDVSCPU(unsigned int device, unsigned int resolution)
-        : OpenCVDVS(device, resolution)
+    OpenCVDVSCPU(unsigned int device, unsigned int resolution, bool absolute=false)
+        : OpenCVDVS(device, resolution, absolute)
     {
         // Initialize and zero the two downsampled image
         m_DownsampledFrames[0].create(getResolution(), getResolution(), CV_32FC1);
@@ -139,7 +147,12 @@ public:
         
         // If this isn't first frame, calculate difference with previous frame
         if(i > 0) {
-            m_FrameDifference = curDownSampledFrame - prevDownSampledFrame;
+            if(isAbsolute()) {
+                cv::absdiff(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
+            }
+            else {
+                cv::subtract(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
+            }
         }
     
         // Read next frame
@@ -164,6 +177,11 @@ public:
     {
         cv::imshow(name, m_GreyscaleFrame);
     }
+
+    //----------------------------------------------------------------------------
+    // Public API
+    //----------------------------------------------------------------------------
+    const cv::Mat &getFrameDifference() const{ return m_FrameDifference; }
     
 private:
     //----------------------------------------------------------------------------
@@ -182,8 +200,8 @@ private:
 class OpenCVDVSGPU : public OpenCVDVS
 {
 public:
-    OpenCVDVSGPU(unsigned int device, unsigned int resolution)
-        : OpenCVDVS(device, resolution)
+    OpenCVDVSGPU(unsigned int device, unsigned int resolution, bool absolute=false)
+        : OpenCVDVS(device, resolution, absolute)
     {
         // Create GPU matrix to upload squared camera input into
         auto cameraSquare = getCameraSquare();
@@ -224,7 +242,12 @@ public:
         
         // If this isn't first frame, calculate difference with previous frame
         if(i > 0) {
-            cv::gpu::subtract(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
+            if(isAbsolute()) {
+                cv::gpu::absdiff(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
+            }
+            else {
+                cv::gpu::subtract(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
+            }
         }
     
         // Read next frame
@@ -259,6 +282,11 @@ public:
         
         cv::imshow(name, greyscaleFrame);
     }
+
+    //----------------------------------------------------------------------------
+    // Public API
+    //----------------------------------------------------------------------------
+    const cv::gpu::GpuMat &getFrameDifference() const{ return m_FrameDifference; }
     
 private:
     //----------------------------------------------------------------------------
