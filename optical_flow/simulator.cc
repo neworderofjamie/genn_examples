@@ -7,15 +7,18 @@
 #include <random>
 #include <set>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 // Standard C includes
 #include <cassert>
+#include <csignal>
 #include <cstdlib>
 
 // Common example includes
-#include "../common/analogue_csv_recorder.h"
+#include "../common/dvs_128.h"
 #include "../common/spike_csv_recorder.h"
+#include "../common/timer.h"
 
 // Optical flow includes
 #include "parameters.h"
@@ -27,6 +30,12 @@ namespace
 {
 typedef void (*allocateFn)(unsigned int);
 
+volatile std::sig_atomic_t g_SignalStatus;
+
+void signalHandler(int status)
+{
+    g_SignalStatus = status;
+}
 
 
 unsigned int getNeuronIndex(unsigned int resolution, unsigned int x, unsigned int y)
@@ -259,9 +268,9 @@ unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indi
 
 int main(int argc, char *argv[])
 {
-    std::ifstream spikeInput(argv[1]);
-    assert(spikeInput.good());
-
+    // Create DVS 128 device
+    DVS128 dvs(DVS128::Polarity::On);
+    
     allocateMem();
     initialize();
 
@@ -276,46 +285,73 @@ int main(int argc, char *argv[])
 
     std::default_random_engine engine;
 
-    // Read first line of input
-    std::vector<unsigned int> inputIndices;
-    unsigned int nextInputTime = read_p_input(spikeInput, inputIndices);
+    // Catch interrupt (ctrl-c) signals
+    std::signal(SIGINT, signalHandler);
 
     SpikeCSVRecorder dvsPixelSpikeRecorder("dvs_pixel_spikes.csv", glbSpkCntDVS, glbSpkDVS);
     SpikeCSVRecorder macroPixelSpikeRecorder("macro_pixel_spikes.csv", glbSpkCntMacroPixel, glbSpkMacroPixel);
     SpikeCSVRecorder outputSpikeRecorder("output_spikes.csv", glbSpkCntOutput, glbSpkOutput);
 
+    // Start revieving DVS events
+    dvs.start();
+
+    double record = 0.0;
+    double dvsGet = 0.0;
+    double step = 0.0;
+
+    const auto dtDuration = std::chrono::duration<double, std::milli>{DT};
+
     // Loop through timesteps until there is no more import
-    unsigned int i;
-    for(i = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); i++)
+    unsigned int i = 0;
+    std::chrono::duration<double, std::milli> sleepTime{0};
+    std::chrono::duration<double, std::milli> overrunTime{0};
+    for(i = 0; g_SignalStatus == 0; i++)
     {
-        // If we should supply input this timestep
-        if(nextInputTime == i) {
-            // Copy into spike source
-            spikeCount_DVS = inputIndices.size();
-            std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
-
-#ifndef CPU_ONLY
-            // Copy to GPU
-            pushPCurrentSpikesToDevice();
-#endif
-
-            // Read NEXT input
-            nextInputTime = read_p_input(spikeInput, inputIndices);
+        auto tickStart = std::chrono::high_resolution_clock::now();
+    
+        {
+            TimerAccumulate<std::milli> timer(dvsGet);
+            dvs.readEvents(spikeCount_DVS, spike_DVS);
         }
 
-        dvsPixelSpikeRecorder.record(t);
+        {
+            TimerAccumulate<std::milli> timer(record);
+            dvsPixelSpikeRecorder.record(t);
+        }
 
-        // Simulate
+        {
+            TimerAccumulate<std::milli> timer(step);
+
+            // Simulate
 #ifndef CPU_ONLY
-        stepTimeGPU();
+            stepTimeGPU();
 #else
-        stepTimeCPU();
+            stepTimeCPU();
 #endif
+        }
 
-        macroPixelSpikeRecorder.record(t);
-        outputSpikeRecorder.record(t);
+        {
+            TimerAccumulate<std::milli> timer(record);
+
+            macroPixelSpikeRecorder.record(t);
+            outputSpikeRecorder.record(t);
+        }
+
+        auto tickEnd = std::chrono::high_resolution_clock::now();
+        auto tickDuration = tickEnd - tickStart;
+        if(tickDuration < dtDuration) {
+            auto tickSleep = dtDuration - tickDuration;
+            sleepTime += tickSleep;
+            std::this_thread::sleep_for(tickSleep);
+        }
+        else {
+            overrunTime += (tickDuration - dtDuration);
+        }
     }
 
-    std::cout << "Ran for " << i << " " << DT << "ms timesteps" << std::endl;
+    dvs.stop();
+
+    std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "ms, slept for " << sleepTime.count() << "ms" << std::endl;
+    std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Record:" << record << std::endl;
     return 0;
 }
