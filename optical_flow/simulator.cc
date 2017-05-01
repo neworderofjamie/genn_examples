@@ -27,6 +27,8 @@ namespace
 {
 typedef void (*allocateFn)(unsigned int);
 
+
+
 unsigned int getNeuronIndex(unsigned int resolution, unsigned int x, unsigned int y)
 {
     return x + (y * resolution);
@@ -81,6 +83,97 @@ void build_centre_to_macro_connection(SparseProjection &projection, allocateFn a
     // Check
     assert(s == (Parameters::centreSize * Parameters::centreSize));
     assert(i == (Parameters::inputSize * Parameters::inputSize));
+}
+
+void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &inhibitoryProjection,
+                    allocateFn allocateExcitatory, allocateFn allocateInhibitory)
+{
+    allocateExcitatory(Parameters::detectorSize * Parameters::detectorSize * Parameters::DetectorMax);
+    allocateInhibitory(Parameters::detectorSize * Parameters::detectorSize * Parameters::DetectorMax);
+
+    // Loop through macro cells
+    unsigned int sExcitatory = 0;
+    unsigned int iExcitatory = 0;
+    unsigned int sInhibitory = 0;
+    unsigned int iInhibitory = 0;
+    for(unsigned int yi = 0; yi < Parameters::macroPixelSize; yi++)
+    {
+        for(unsigned int xi = 0; xi < Parameters::macroPixelSize; xi++)
+        {
+            excitatoryProjection.indInG[iExcitatory++] = sExcitatory;
+            inhibitoryProjection.indInG[iInhibitory++] = sInhibitory;
+
+            // If we're not in border region
+            if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
+                && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
+            {
+                const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
+                const unsigned int yj = yi - 1;
+
+                // Add excitatory synapses
+                excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
+                                                                         xj + Parameters::DetectorLeft, yj);
+                excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
+                                                                         xj + Parameters::DetectorRight, yj);
+                excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
+                                                                         xj + Parameters::DetectorLeft, yj);
+                excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
+                                                                         xj + Parameters::DetectorRight, yj);
+            }
+
+
+            if(xi < (Parameters::macroPixelSize - 2)
+                && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
+            {
+                // Connect to 'left' detector associated with macropixel one to right
+                const unsigned int xj = (xi - 1 + 1) * Parameters::DetectorMax;
+                const unsigned int yj = yi - 1;
+                inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
+                                                                        xj + Parameters::DetectorLeft, yj);
+            }
+
+            if(xi >= 2
+                && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
+            {
+                // Connect to 'right' detector associated with macropixel one to right
+                const unsigned int xj = (xi - 1 - 1) * Parameters::DetectorMax;
+                const unsigned int yj = yi - 1;
+                inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
+                                                                        xj + Parameters::DetectorRight, yj);
+            }
+
+            if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
+                && yi < (Parameters::macroPixelSize - 2))
+            {
+                // Connect to 'up' detector associated with macropixel one below
+                const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
+                const unsigned int yj = yi - 1 + 1;
+                inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
+                                                                        xj + Parameters::DetectorUp, yj);
+            }
+
+            if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
+                && yi >= 2)
+            {
+                // Connect to 'down' detector associated with macropixel one above
+                const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
+                const unsigned int yj = yi - 1 - 1;
+                inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
+                                                                        xj + Parameters::DetectorDown, yj);
+            }
+
+        }
+    }
+
+    // Add ending entry to data structure
+    excitatoryProjection.indInG[iExcitatory] = sExcitatory;
+    inhibitoryProjection.indInG[iInhibitory] = sInhibitory;
+
+    // Check
+    assert(sExcitatory == (Parameters::detectorSize * Parameters::detectorSize * Parameters::DetectorMax));
+    assert(iExcitatory == (Parameters::macroPixelSize * Parameters::macroPixelSize));
+    assert(sInhibitory == (Parameters::detectorSize * Parameters::detectorSize * Parameters::DetectorMax));
+    assert(iInhibitory == (Parameters::macroPixelSize * Parameters::macroPixelSize));
 }
 
 template<typename Generator, typename ShuffleEngine>
@@ -167,13 +260,14 @@ unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indi
 int main(int argc, char *argv[])
 {
     std::ifstream spikeInput(argv[1]);
-    //assert(spikeInput.good());
+    assert(spikeInput.good());
 
     allocateMem();
     initialize();
 
     build_centre_to_macro_connection(CDVS_MacroPixel, &allocateDVS_MacroPixel);
-
+    buildDetectors(CMacroPixel_Output_Excitatory, CMacroPixel_Output_Inhibitory,
+                   &allocateMacroPixel_Output_Excitatory, &allocateMacroPixel_Output_Inhibitory);
     //print_sparse_matrix(Parameters::inputSize, CDVS_MacroPixel);
     initoptical_flow();
 
@@ -184,22 +278,21 @@ int main(int argc, char *argv[])
 
     // Read first line of input
     std::vector<unsigned int> inputIndices;
-    //unsigned int nextInputTime = read_p_input(spikeInput, inputIndices);
+    unsigned int nextInputTime = read_p_input(spikeInput, inputIndices);
 
     SpikeCSVRecorder dvsPixelSpikeRecorder("dvs_pixel_spikes.csv", glbSpkCntDVS, glbSpkDVS);
     SpikeCSVRecorder macroPixelSpikeRecorder("macro_pixel_spikes.csv", glbSpkCntMacroPixel, glbSpkMacroPixel);
+    SpikeCSVRecorder outputSpikeRecorder("output_spikes.csv", glbSpkCntOutput, glbSpkOutput);
 
     // Loop through timesteps until there is no more import
-    for(unsigned int i = 0; i < 100/*nextInputTime < std::numeric_limits<unsigned int>::max()*/; i++)
+    unsigned int i;
+    for(i = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); i++)
     {
-        //spikeCount_DVS = 1;
-        //spike_DVS[0] = i;
-        readCalibrateInput(gen, engine);
         // If we should supply input this timestep
-        //if(nextInputTime == i) {
+        if(nextInputTime == i) {
             // Copy into spike source
-            //spikeCount_DVS = inputIndices.size();
-            //std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
+            spikeCount_DVS = inputIndices.size();
+            std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
 
 #ifndef CPU_ONLY
             // Copy to GPU
@@ -207,8 +300,8 @@ int main(int argc, char *argv[])
 #endif
 
             // Read NEXT input
-            //nextInputTime = read_p_input(spikeInput, inputIndices);
-        //}
+            nextInputTime = read_p_input(spikeInput, inputIndices);
+        }
 
         dvsPixelSpikeRecorder.record(t);
 
@@ -220,7 +313,9 @@ int main(int argc, char *argv[])
 #endif
 
         macroPixelSpikeRecorder.record(t);
+        outputSpikeRecorder.record(t);
     }
 
+    std::cout << "Ran for " << i << " " << DT << "ms timesteps" << std::endl;
     return 0;
 }

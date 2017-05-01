@@ -6,160 +6,109 @@ import matplotlib.pyplot as plt
 import sys
 
 original_resolution = 128
-output_resolution = 32
+macro_pixel_resolution = 9
+detector_resolution = 7
 
 # How many 
 timesteps_per_frame = 33
 
-
-def read_input_spikes(filename, num_frames):
-    timestep_inputs = np.zeros((output_resolution, output_resolution, num_frames), dtype=float)
-
-    with open(filename, "r") as input_spike_file:
-        # Read input spike file
-        scale = original_resolution / output_resolution
-        for line in input_spike_file:
-            # Split lines into time and keys
-            time_string, keys_string = line.split(";")
-            time = int(time_string)
-            frame = time // timesteps_per_frame
-
-            if frame >= num_frames:
-                print("Warning: input overruns %u/%u frames" % (frame, num_frames))
-                continue
-
-            # Load spikes into numpy array
-            frame_input_spikes = np.asarray(keys_string.split(","), dtype=int)
-
-            # Split into X and Y
-            frame_input_x = np.floor_divide(frame_input_spikes, original_resolution)
-            frame_input_y = np.remainder(frame_input_spikes, original_resolution)
-
-            # Scale to output resolution
-            frame_input_x /= scale
-            frame_input_y /= scale
-
-            # Take histogram so as to assemble frame
-            frame_input_image = np.histogram2d(frame_input_x, frame_input_y,
-                                            bins=np.arange(output_resolution + 1))[0]
-
-            # Add this to correct frame of image
-            timestep_inputs[:,:,frame] += frame_input_image
-        return timestep_inputs
-
-def read_s_voltage():
-    with open("s_voltages.csv", "rb") as s_v_file:
+def read_spikes(filename, resolution, timesteps_per_frame):
+    with open(filename, "rb") as spike_file:
         # Create CSV reader
-        s_v_csv_reader = csv.reader(s_v_file, delimiter = ",")
+        spike_csv_reader = csv.reader(spike_file, delimiter = ",")
 
         # Skip headers
-        s_v_csv_reader.next()
+        spike_csv_reader.next()
 
         # Read data and zip into columns
-        s_v_columns = zip(*s_v_csv_reader)
+        spike_columns = zip(*spike_csv_reader)
 
         # Convert CSV columns to numpy
-        s_v = np.asarray(s_v_columns[2], dtype=float)
-
-        # Build 3D histogram i.e. video frames from this data
-        return  np.reshape(s_v, (-1, output_resolution, output_resolution))
-
-
-def read_lgmd_voltage():
-    with open("lgmd_voltages.csv", "rb") as lgmd_v_file:
-        # Create CSV reader
-        lgmd_v_csv_reader = csv.reader(lgmd_v_file, delimiter = ",")
-
-        # Skip headers
-        lgmd_v_csv_reader.next()
-
-        # Read data and zip into columns
-        lgmd_v_columns = zip(*lgmd_v_csv_reader)
-
-         # Convert CSV columns to numpy
-        return np.asarray(lgmd_v_columns[2], dtype=float)
-
-def read_lgmd_spikes():
-    with open("lgmd_spikes.csv", "rb") as lgmd_spike_file:
-        # Create CSV reader
-        lgmd_spike_csv_reader = csv.reader(lgmd_spike_file, delimiter = ",")
-
-        # Skip headers
-        lgmd_spike_csv_reader.next()
-
-        # Read data and zip into columns
-        lgmd_spike_columns = zip(*lgmd_spike_csv_reader)
-
-        # Convert CSV columns to numpy
-        if len(lgmd_spike_columns) == 0:
-            return np.asarray([], dtype=float)
+        if len(spike_columns) == 0:
+            return np.zeros((resolution, resolution, 0))
         else:
-            return np.asarray(lgmd_spike_columns[0], dtype=float)
+            spike_times = np.asarray(spike_columns[0], dtype=float)
+            spike_addresses = np.asarray(spike_columns[1], dtype=int)
 
-s_output = read_s_voltage()
-num_frames = int(np.ceil(float(s_output.shape[0]) / float(timesteps_per_frame)))
+            spike_x = np.remainder(spike_addresses, resolution)
+            spike_y = np.floor_divide(spike_addresses, resolution)
 
-timestep_inputs = read_input_spikes(sys.argv[1], num_frames)
-lgmd_output = read_lgmd_voltage()
-lgmd_spikes = read_lgmd_spikes()
+            return np.histogramdd((spike_y, spike_x, spike_times),
+                                  (range(resolution + 1), range(resolution + 1), range(0, int(np.ceil(np.amax(spike_times))) + 1, timesteps_per_frame)))[0]
 
-fig = plt.figure()
+# Build spike histograms
+dvs_spikes = read_spikes("dvs_pixel_spikes.csv", 128, timesteps_per_frame)
+macro_pixel_spikes = read_spikes("macro_pixel_spikes.csv", 9, timesteps_per_frame)
+output_spikes = read_spikes("output_spikes.csv", 7 * 4, timesteps_per_frame)[:7,:,:]
 
-p_axis = plt.subplot2grid((3, 4), (0, 0), colspan=2, rowspan=2)
-p_axis.set_title("Retina spikes")
+# Extract left, right, up and down channels
+direction_output_spikes = [output_spikes[:,i::4,:] for i in range(4)]
 
-s_axis = plt.subplot2grid((3, 4), (0, 2), colspan=2, rowspan=2)
-s_axis.set_title("Summing population membrane voltage")
+duration = max(dvs_spikes.shape[2], macro_pixel_spikes.shape[2], output_spikes.shape[2])
 
-lgmd_axis = plt.subplot2grid((3, 4), (2, 0), colspan=4)
-lgmd_axis.set_title("LGMD membrane voltage")
-lgmd_axis.set_ylim((-10.0, 0.25))
-lgmd_axis.plot(lgmd_output, label="LGMD")
+fig, axes = plt.subplots(1, 6)
 
-# Mark spikes
-lgmd_axis.vlines(lgmd_spikes, -10.0, 0.25, color="red")
+dvs_image_data = dvs_spikes[:,:,0]
+macro_pixel_image_data = macro_pixel_spikes[:,:,0]
+direction_output_image_data = [d[:,:,0] for d in direction_output_spikes]
 
-print("Maximum summing %f" % np.amax(s_output))
+dvs_image = axes[0].imshow(dvs_image_data, interpolation="nearest", cmap="jet", vmin=0.0, vmax=float(timesteps_per_frame))
+macro_pixel_image = axes[1].imshow(macro_pixel_image_data, interpolation="nearest", cmap="jet", vmin=0.0, vmax=float(timesteps_per_frame))
+direction_output_image = [axes[2 + i].imshow(d, interpolation="nearest", cmap="jet", vmin=0.0, vmax=float(timesteps_per_frame))
+                          for i, d in enumerate(direction_output_image_data)]
 
-input_image_data = timestep_inputs[:,:,0]
-input_image = p_axis.imshow(input_image_data, interpolation="nearest", cmap="jet", vmin=0.0, vmax=float(timesteps_per_frame))
-s_v_image = s_axis.imshow(s_output[0,:,:], interpolation="nearest", cmap="jet", vmin=0.0, vmax=np.amax(s_output))
+axes[0].set_title("DVS")
+axes[1].set_title("Macro pixels")
+axes[2].set_title("Left")
+axes[3].set_title("Right")
+axes[4].set_title("Up")
+axes[5].set_title("Down")
 
-border = s_axis.add_patch(
+# Add border showing region within which optical flow is calculated
+border = axes[0].add_patch(
     patches.Rectangle(
-        (6, 6),   # (x,y)
-        20,          # width
-        20,          # height
+        (41, 41),   # (x,y)
+        45,          # width
+        45,          # height
         fill=False,
         color="white",
         linewidth=2.0))
 
-current_time = lgmd_axis.axvline(0, 0, 1, color="black")
-
 def updatefig(frame):
-    global input_image_data, input_image, s_v_image, border, timesteps_per_frame, current_time
+    global dvs_spikes, macro_pixel_spikes, direction_output_spikes
+    global dvs_image_data, macro_pixel_image_data, direction_output_image_data
+    global dvs_image, macro_pixel_image, direction_output_image
+    global border
     
     # Decay image data
-    input_image_data *= 0.9
+    dvs_image_data *= 0.9
+    macro_pixel_image_data *= 0.9
 
-    # Loop through all timesteps that occur within frame
-    input_image_data += timestep_inputs[:,:,frame]
+    # Add spikes that occur during this frame
+    if frame < dvs_spikes.shape[2]:
+        dvs_image_data += dvs_spikes[:,:,frame]
+    if frame < macro_pixel_spikes.shape[2]:
+        macro_pixel_image_data += macro_pixel_spikes[:,:,frame]
 
-    # Set image data
-    input_image.set_array(input_image_data)
+    # Update images
+    dvs_image.set_array(dvs_image_data)
+    macro_pixel_image.set_array(macro_pixel_image_data)
 
-    # Get 3D block of voltage timestep data representing to show in this frame and show average
-    s_timesteps_in_frame = s_output[frame * timesteps_per_frame:(frame + 1) * timesteps_per_frame,:,:]
-    s_v_image.set_array(np.average(s_timesteps_in_frame, axis = 0))
+    # Loop through direction outputs
+    for s, d, i in zip(direction_output_spikes, direction_output_image_data, direction_output_image):
+        d *= 0.9
 
-    current_time.set_xdata([frame * timesteps_per_frame])
+        if frame < s.shape[2]:
+            d += s[:, :, frame]
+
+        i.set_array(d)
 
     # Return list of artists which we have updated
     # **YUCK** order of these dictates sort order
     # **YUCK** score_text must be returned whether it has
     # been updated or not to prevent overdraw
-    return [input_image, s_v_image, border, current_time]
+    return [dvs_image, macro_pixel_image] + direction_output_image + [border]
 
 # Play animation
-ani = animation.FuncAnimation(fig, updatefig, range(timestep_inputs.shape[2]), interval=timesteps_per_frame, blit=True, repeat=True)
+ani = animation.FuncAnimation(fig, updatefig, range(duration), interval=timesteps_per_frame, blit=True, repeat=True)
 plt.show()
