@@ -33,16 +33,16 @@ def read_spikes(filename, resolution, timesteps_per_frame):
             spike_x = np.remainder(spike_addresses, resolution)
             spike_y = np.floor_divide(spike_addresses, resolution)
 
-            return np.histogramdd((spike_y, spike_x, spike_times),
+            return np.histogramdd((spike_x, spike_y, spike_times),
                                   (range(resolution + 1), range(resolution + 1), range(0, int(np.ceil(np.amax(spike_times))) + 1, timesteps_per_frame)))[0]
 
 # Build spike histograms
 dvs_spikes = read_spikes("dvs_pixel_spikes.csv", 128, timesteps_per_frame)
 macro_pixel_spikes = read_spikes("macro_pixel_spikes.csv", 9, timesteps_per_frame)
-output_spikes = read_spikes("output_spikes.csv", 7 * 4, timesteps_per_frame)[:7,:,:]
+output_spikes = read_spikes("output_spikes.csv", 7 * 4, timesteps_per_frame)[:,:7,:]
 
 # Extract left, right, up and down channels
-direction_output_spikes = [output_spikes[:,i::4,:] for i in range(4)]
+direction_output_spikes = [output_spikes[i::4,:,:] for i in range(4)]
 
 duration = max(dvs_spikes.shape[2], macro_pixel_spikes.shape[2], output_spikes.shape[2])
 
