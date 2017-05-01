@@ -8,11 +8,11 @@
 //------------------------------------------------------------------------
 // Timer
 //------------------------------------------------------------------------
-template<typename A = std::chrono::milliseconds>
+template<typename A = std::milli>
 class Timer
 {
 public:
-    Timer(const std::string &title) : m_Start(std::chrono::steady_clock::now()), m_Title(title)
+    Timer(const std::string &title) : m_Start(std::chrono::high_resolution_clock::now()), m_Title(title)
     {
     }
 
@@ -26,23 +26,24 @@ public:
     //------------------------------------------------------------------------
     double get() const
     {
-        auto now = std::chrono::steady_clock::now();
-        return std::chrono::duration_cast<A>(now - m_Start).count();
+        auto now = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = now - m_Start;
+        return duration.count();
     }
 
 private:
     //------------------------------------------------------------------------
     // Members
     //------------------------------------------------------------------------
-    std::chrono::time_point<std::chrono::steady_clock> m_Start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> m_Start;
     std::string m_Title;
 };
 
-template<typename A = std::chrono::milliseconds>
+template<typename A = std::milli>
 class TimerAccumulate
 {
 public:
-    TimerAccumulate(double &accumulator) : m_Start(std::chrono::steady_clock::now()), m_Accumulator(accumulator)
+    TimerAccumulate(double &accumulator) : m_Start(std::chrono::high_resolution_clock::now()), m_Accumulator(accumulator)
     {
     }
 
@@ -56,14 +57,15 @@ public:
     //------------------------------------------------------------------------
     double get() const
     {
-        auto now = std::chrono::steady_clock::now();
-        return std::chrono::duration_cast<A>(now - m_Start).count();
+        auto now = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = now - m_Start;
+        return duration.count();
     }
 
 private:
     //------------------------------------------------------------------------
     // Members
     //------------------------------------------------------------------------
-    std::chrono::time_point<std::chrono::steady_clock> m_Start;
+    std::chrono::time_point<std::chrono::high_resolution_clock> m_Start;
     double &m_Accumulator;
 };
