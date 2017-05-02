@@ -39,18 +39,21 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues dvsMacroPixelWeightUpdateInit(
         0.8);     // 0 - Wij (nA)
 
-    WeightUpdateModels::StaticPulse::VarValues macroPixelOutputWeightUpdateInit(
-        2.0);     // 0 - Wij (nA)
+    WeightUpdateModels::StaticPulse::VarValues macroPixelOutputExcitatoryWeightUpdateInit(
+        1.0);     // 0 - Wij (nA)
+
+    WeightUpdateModels::StaticPulse::VarValues macroPixelOutputInhibitoryWeightUpdateInit(
+        -0.5);     // 0 - Wij (nA)
 
     // Exponential current parameters
     ExpCurr::ParamValues macroPixelPostSynParams(
         5.0);         // 0 - TauSyn (ms)
 
     ExpCurr::ParamValues outputExcitatoryPostSynParams(
-        10.0);         // 0 - TauSyn (ms)
+        25.0);         // 0 - TauSyn (ms)
 
     ExpCurr::ParamValues outputInhibitoryPostSynParams(
-        15.0);         // 0 - TauSyn (ms)
+        50.0);         // 0 - TauSyn (ms)
 
     //------------------------------------------------------------------------
     // Neuron populations
@@ -76,13 +79,13 @@ void modelDefinition(NNmodel &model)
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "MacroPixel_Output_Excitatory", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "MacroPixel", "Output",
-        {}, macroPixelOutputWeightUpdateInit,
+        {}, macroPixelOutputExcitatoryWeightUpdateInit,
         outputExcitatoryPostSynParams, {});
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "MacroPixel_Output_Inhibitory", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "MacroPixel", "Output",
-        {}, macroPixelOutputWeightUpdateInit,
+        {}, macroPixelOutputInhibitoryWeightUpdateInit,
         outputInhibitoryPostSynParams, {});
     /*model.setSpanTypeToPre("EE");
     model.setSpanTypeToPre("EI");
