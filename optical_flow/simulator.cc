@@ -125,9 +125,9 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
                 excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
                                                                          xj + Parameters::DetectorRight, yj);
                 excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                         xj + Parameters::DetectorLeft, yj);
+                                                                         xj + Parameters::DetectorUp, yj);
                 excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                         xj + Parameters::DetectorRight, yj);
+                                                                         xj + Parameters::DetectorDown, yj);
             }
 
 
@@ -138,7 +138,7 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
                 const unsigned int xj = (xi - 1 + 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1;
                 inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                        xj + Parameters::DetectorLeft, yj);
+                                                                         xj + Parameters::DetectorLeft, yj);
             }
 
             if(xi >= 2
@@ -148,7 +148,7 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
                 const unsigned int xj = (xi - 1 - 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1;
                 inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                        xj + Parameters::DetectorRight, yj);
+                                                                         xj + Parameters::DetectorRight, yj);
             }
 
             if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
@@ -158,7 +158,7 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
                 const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1 + 1;
                 inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                        xj + Parameters::DetectorUp, yj);
+                                                                         xj + Parameters::DetectorUp, yj);
             }
 
             if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
@@ -168,7 +168,7 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
                 const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1 - 1;
                 inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                        xj + Parameters::DetectorDown, yj);
+                                                                         xj + Parameters::DetectorDown, yj);
             }
 
         }
@@ -268,9 +268,19 @@ unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indi
 
 int main(int argc, char *argv[])
 {
+#ifdef LIVE
     // Create DVS 128 device
     DVS128 dvs(DVS128::Polarity::On);
-    
+#else
+    assert(argc > 1);
+    std::ifstream spikeInput(argv[1]);
+    assert(spikeInput.good());
+
+    // Read first line of input
+    std::vector<unsigned int> inputIndices;
+    unsigned int nextInputTime = read_p_input(spikeInput, inputIndices);
+#endif
+
     allocateMem();
     initialize();
 
@@ -285,34 +295,56 @@ int main(int argc, char *argv[])
 
     std::default_random_engine engine;
 
-    // Catch interrupt (ctrl-c) signals
-    std::signal(SIGINT, signalHandler);
-
     SpikeCSVRecorder dvsPixelSpikeRecorder("dvs_pixel_spikes.csv", glbSpkCntDVS, glbSpkDVS);
     SpikeCSVRecorder macroPixelSpikeRecorder("macro_pixel_spikes.csv", glbSpkCntMacroPixel, glbSpkMacroPixel);
     SpikeCSVRecorder outputSpikeRecorder("output_spikes.csv", glbSpkCntOutput, glbSpkOutput);
 
-    // Start revieving DVS events
-    dvs.start();
+    // Loop through timesteps until there is no more import
+    unsigned int i = 0;
 
     double record = 0.0;
     double dvsGet = 0.0;
     double step = 0.0;
 
+#ifdef LIVE
+    // Catch interrupt (ctrl-c) signals
+    std::signal(SIGINT, signalHandler);
+
+    // Start revieving DVS events
+    dvs.start();
+
     const auto dtDuration = std::chrono::duration<double, std::milli>{DT};
 
-    // Loop through timesteps until there is no more import
-    unsigned int i = 0;
     std::chrono::duration<double, std::milli> sleepTime{0};
     std::chrono::duration<double, std::milli> overrunTime{0};
     for(i = 0; g_SignalStatus == 0; i++)
+#else
+    for(i = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); i++)
+#endif
     {
         auto tickStart = std::chrono::high_resolution_clock::now();
     
+#ifdef LIVE
         {
             TimerAccumulate<std::milli> timer(dvsGet);
             dvs.readEvents(spikeCount_DVS, spike_DVS);
         }
+#else
+        // If we should supply input this timestep
+        if(nextInputTime == i) {
+            // Copy into spike source
+            spikeCount_DVS = inputIndices.size();
+            std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
+
+#ifndef CPU_ONLY
+            // Copy to GPU
+            pushPCurrentSpikesToDevice();
+#endif
+
+            // Read NEXT input
+            nextInputTime = read_p_input(spikeInput, inputIndices);
+        }
+#endif
 
         {
             TimerAccumulate<std::milli> timer(record);
@@ -337,6 +369,7 @@ int main(int argc, char *argv[])
             outputSpikeRecorder.record(t);
         }
 
+#ifdef LIVE
         auto tickEnd = std::chrono::high_resolution_clock::now();
         auto tickDuration = tickEnd - tickStart;
         if(tickDuration < dtDuration) {
@@ -347,11 +380,17 @@ int main(int argc, char *argv[])
         else {
             overrunTime += (tickDuration - dtDuration);
         }
+#endif
     }
 
+#ifdef LIVE
     dvs.stop();
-
     std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "ms, slept for " << sleepTime.count() << "ms" << std::endl;
+#else
+    std::cout << "Ran for " << i << " " << DT << "ms timesteps" << std::endl;
+#endif
+
+
     std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Record:" << record << std::endl;
     return 0;
 }
