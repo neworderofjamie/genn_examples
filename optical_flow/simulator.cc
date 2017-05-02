@@ -265,49 +265,20 @@ unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indi
 
     return nextTime;
 }
-}
 
-int main(int argc, char *argv[])
+void runLive()
 {
-#ifdef LIVE
-    // Create DVS 128 device
+     // Create DVS 128 device
     DVS128 dvs(DVS128::Polarity::On);
-#else
-    assert(argc > 1);
-    std::ifstream spikeInput(argv[1]);
-    assert(spikeInput.good());
-
-    // Read first line of input
-    std::vector<unsigned int> inputIndices;
-    unsigned int nextInputTime = read_p_input(spikeInput, inputIndices);
-#endif
-
-    allocateMem();
-    initialize();
-
-    build_centre_to_macro_connection(CDVS_MacroPixel, &allocateDVS_MacroPixel);
-    buildDetectors(CMacroPixel_Output_Excitatory, CMacroPixel_Output_Inhibitory,
-                   &allocateMacroPixel_Output_Excitatory, &allocateMacroPixel_Output_Inhibitory);
-    //print_sparse_matrix(Parameters::inputSize, CDVS_MacroPixel);
-    initoptical_flow();
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
-    std::default_random_engine engine;
 
     SpikeCSVRecorder dvsPixelSpikeRecorder("dvs_pixel_spikes.csv", glbSpkCntDVS, glbSpkDVS);
     SpikeCSVRecorder macroPixelSpikeRecorder("macro_pixel_spikes.csv", glbSpkCntMacroPixel, glbSpkMacroPixel);
     SpikeCSVRecorder outputSpikeRecorder("output_spikes.csv", glbSpkCntOutput, glbSpkOutput);
 
-    // Loop through timesteps until there is no more import
-    unsigned int i = 0;
-
     double record = 0.0;
     double dvsGet = 0.0;
     double step = 0.0;
 
-#ifdef LIVE
     // Catch interrupt (ctrl-c) signals
     std::signal(SIGINT, signalHandler);
 
@@ -318,36 +289,17 @@ int main(int argc, char *argv[])
 
     std::chrono::duration<double, std::milli> sleepTime{0};
     std::chrono::duration<double, std::milli> overrunTime{0};
+    unsigned int i = 0;
     for(i = 0; g_SignalStatus == 0; i++)
-#else
-    for(i = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); i++)
-#endif
     {
-        auto tickStart = std::chrono::high_resolution_clock::now();
-    
-#ifdef LIVE
+         auto tickStart = std::chrono::high_resolution_clock::now();
+
         {
             TimerAccumulate<std::milli> timer(dvsGet);
             dvs.readEvents(spikeCount_DVS, spike_DVS);
         }
-#else
-        // If we should supply input this timestep
-        if(nextInputTime == i) {
-            // Copy into spike source
-            spikeCount_DVS = inputIndices.size();
-            std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
 
-#ifndef CPU_ONLY
-            // Copy to GPU
-            pushPCurrentSpikesToDevice();
-#endif
-
-            // Read NEXT input
-            nextInputTime = read_p_input(spikeInput, inputIndices);
-        }
-#endif
-
-        {
+         {
             TimerAccumulate<std::milli> timer(record);
             dvsPixelSpikeRecorder.record(t);
         }
@@ -370,8 +322,10 @@ int main(int argc, char *argv[])
             outputSpikeRecorder.record(t);
         }
 
-#ifdef LIVE
+        // Get time of tick start
         auto tickEnd = std::chrono::high_resolution_clock::now();
+
+        // If there we're ahead of real-time pause
         auto tickDuration = tickEnd - tickStart;
         if(tickDuration < dtDuration) {
             auto tickSleep = dtDuration - tickDuration;
@@ -381,17 +335,80 @@ int main(int argc, char *argv[])
         else {
             overrunTime += (tickDuration - dtDuration);
         }
-#endif
     }
 
-#ifdef LIVE
     dvs.stop();
     std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "ms, slept for " << sleepTime.count() << "ms" << std::endl;
-#else
-    std::cout << "Ran for " << i << " " << DT << "ms timesteps" << std::endl;
+    std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Record:" << record << std::endl;
+}
+
+void runFromFile(const char *filename)
+{
+    std::ifstream spikeInput(filename);
+    assert(spikeInput.good());
+
+    // Read first line of input
+    std::vector<unsigned int> inputIndices;
+    unsigned int nextInputTime = read_p_input(spikeInput, inputIndices);
+
+    SpikeCSVRecorder dvsPixelSpikeRecorder("dvs_pixel_spikes.csv", glbSpkCntDVS, glbSpkDVS);
+    SpikeCSVRecorder macroPixelSpikeRecorder("macro_pixel_spikes.csv", glbSpkCntMacroPixel, glbSpkMacroPixel);
+    SpikeCSVRecorder outputSpikeRecorder("output_spikes.csv", glbSpkCntOutput, glbSpkOutput);
+
+    double record = 0.0;
+    double dvsGet = 0.0;
+    double step = 0.0;
+
+    unsigned int i = 0;
+    for(i = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); i++)
+    {
+         // If we should supply input this timestep
+        if(nextInputTime == i) {
+            // Copy into spike source
+            spikeCount_DVS = inputIndices.size();
+            std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
+
+#ifndef CPU_ONLY
+            // Copy to GPU
+            pushPCurrentSpikesToDevice();
 #endif
 
+            // Read NEXT input
+            nextInputTime = read_p_input(spikeInput, inputIndices);
+        }
 
-    std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Record:" << record << std::endl;
+        dvsPixelSpikeRecorder.record(t);
+
+        // Simulate
+#ifndef CPU_ONLY
+        stepTimeGPU();
+#else
+        stepTimeCPU();
+#endif
+        macroPixelSpikeRecorder.record(t);
+        outputSpikeRecorder.record(t);
+    }
+
+    std::cout << "Ran for " << i << " " << DT << "ms timesteps" << std::endl;
+}
+}
+
+int main(int argc, char *argv[])
+{
+    allocateMem();
+    initialize();
+
+    build_centre_to_macro_connection(CDVS_MacroPixel, &allocateDVS_MacroPixel);
+    buildDetectors(CMacroPixel_Output_Excitatory, CMacroPixel_Output_Inhibitory,
+                   &allocateMacroPixel_Output_Excitatory, &allocateMacroPixel_Output_Inhibitory);
+    //print_sparse_matrix(Parameters::inputSize, CDVS_MacroPixel);
+    initoptical_flow();
+
+#ifdef LIVE
+    runLive();
+#else
+    assert(argc > 1);
+    runFromFile(argv[0]);
+#endif
     return 0;
 }
