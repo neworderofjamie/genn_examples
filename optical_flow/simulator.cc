@@ -109,6 +109,7 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
     {
         for(unsigned int xi = 0; xi < Parameters::macroPixelSize; xi++)
         {
+            // Mark start of 'synaptic row'
             excitatoryProjection.indInG[iExcitatory++] = sExcitatory;
             inhibitoryProjection.indInG[iInhibitory++] = sInhibitory;
 
@@ -119,7 +120,7 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
                 const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1;
 
-                // Add excitatory synapses
+                // Add excitatory synapses to all detectors
                 excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
                                                                          xj + Parameters::DetectorLeft, yj);
                 excitatoryProjection.ind[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
@@ -131,40 +132,40 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
             }
 
 
+            // Create inhibitory connection to 'left' detector associated with macropixel one to right
             if(xi < (Parameters::macroPixelSize - 2)
                 && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
             {
-                // Connect to 'left' detector associated with macropixel one to right
                 const unsigned int xj = (xi - 1 + 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1;
                 inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
                                                                          xj + Parameters::DetectorLeft, yj);
             }
 
+            // Create inhibitory connection to 'right' detector associated with macropixel one to right
             if(xi >= 2
                 && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
             {
-                // Connect to 'right' detector associated with macropixel one to right
                 const unsigned int xj = (xi - 1 - 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1;
                 inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
                                                                          xj + Parameters::DetectorRight, yj);
             }
 
+            // Create inhibitory connection to 'up' detector associated with macropixel one below
             if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
                 && yi < (Parameters::macroPixelSize - 2))
             {
-                // Connect to 'up' detector associated with macropixel one below
                 const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1 + 1;
                 inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
                                                                          xj + Parameters::DetectorUp, yj);
             }
 
+            // Create inhibitory connection to 'down' detector associated with macropixel one above
             if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
                 && yi >= 2)
             {
-                // Connect to 'down' detector associated with macropixel one above
                 const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
                 const unsigned int yj = yi - 1 - 1;
                 inhibitoryProjection.ind[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
