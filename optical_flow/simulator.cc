@@ -275,8 +275,7 @@ unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indi
 void displayThreadHandler(std::mutex &outputMutex, const float (&output)[Parameters::detectorSize][Parameters::detectorSize][2])
 {
     // Create output image
-    const unsigned int scale = 50;
-    const unsigned int outputImageSize = Parameters::detectorSize * scale;
+    const unsigned int outputImageSize = Parameters::detectorSize * Parameters::outputScale;
     cv::Mat outputImage(outputImageSize, outputImageSize, CV_8UC3);
 
     while(g_SignalStatus == 0)
@@ -292,8 +291,9 @@ void displayThreadHandler(std::mutex &outputMutex, const float (&output)[Paramet
             {
                 for(unsigned int y = 0; y < Parameters::detectorSize; y++)
                 {
-                    const cv::Point start(x * scale, y * scale);
-                    const cv::Point end = start + (2.0 * cv::Point(output[x][y][0], output[x][y][1]));
+                    const cv::Point start(x * Parameters::outputScale, y * Parameters::outputScale);
+                    const cv::Point end = start + cv::Point(Parameters::outputVectorScale * output[x][y][0],
+                                                            Parameters::outputVectorScale * output[x][y][1]);
 
                     cv::line(outputImage, start, end,
                              CV_RGB(0xFF, 0xFF, 0xFF));

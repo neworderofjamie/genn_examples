@@ -19,9 +19,13 @@ namespace Parameters
 
     const unsigned int inputSize = 128;
     const unsigned int kernelSize = 5;
-    const unsigned int centreSize = 45;
+    const unsigned int centreSize = 125;
 
     const unsigned int macroPixelSize = centreSize / kernelSize;
 
     const unsigned int detectorSize = macroPixelSize - 2;
+
+    const unsigned int outputScale = 25;
+
+    const float outputVectorScale = 2.0f;
 }
