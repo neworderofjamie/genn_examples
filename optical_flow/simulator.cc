@@ -1,9 +1,9 @@
-#include "optical_flow_CODE/definitions.h"
-
 // Standard C++ includes
 #include <algorithm>
 #include <fstream>
+#include <iostream>
 #include <limits>
+#include <mutex>
 #include <random>
 #include <set>
 #include <sstream>
@@ -15,6 +15,9 @@
 #include <csignal>
 #include <cstdlib>
 
+// OpenCV includes
+#include <opencv2/highgui/highgui.hpp>
+
 // Common example includes
 #include "../common/dvs_128.h"
 #include "../common/spike_csv_recorder.h"
@@ -22,6 +25,9 @@
 
 // Optical flow includes
 #include "parameters.h"
+
+// Auto-generated simulation code
+#include "optical_flow_CODE/definitions.h"
 
 //----------------------------------------------------------------------------
 // Anonymous namespace
@@ -266,18 +272,60 @@ unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indi
     return nextTime;
 }
 
+void displayThreadHandler(std::mutex &outputMutex, const float (&output)[Parameters::detectorSize][Parameters::detectorSize][2])
+{
+    // Create output image
+    const unsigned int scale = 50;
+    const unsigned int outputImageSize = Parameters::detectorSize * scale;
+    cv::Mat outputImage(outputImageSize, outputImageSize, CV_8UC3);
+
+    while(g_SignalStatus == 0)
+    {
+        // Clear background
+        outputImage.setTo(cv::Scalar::all(0));
+
+        {
+            std::lock_guard<std::mutex> lock(outputMutex);
+
+            // Loop through output coordinates
+            for(unsigned int x = 0; x < Parameters::detectorSize; x++)
+            {
+                for(unsigned int y = 0; y < Parameters::detectorSize; y++)
+                {
+                    const cv::Point start(x * scale, y * scale);
+                    const cv::Point end = start + (2.0 * cv::Point(output[x][y][0], output[x][y][1]));
+
+                    cv::line(outputImage, start, end,
+                             CV_RGB(0xFF, 0xFF, 0xFF));
+                }
+            }
+
+        }
+
+        cv::imshow("Frame", outputImage);
+        cv::waitKey(33);
+    }
+}
+
 void runLive()
 {
      // Create DVS 128 device
     DVS128 dvs(DVS128::Polarity::On);
 
-    SpikeCSVRecorder dvsPixelSpikeRecorder("dvs_pixel_spikes.csv", glbSpkCntDVS, glbSpkDVS);
-    SpikeCSVRecorder macroPixelSpikeRecorder("macro_pixel_spikes.csv", glbSpkCntMacroPixel, glbSpkMacroPixel);
-    SpikeCSVRecorder outputSpikeRecorder("output_spikes.csv", glbSpkCntOutput, glbSpkOutput);
-
-    double record = 0.0;
+    const cv::Point detectorPoint[Parameters::DetectorMax] = {
+        cv::Point(),//DetectorLeft
+        cv::Point(),//DetectorRight
+        cv::Point(),//DetectorUp
+        cv::Point(),//DetectorDown
+    };
     double dvsGet = 0.0;
     double step = 0.0;
+    double render = 0.0;
+
+    std::mutex outputMutex;
+    float output[Parameters::detectorSize][Parameters::detectorSize][2] = {0};
+
+    std::thread displayThread(displayThreadHandler, std::ref(outputMutex), std::ref(output));
 
     // Catch interrupt (ctrl-c) signals
     std::signal(SIGINT, signalHandler);
@@ -285,8 +333,10 @@ void runLive()
     // Start revieving DVS events
     dvs.start();
 
+    // Convert timestep to a duration
     const auto dtDuration = std::chrono::duration<double, std::milli>{DT};
 
+    // Duration counters
     std::chrono::duration<double, std::milli> sleepTime{0};
     std::chrono::duration<double, std::milli> overrunTime{0};
     unsigned int i = 0;
@@ -299,27 +349,66 @@ void runLive()
             dvs.readEvents(spikeCount_DVS, spike_DVS);
         }
 
-         {
-            TimerAccumulate<std::milli> timer(record);
-            dvsPixelSpikeRecorder.record(t);
-        }
-
         {
             TimerAccumulate<std::milli> timer(step);
 
             // Simulate
 #ifndef CPU_ONLY
             stepTimeGPU();
+            pullOutputSpikes();
 #else
             stepTimeCPU();
 #endif
         }
 
         {
-            TimerAccumulate<std::milli> timer(record);
+            TimerAccumulate<std::milli> timer(render);
 
-            macroPixelSpikeRecorder.record(t);
-            outputSpikeRecorder.record(t);
+            {
+                std::lock_guard<std::mutex> lock(outputMutex);
+
+                for(unsigned int s = 0; s < spikeCount_Output; s++)
+                {
+                    const unsigned int spike = spike_Output[s];
+
+                    const auto spikeCoord = std::div((int)spike, (int)Parameters::detectorSize * Parameters::DetectorMax);
+                    const int spikeY = spikeCoord.quot;
+
+                    const auto xCoord = std::div(spikeCoord.rem, (int)Parameters::DetectorMax);
+                    const int spikeX =  xCoord.quot;
+
+                    switch(xCoord.rem)
+                    {
+                        case Parameters::DetectorLeft:
+                            output[spikeX][spikeY][0] -= 1.0f;
+                            break;
+
+                        case Parameters::DetectorRight:
+                            output[spikeX][spikeY][0] += 1.0f;
+                            break;
+
+                        case Parameters::DetectorUp:
+                            output[spikeX][spikeY][1] -= 1.0f;
+                            break;
+
+                        case Parameters::DetectorDown:
+                            output[spikeX][spikeY][1] += 1.0f;
+                            break;
+
+                    }
+                }
+
+                // Decay output
+                const float persistence = 0.995f;
+                for(unsigned int x = 0; x < Parameters::detectorSize; x++)
+                {
+                    for(unsigned int y = 0; y < Parameters::detectorSize; y++)
+                    {
+                        output[x][y][0] *= persistence;
+                        output[x][y][1] *= persistence;
+                    }
+                }
+            }
         }
 
         // Get time of tick start
@@ -337,9 +426,10 @@ void runLive()
         }
     }
 
+    displayThread.join();
     dvs.stop();
     std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "ms, slept for " << sleepTime.count() << "ms" << std::endl;
-    std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Record:" << record << std::endl;
+    std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Render:" << render << std::endl;
 }
 
 void runFromFile(const char *filename)
