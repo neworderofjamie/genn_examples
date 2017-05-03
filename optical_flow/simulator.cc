@@ -355,7 +355,7 @@ void runLive()
             // Simulate
 #ifndef CPU_ONLY
             stepTimeGPU();
-            pullOutputSpikes();
+            pullOutputCurrentSpikesFromDevice();
 #else
             stepTimeCPU();
 #endif
@@ -460,7 +460,7 @@ void runFromFile(const char *filename)
 
 #ifndef CPU_ONLY
             // Copy to GPU
-            pushPCurrentSpikesToDevice();
+            pushDVSCurrentSpikesToDevice();
 #endif
 
             // Read NEXT input
@@ -472,6 +472,9 @@ void runFromFile(const char *filename)
         // Simulate
 #ifndef CPU_ONLY
         stepTimeGPU();
+
+        pullMacroPixelCurrentSpikesFromDevice();
+        pullOutputCurrentSpikesFromDevice();
 #else
         stepTimeCPU();
 #endif
