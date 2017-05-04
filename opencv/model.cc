@@ -1,11 +1,12 @@
 #include <cmath>
 #include <vector>
-
 // GeNN includes
 #include "modelSpec.h"
 
 // Common example includes
 #include "../common/opencv_lif.h"
+
+#include "parameters.h"
 
 //------------------------------------------------------------------------
 // Anonymous namespace
@@ -27,7 +28,7 @@ void modelDefinition(NNmodel &model)
     // Convert persistences to taus
     const double scale = 10.0;
     const double tau_p = persistance_to_tc(1.0, 0.4) * scale;
-    
+
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
@@ -48,11 +49,25 @@ void modelDefinition(NNmodel &model)
         -60.0,        // 0 - V
         0.0);       // 1 - RefracTime
 
+
     //------------------------------------------------------------------------
     // Neuron populations
     //------------------------------------------------------------------------
     // Create IF_curr neuron
     model.addNeuronPopulation<OpenCVLIF>("P", 32 * 32, p_lif_params, lif_init);
-    
+
+    if(Parameters::useMagno) {
+        WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
+            1.0);    // 0 - Wij (nA)
+
+        model.addNeuronPopulation<OpenCVLIF>("M", 16 * 16, p_lif_params, lif_init);
+        model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>
+                                ("MagnoToParvo", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+                                "M", "P", {}, staticSynapseInit, {}, {});
+        model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>
+                                ("ParvoToMagno", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+                                "P", "M", {}, staticSynapseInit, {}, {});
+    }
+
     model.finalize();
 }
