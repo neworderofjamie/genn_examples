@@ -19,8 +19,10 @@
 #include <opencv2/highgui/highgui.hpp>
 
 // Common example includes
-#include "../common/dvs_128.h"
-#include "../common/spike_csv_recorder.h"
+#ifdef LIVE
+    #include "../common/dvs_128.h"
+#endif
+#include "../common/spike_image_renderer.h"
 #include "../common/timer.h"
 
 // Optical flow includes
@@ -65,7 +67,7 @@ void print_sparse_matrix(unsigned int pre_resolution, const SparseProjection &pr
     }
 }
 
-void build_centre_to_macro_connection(SparseProjection &projection, allocateFn allocate)
+void buildCentreToMacroConnection(SparseProjection &projection, allocateFn allocate)
 {
     // Allocate centre_size * centre_size connections
     allocate(Parameters::centreSize * Parameters::centreSize);
@@ -192,63 +194,14 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
     assert(iInhibitory == (Parameters::macroPixelSize * Parameters::macroPixelSize));
 }
 
-template<typename Generator, typename ShuffleEngine>
-void readCalibrateInput(Generator &gen, ShuffleEngine &engine)
-{
-    // Create array containing coordinates of all pixels within a macrocell
-    std::vector<std::pair<unsigned int, unsigned int>> macroCellIndices;
-    macroCellIndices.reserve(Parameters::kernelSize * Parameters::kernelSize);
-    for(unsigned int x = 0; x < Parameters::kernelSize; x++)
-    {
-        for(unsigned int y = 0; y < Parameters::kernelSize; y++)
-        {
-            macroCellIndices.push_back(std::make_pair(x, y));
-        }
-    }
-
-    spikeCount_DVS = 0;
-
-    const unsigned int nearBorder = (Parameters::inputSize - Parameters::centreSize) / 2;
-
-    // Loop through macropixels
-    for(unsigned int yi = 0; yi < Parameters::macroPixelSize; yi++)
-    {
-        // Create binomial distribution of probability of neuron in kernel firing based on y coordinate
-        std::binomial_distribution<> d(Parameters::kernelSize * Parameters::kernelSize,
-                                       0.1 * ((double)yi / (double)Parameters::macroPixelSize));
-        for(unsigned int xi = 0; xi < Parameters::macroPixelSize; xi++)
-        {
-            // Shuffle the order of the macrocell indices
-            std::shuffle(macroCellIndices.begin(), macroCellIndices.end(), engine);
-
-            // Draw number of active pixels from binomial
-            const unsigned int numActiveNeurons = d(gen);
-            for(unsigned int i = 0; i < numActiveNeurons; i++)
-            {
-                unsigned int a = getNeuronIndex(Parameters::inputSize,
-                                                (xi * Parameters::kernelSize) + nearBorder + macroCellIndices[i].first,
-                                                (yi * Parameters::kernelSize) + nearBorder + macroCellIndices[i].second);
-                assert(a < (Parameters::inputSize * Parameters::inputSize));
-                spike_DVS[spikeCount_DVS++] = a;
-
-            }
-        }
-    }
-    // 9 spikes per ms
-    // 8 spikes per ms
-    // 7 spikes per ms
-    // 6 spikes per ms
-    // 5 spikes
-}
-
-unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indices)
+bool readPInput(std::ifstream &stream, std::vector<unsigned int> &indices, unsigned int &nextTime)
 {
     // Read lines into string
     std::string line;
     std::getline(stream, line);
 
     if(line.empty()) {
-        return std::numeric_limits<unsigned int>::max();
+        return false;
     }
 
     // Create string stream from line
@@ -257,7 +210,7 @@ unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indi
     // Read time from start of line
     std::string nextTimeString;
     std::getline(lineStream, nextTimeString, ';');
-    unsigned int nextTime = (unsigned int)std::stoul(nextTimeString);
+    nextTime = (unsigned int)std::stoul(nextTimeString);
 
     // Clear existing times
     indices.clear();
@@ -269,11 +222,16 @@ unsigned int read_p_input(std::ifstream &stream, std::vector<unsigned int> &indi
         indices.push_back(std::atoi(inputIndexString.c_str()));
     }
 
-    return nextTime;
+    return true;
 }
 
-void displayThreadHandler(std::mutex &outputMutex, const float (&output)[Parameters::detectorSize][Parameters::detectorSize][2])
+void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
+                          std::mutex &outputMutex, const float (&output)[Parameters::detectorSize][Parameters::detectorSize][2])
 {
+    cv::namedWindow("Input", CV_WINDOW_NORMAL);
+    cv::resizeWindow("Input", Parameters::inputSize * Parameters::inputScale,
+                     Parameters::inputSize * Parameters::inputScale);
+
     // Create output image
     const unsigned int outputImageSize = Parameters::detectorSize * Parameters::outputScale;
     cv::Mat outputImage(outputImageSize, outputImageSize, CV_8UC3);
@@ -299,39 +257,111 @@ void displayThreadHandler(std::mutex &outputMutex, const float (&output)[Paramet
                              CV_RGB(0xFF, 0xFF, 0xFF));
                 }
             }
-
         }
 
-        cv::imshow("Frame", outputImage);
+        cv::imshow("Output", outputImage);
+
+        {
+            std::lock_guard<std::mutex> lock(inputMutex);
+            cv::imshow("Input", inputImage);
+        }
+
+
         cv::waitKey(33);
     }
 }
 
-void runLive()
+void applyOutputSpikes(unsigned int outputSpikeCount, const unsigned int *outputSpikes, float (&output)[Parameters::detectorSize][Parameters::detectorSize][2])
 {
+    // Loop through output spikes
+    for(unsigned int s = 0; s < outputSpikeCount; s++)
+    {
+        // Convert spike ID to x, y, detector
+        const unsigned int spike = outputSpikes[s];
+        const auto spikeCoord = std::div((int)spike, (int)Parameters::detectorSize * Parameters::DetectorMax);
+        const int spikeY = spikeCoord.quot;
+        const auto xCoord = std::div(spikeCoord.rem, (int)Parameters::DetectorMax);
+        const int spikeX =  xCoord.quot;
+
+        // Apply spike to correct axis of output pixel based on detector it was emitted by
+        switch(xCoord.rem)
+        {
+            case Parameters::DetectorLeft:
+                output[spikeX][spikeY][0] -= 1.0f;
+                break;
+
+            case Parameters::DetectorRight:
+                output[spikeX][spikeY][0] += 1.0f;
+                break;
+
+            case Parameters::DetectorUp:
+                output[spikeX][spikeY][1] -= 1.0f;
+                break;
+
+            case Parameters::DetectorDown:
+                output[spikeX][spikeY][1] += 1.0f;
+                break;
+
+        }
+    }
+
+    // Decay output
+    for(unsigned int x = 0; x < Parameters::detectorSize; x++)
+    {
+        for(unsigned int y = 0; y < Parameters::detectorSize; y++)
+        {
+            output[x][y][0] *= Parameters::spikePersistence;
+            output[x][y][1] *= Parameters::spikePersistence;
+        }
+    }
+}
+}
+
+int main(int argc, char *argv[])
+{
+    allocateMem();
+    initialize();
+
+    buildCentreToMacroConnection(CDVS_MacroPixel, &allocateDVS_MacroPixel);
+    buildDetectors(CMacroPixel_Output_Excitatory, CMacroPixel_Output_Inhibitory,
+                   &allocateMacroPixel_Output_Excitatory, &allocateMacroPixel_Output_Inhibitory);
+    //print_sparse_matrix(Parameters::inputSize, CDVS_MacroPixel);
+    initoptical_flow();
+
+#ifdef LIVE
      // Create DVS 128 device
     DVS128 dvs(DVS128::Polarity::On);
 
-    const cv::Point detectorPoint[Parameters::DetectorMax] = {
-        cv::Point(),//DetectorLeft
-        cv::Point(),//DetectorRight
-        cv::Point(),//DetectorUp
-        cv::Point(),//DetectorDown
-    };
     double dvsGet = 0.0;
+#else
+    assert(argc > 1);
+
+    std::ifstream spikeInput(argv[1]);
+    assert(spikeInput.good());
+
+    double read = 0.0;
+
+    // Read first line of input
+    std::vector<unsigned int> inputIndices;
+    unsigned int nextInputTime;
+    if(!readPInput(spikeInput, inputIndices, nextInputTime)) {
+        std::cerr << "No spikes to input" << std::endl;
+        return 1;
+    }
+#endif
+
     double step = 0.0;
     double render = 0.0;
 
+
+    std::mutex inputMutex;
+    cv::Mat inputImage(Parameters::inputSize, Parameters::inputSize, CV_32F);
+
     std::mutex outputMutex;
     float output[Parameters::detectorSize][Parameters::detectorSize][2] = {0};
-
-    std::thread displayThread(displayThreadHandler, std::ref(outputMutex), std::ref(output));
-
-    // Catch interrupt (ctrl-c) signals
-    std::signal(SIGINT, signalHandler);
-
-    // Start revieving DVS events
-    dvs.start();
+    std::thread displayThread(displayThreadHandler,
+                              std::ref(inputMutex), std::ref(inputImage),
+                              std::ref(outputMutex), std::ref(output));
 
     // Convert timestep to a duration
     const auto dtDuration = std::chrono::duration<double, std::milli>{DT};
@@ -340,13 +370,52 @@ void runLive()
     std::chrono::duration<double, std::milli> sleepTime{0};
     std::chrono::duration<double, std::milli> overrunTime{0};
     unsigned int i = 0;
+
+     // Catch interrupt (ctrl-c) signals
+    std::signal(SIGINT, signalHandler);
+
     for(i = 0; g_SignalStatus == 0; i++)
     {
-         auto tickStart = std::chrono::high_resolution_clock::now();
-
+        auto tickStart = std::chrono::high_resolution_clock::now();
+#ifdef LIVE
         {
             TimerAccumulate<std::milli> timer(dvsGet);
             dvs.readEvents(spikeCount_DVS, spike_DVS);
+
+#ifndef CPU_ONLY
+            // Copy to GPU
+            pushDVSCurrentSpikesToDevice();
+#endif
+        }
+#else
+        {
+            TimerAccumulate<std::milli> timer(read);
+
+            // If we should supply input this timestep
+            if(nextInputTime == i) {
+                // Copy into spike source
+                spikeCount_DVS = inputIndices.size();
+                std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
+
+                // Read NEXT input
+                if(!readPInput(spikeInput, inputIndices, nextInputTime)) {
+                    g_SignalStatus = 1;
+                }
+            }
+
+#ifndef CPU_ONLY
+            // Copy to GPU
+            pushDVSCurrentSpikesToDevice();
+#endif
+        }
+#endif
+        {
+            TimerAccumulate<std::milli> timer(render);
+            {
+                std::lock_guard<std::mutex> lock(inputMutex);
+                renderSpikeImage(spikeCount_DVS, spike_DVS, Parameters::inputSize,
+                                 Parameters::spikePersistence, inputImage);
+            }
         }
 
         {
@@ -355,7 +424,7 @@ void runLive()
             // Simulate
 #ifndef CPU_ONLY
             stepTimeGPU();
-            pullOutputSpikes();
+            pullOutputCurrentSpikesFromDevice();
 #else
             stepTimeCPU();
 #endif
@@ -363,51 +432,9 @@ void runLive()
 
         {
             TimerAccumulate<std::milli> timer(render);
-
             {
                 std::lock_guard<std::mutex> lock(outputMutex);
-
-                for(unsigned int s = 0; s < spikeCount_Output; s++)
-                {
-                    const unsigned int spike = spike_Output[s];
-
-                    const auto spikeCoord = std::div((int)spike, (int)Parameters::detectorSize * Parameters::DetectorMax);
-                    const int spikeY = spikeCoord.quot;
-
-                    const auto xCoord = std::div(spikeCoord.rem, (int)Parameters::DetectorMax);
-                    const int spikeX =  xCoord.quot;
-
-                    switch(xCoord.rem)
-                    {
-                        case Parameters::DetectorLeft:
-                            output[spikeX][spikeY][0] -= 1.0f;
-                            break;
-
-                        case Parameters::DetectorRight:
-                            output[spikeX][spikeY][0] += 1.0f;
-                            break;
-
-                        case Parameters::DetectorUp:
-                            output[spikeX][spikeY][1] -= 1.0f;
-                            break;
-
-                        case Parameters::DetectorDown:
-                            output[spikeX][spikeY][1] += 1.0f;
-                            break;
-
-                    }
-                }
-
-                // Decay output
-                const float persistence = 0.995f;
-                for(unsigned int x = 0; x < Parameters::detectorSize; x++)
-                {
-                    for(unsigned int y = 0; y < Parameters::detectorSize; y++)
-                    {
-                        output[x][y][0] *= persistence;
-                        output[x][y][1] *= persistence;
-                    }
-                }
+                applyOutputSpikes(spikeCount_Output, spike_Output, output);
             }
         }
 
@@ -426,79 +453,18 @@ void runLive()
         }
     }
 
+    // Wait for display thread to die
     displayThread.join();
-    dvs.stop();
+
+    // Stop DVS
     std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "ms, slept for " << sleepTime.count() << "ms" << std::endl;
-    std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Render:" << render << std::endl;
-}
-
-void runFromFile(const char *filename)
-{
-    std::ifstream spikeInput(filename);
-    assert(spikeInput.good());
-
-    // Read first line of input
-    std::vector<unsigned int> inputIndices;
-    unsigned int nextInputTime = read_p_input(spikeInput, inputIndices);
-
-    SpikeCSVRecorder dvsPixelSpikeRecorder("dvs_pixel_spikes.csv", glbSpkCntDVS, glbSpkDVS);
-    SpikeCSVRecorder macroPixelSpikeRecorder("macro_pixel_spikes.csv", glbSpkCntMacroPixel, glbSpkMacroPixel);
-    SpikeCSVRecorder outputSpikeRecorder("output_spikes.csv", glbSpkCntOutput, glbSpkOutput);
-
-    double record = 0.0;
-    double dvsGet = 0.0;
-    double step = 0.0;
-
-    unsigned int i = 0;
-    for(i = 0; nextInputTime < std::numeric_limits<unsigned int>::max(); i++)
-    {
-         // If we should supply input this timestep
-        if(nextInputTime == i) {
-            // Copy into spike source
-            spikeCount_DVS = inputIndices.size();
-            std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
-
-#ifndef CPU_ONLY
-            // Copy to GPU
-            pushPCurrentSpikesToDevice();
-#endif
-
-            // Read NEXT input
-            nextInputTime = read_p_input(spikeInput, inputIndices);
-        }
-
-        dvsPixelSpikeRecorder.record(t);
-
-        // Simulate
-#ifndef CPU_ONLY
-        stepTimeGPU();
-#else
-        stepTimeCPU();
-#endif
-        macroPixelSpikeRecorder.record(t);
-        outputSpikeRecorder.record(t);
-    }
-
-    std::cout << "Ran for " << i << " " << DT << "ms timesteps" << std::endl;
-}
-}
-
-int main(int argc, char *argv[])
-{
-    allocateMem();
-    initialize();
-
-    build_centre_to_macro_connection(CDVS_MacroPixel, &allocateDVS_MacroPixel);
-    buildDetectors(CMacroPixel_Output_Excitatory, CMacroPixel_Output_Inhibitory,
-                   &allocateMacroPixel_Output_Excitatory, &allocateMacroPixel_Output_Inhibitory);
-    //print_sparse_matrix(Parameters::inputSize, CDVS_MacroPixel);
-    initoptical_flow();
 
 #ifdef LIVE
-    runLive();
+    dvs.stop();
+    std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Render:" << render << std::endl;
 #else
-    assert(argc > 1);
-    runFromFile(argv[0]);
+    std::cout << "Read:" << read << "ms, Step:" << step << "ms, Render:" << render << std::endl;
 #endif
+
     return 0;
 }

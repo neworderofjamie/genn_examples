@@ -26,6 +26,9 @@ namespace Parameters
     const unsigned int detectorSize = macroPixelSize - 2;
 
     const unsigned int outputScale = 25;
+    const unsigned int inputScale = 4;
+
+    const float spikePersistence = 0.995f;
 
     const float outputVectorScale = 2.0f;
 }
