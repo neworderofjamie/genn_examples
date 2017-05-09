@@ -59,12 +59,12 @@ void modelDefinition(NNmodel &model)
     // Neuron populations
     //------------------------------------------------------------------------
     // Create IF_curr neuron
-    model.addNeuronPopulation<NeuronModels::SpikeSource>("DVS", Parameters::inputSize * Parameters::inputSize,
+    auto *dvs = model.addNeuronPopulation<NeuronModels::SpikeSource>("DVS", Parameters::inputSize * Parameters::inputSize,
                                                          {}, {});
     model.addNeuronPopulation<LIF>("MacroPixel", Parameters::macroPixelSize * Parameters::macroPixelSize,
                                    lifParams, lifInit);
 
-    model.addNeuronPopulation<LIF>("Output", Parameters::detectorSize * Parameters::detectorSize * Parameters::DetectorMax,
+    auto *output = model.addNeuronPopulation<LIF>("Output", Parameters::detectorSize * Parameters::detectorSize * Parameters::DetectorMax,
                                    lifParams, lifInit);
 
     //------------------------------------------------------------------------
@@ -87,14 +87,10 @@ void modelDefinition(NNmodel &model)
         "MacroPixel", "Output",
         {}, macroPixelOutputInhibitoryWeightUpdateInit,
         outputInhibitoryPostSynParams, {});
-    /*model.setSpanTypeToPre("EE");
-    model.setSpanTypeToPre("EI");
-    model.setSpanTypeToPre("II");
-    model.setSpanTypeToPre("IE");*/
 
     // Use zero-copy for spikes and weights as we want to record them every timestep
-    //e->setSpikeZeroCopyEnabled(true);
-    //ie->setWUVarZeroCopyEnabled("g", true);
+    dvs->setSpikeZeroCopyEnabled(true);
+    output->setSpikeZeroCopyEnabled(true);
 
     model.finalize();
 }
