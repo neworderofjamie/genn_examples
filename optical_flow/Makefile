@@ -7,9 +7,13 @@ ifndef CPU_ONLY
     LINK_FLAGS += -lopencv_gpu
 endif
     
-ifdef LIVE
+ifdef DVS
     LINK_FLAGS  += -lcaer
-    CXXFLAGS    += -DLIVE
+    CXXFLAGS    += -DDVS
+endif
+
+ifdef CSV
+    CXXFLAGS    += -DCSV
 endif
 
 ifdef JETSON_POWER

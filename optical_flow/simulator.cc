@@ -19,11 +19,17 @@
 #include <opencv2/highgui/highgui.hpp>
 
 // Common example includes
-#ifdef LIVE
-    #include "../common/dvs_128.h"
-#endif
 #include "../common/spike_image_renderer.h"
 #include "../common/timer.h"
+
+#ifdef DVS
+    #include "../common/dvs_128.h"
+#elif CSV
+    #include "../common/dvs_pre_recorded.h"
+#else
+    #include "../common/dvs_pre_recorded_ms.h"
+#endif
+
 
 // Optical flow includes
 #include "parameters.h"
@@ -194,37 +200,6 @@ void buildDetectors(SparseProjection &excitatoryProjection, SparseProjection &in
     assert(iInhibitory == (Parameters::macroPixelSize * Parameters::macroPixelSize));
 }
 
-bool readPInput(std::ifstream &stream, std::vector<unsigned int> &indices, unsigned int &nextTime)
-{
-    // Read lines into string
-    std::string line;
-    std::getline(stream, line);
-
-    if(line.empty()) {
-        return false;
-    }
-
-    // Create string stream from line
-    std::stringstream lineStream(line);
-
-    // Read time from start of line
-    std::string nextTimeString;
-    std::getline(lineStream, nextTimeString, ';');
-    nextTime = (unsigned int)std::stoul(nextTimeString);
-
-    // Clear existing times
-    indices.clear();
-
-    while(lineStream.good()) {
-        // Read input spike index
-        std::string inputIndexString;
-        std::getline(lineStream, inputIndexString, ',');
-        indices.push_back(std::atoi(inputIndexString.c_str()));
-    }
-
-    return true;
-}
-
 void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
                           std::mutex &outputMutex, const float (&output)[Parameters::detectorSize][Parameters::detectorSize][2])
 {
@@ -356,28 +331,18 @@ int main(int argc, char *argv[])
     //print_sparse_matrix(Parameters::inputSize, CDVS_MacroPixel);
     initoptical_flow();
 
-#ifdef LIVE
+#ifdef DVS
      // Create DVS 128 device
     DVS128 dvs(DVS128::Polarity::On);
-
-    double dvsGet = 0.0;
+#elif CSV
+    assert(argc > 1);
+    DVSPreRecorded dvs(argv[1], DVSPreRecorded::Polarity::On, DT, true);
 #else
     assert(argc > 1);
-
-    std::ifstream spikeInput(argv[1]);
-    assert(spikeInput.good());
-
-    double read = 0.0;
-
-    // Read first line of input
-    std::vector<unsigned int> inputIndices;
-    unsigned int nextInputTime;
-    if(!readPInput(spikeInput, inputIndices, nextInputTime)) {
-        std::cerr << "No spikes to input" << std::endl;
-        return 1;
-    }
+    DVSPreRecordedMs dvs(argv[1]);
 #endif
 
+    double dvsGet = 0.0;
     double step = 0.0;
     double render = 0.0;
 
@@ -405,7 +370,7 @@ int main(int argc, char *argv[])
     for(i = 0; g_SignalStatus == 0; i++)
     {
         auto tickStart = std::chrono::high_resolution_clock::now();
-#ifdef LIVE
+
         {
             TimerAccumulate<std::milli> timer(dvsGet);
             dvs.readEvents(spikeCount_DVS, spike_DVS);
@@ -415,28 +380,7 @@ int main(int argc, char *argv[])
             pushDVSCurrentSpikesToDevice();
 #endif
         }
-#else
-        {
-            TimerAccumulate<std::milli> timer(read);
 
-            // If we should supply input this timestep
-            if(nextInputTime == i) {
-                // Copy into spike source
-                spikeCount_DVS = inputIndices.size();
-                std::copy(inputIndices.cbegin(), inputIndices.cend(), &spike_DVS[0]);
-
-                // Read NEXT input
-                if(!readPInput(spikeInput, inputIndices, nextInputTime)) {
-                    g_SignalStatus = 1;
-                }
-            }
-
-#ifndef CPU_ONLY
-            // Copy to GPU
-            pushDVSCurrentSpikesToDevice();
-#endif
-        }
-#endif
         {
             TimerAccumulate<std::milli> timer(render);
             {
@@ -485,14 +429,10 @@ int main(int argc, char *argv[])
     displayThread.join();
 
     // Stop DVS
-    std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "ms, slept for " << sleepTime.count() << "ms" << std::endl;
-
-#ifdef LIVE
     dvs.stop();
+
+    std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "ms, slept for " << sleepTime.count() << "ms" << std::endl;
     std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Render:" << render << std::endl;
-#else
-    std::cout << "Read:" << read << "ms, Step:" << step << "ms, Render:" << render << std::endl;
-#endif
 
     return 0;
 }
