@@ -36,19 +36,31 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
         2.0);    // 0 - Wij (nA)
 
-    // Additive STDP synapse parameters
+    /*// Minimal triplet rule parameter set
     PfisterTriplet::ParamValues pfisterParams(
-        16.8,           // 0 - Tau plus
-        33.7,           // 1 - Tau minus
-        101.0,          // 2 - Tau X
-        114.0,          // 3 - Tau Y
-        0.0,            // 4 - A2+
-        0.0071 * 0.5,   // 5 - A2-
-        0.0065 * 0.5,   // 6 - A3+
-        0.0,            // 7 - A3-
-        0.0,            // 8 - Minimum weight
-        1.0);           // 9 - Maximum weight
+        16.8,                           // 0 - Tau plus
+        33.7,                           // 1 - Tau minus
+        101.0,                          // 2 - Tau X
+        114.0,                          // 3 - Tau Y
+        0.0,                            // 4 - A2+
+        7.1E-3 * Parameters::aScale,    // 5 - A2-
+        6.5E-3 * Parameters::aScale,    // 6 - A3+
+        0.0,                            // 7 - A3-
+        0.0,                            // 8 - Minimum weight
+        1.0);                           // 9 - Maximum weight*/
 
+    // Full triplet rule parameter set
+    PfisterTriplet::ParamValues pfisterParams(
+        16.8,                           // 0 - Tau plus
+        33.7,                           // 1 - Tau minus
+        101.0,                          // 2 - Tau X
+        125.0,                          // 3 - Tau Y
+        5.0E-10 * Parameters::aScale,   // 4 - A2+
+        7.0E-3 * Parameters::aScale,    // 5 - A2-
+        6.2E-3 * Parameters::aScale,    // 6 - A3+
+        2.3E-4 * Parameters::aScale,    // 7 - A3-
+        0.0,                            // 8 - Minimum weight
+        1.0);                           // 9 - Maximum weight
 
     PfisterTriplet::VarValues pfisterInit(
         0.5);  // 0 - g

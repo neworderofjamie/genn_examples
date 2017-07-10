@@ -35,7 +35,7 @@ with open("weights.csv", "rb") as csv_file:
 
     weights = [raw_weights[negative_mask],
                raw_weights[positive_mask]]
-    print weights
+
     # Create plot
     figure, axis = plt.subplots()
 
