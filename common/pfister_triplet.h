@@ -28,10 +28,15 @@ public:
     SET_PRE_VARS({{"r1", "scalar"}, {"r2", "scalar"}});
     SET_POST_VARS({{"o1", "scalar"}, {"o2", "scalar"}});
 
-    SET_SIM_PREAMBLE_CODE(
+    SET_PRE_SPIKE_CODE(
         "scalar dt = $(t) - $(sT_pre);\n"
         "$(r1) = ($(r1) * exp(-dt / $(tauPlus))) + 1.0;\n"
         "$(r2) =  ($(sT_pre) == 0.0) ? 0.0 : ($(r2) + 1.0) * exp(-dt / $(tauX));\n");
+
+    SET_POST_SPIKE_CODE(
+        "scalar dt = $(t) - $(sT_post);\n"
+        "$(o1) = ($(o1) * exp(-dt / $(tauPlus))) + 1.0;\n"
+        "$(o2) = ($(sT_post) == 0.0) ? 0.0 : ($(o2) + 1.0) * exp(-dt / $(tauY));\n");
 
     SET_SIM_CODE(
         "$(addtoinSyn) = $(g);\n"
@@ -43,11 +48,6 @@ public:
         "    scalar newWeight = $(g) - o1 * ($(A2Minus) + ($(A3Minus) * $(r2)));\n"
         "    $(g) = (newWeight < $(Wmin)) ? $(Wmin) : newWeight;\n"
         "}\n");
-
-    SET_LEARN_POST_PREAMBLE_CODE(
-        "scalar dt = $(t) - $(sT_post);\n"
-        "$(o1) = ($(o1) * exp(-dt / $(tauPlus))) + 1.0;\n"
-        "$(o2) = ($(sT_post) == 0.0) ? 0.0 : ($(o2) + 1.0) * exp(-dt / $(tauX));\n");
 
     SET_LEARN_POST_CODE(
         "scalar dt = $(t) - $(sT_pre);\n"
