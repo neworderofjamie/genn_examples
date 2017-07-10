@@ -70,19 +70,29 @@ void modelDefinition(NNmodel &model)
     // Create IF_curr neuron
     model.addNeuronPopulation<NeuronModels::SpikeSource>("PreStim", Parameters::numNeurons, {}, {});
     model.addNeuronPopulation<NeuronModels::SpikeSource>("PostStim", Parameters::numNeurons, {}, {});
-    model.addNeuronPopulation<LIF>("Excitatory", Parameters::numNeurons, lifParams, lifInit);
+    model.addNeuronPopulation<LIF>("Pre", Parameters::numNeurons, lifParams, lifInit);
+    model.addNeuronPopulation<LIF>("Post", Parameters::numNeurons, lifParams, lifInit);
 
-    model.addSynapsePopulation<PfisterTriplet, ExpCurr>(
-            "PreStimToExcitatory", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
-            "PreStim", "Excitatory",
-            pfisterParams,  pfisterInit, pfisterPreInit, pfisterPostInit,
+    auto preStimToPre = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+            "PreStimToPre", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+            "PreStim", "Pre",
+            {}, staticSynapseInit,
             expCurrParams, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-            "PostStimToExcitatory", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
-            "PostStim", "Excitatory",
+    auto postStimToPost = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+            "PostStimToPost", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+            "PostStim", "Post",
             {}, staticSynapseInit,
             expCurrParams, {});
 
+    auto preToPost = model.addSynapsePopulation<PfisterTriplet, ExpCurr>(
+            "PreToPost", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+            "Pre", "Post",
+            pfisterParams,  pfisterInit, pfisterPreInit, pfisterPostInit,
+            expCurrParams, {});
+
+    preStimToPre->setMaxConnections(1);
+    postStimToPost->setMaxConnections(1);
+    preToPost->setMaxConnections(1);
 
     model.finalize();
 }

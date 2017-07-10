@@ -9,8 +9,9 @@ int main()
     allocateMem();
 
     // 1-1 connecting stimuli to neurons
-    allocatePreStimToExcitatory(Parameters::numNeurons);
-    allocatePostStimToExcitatory(Parameters::numNeurons);
+    allocatePreStimToPre(Parameters::numNeurons);
+    allocatePostStimToPost(Parameters::numNeurons);
+    allocatePreToPost(Parameters::numNeurons);
 
     initialize();
 
@@ -19,19 +20,21 @@ int main()
     {
         // Each presynaptic neuron only has
         // one postsynaptic neuron connected to it
-        CPreStimToExcitatory.indInG[i] = i;
-        CPostStimToExcitatory.indInG[i] = i;
+        CPreStimToPre.indInG[i] = i;
+        CPostStimToPost.indInG[i] = i;
+        CPreToPost.indInG[i] = i;
 
         // And this postsynaptic neuron has the same number
-        CPreStimToExcitatory.ind[i] = i;
-        CPostStimToExcitatory.ind[i] = i;
+        CPreStimToPre.ind[i] = i;
+        CPostStimToPost.ind[i] = i;
+        CPreToPost.ind[i] = i;
 
-        gPreStimToExcitatory[i] = 0.5;
-        gPostStimToExcitatory[i] = 2.0;
+        gPreToPost[i] = 0.5;
     }
 
-    CPreStimToExcitatory.indInG[Parameters::numNeurons] = Parameters::numNeurons;
-    CPostStimToExcitatory.indInG[Parameters::numNeurons] = Parameters::numNeurons;
+    CPreStimToPre.indInG[Parameters::numNeurons] = Parameters::numNeurons;
+    CPostStimToPost.indInG[Parameters::numNeurons] = Parameters::numNeurons;
+    CPreToPost.indInG[Parameters::numNeurons] = Parameters::numNeurons;
 
     // Setup reverse connection indices for STDP
     initsjostrom_triplet();
@@ -82,6 +85,10 @@ int main()
     // Loop through timesteps
     for(unsigned int t = 0; t < simTimesteps; t++)
     {
+        // Zero spike counts
+        glbSpkCntPreStim[0] = 0;
+        glbSpkCntPostStim[0] = 0;
+
         // Loop through spike sources
         for(unsigned int n = 0; n < Parameters::numNeurons; n++)
         {
@@ -92,9 +99,6 @@ int main()
             {
                 // Manually add a spike to spike source's output
                 glbSpkPreStim[glbSpkCntPreStim[0]++] = n;
-
-                // **YUCK** also update the time used for post-after-pre STDP calculations
-                sTPreStim[n] = 1.0 * (double)t;
 
                 // Go onto next pre-spike
                 nextPreSpikeIndex[n]++;
@@ -114,12 +118,21 @@ int main()
         }
 
         // Simulate
+#ifndef CPU_ONLY
+        pushPreStimCurrentSpikesToDevice();
+        pushPostStimCurrentSpikesToDevice();
+
+        stepTimeGPU();
+
+        pullPreCurrentSpikesFromDevice();
+#else
         stepTimeCPU();
+#endif
 
         // Write spike times to file
-        for(unsigned int i = 0; i < glbSpkCntExcitatory[0]; i++)
+        for(unsigned int i = 0; i < glbSpkCntPre[0]; i++)
         {
-            fprintf(spikes, "%f, %u\n", 1.0 * (double)t, glbSpkExcitatory[i]);
+            fprintf(spikes, "%f, %u\n", 1.0 * (double)t, glbSpkPre[i]);
         }
     }
     fclose(spikes);
@@ -127,9 +140,13 @@ int main()
     FILE *weights = fopen("weights.csv", "w");
     fprintf(weights, "Frequency [Hz], Delta T [ms], Weight\n");
 
+#ifndef CPU_ONLY
+    pullPreToPostStateFromDevice();
+#endif
+
     for(unsigned int n = 0; n < Parameters::numNeurons; n++)
     {
-        fprintf(weights, "%f, %f, %f\n", Parameters::frequencies[n / 2], Parameters::dt[n % 2], gPreStimToExcitatory[n]);
+        fprintf(weights, "%f, %f, %f\n", Parameters::frequencies[n / 2], Parameters::dt[n % 2], gPreToPost[n]);
     }
 
     fclose(weights);
