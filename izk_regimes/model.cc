@@ -24,7 +24,7 @@ public:
     
     SET_PARAM_NAMES({"Ioffset"});
 
-    SET_INIT_VALS({{"V","scalar"}, {"U", "scalar"}, {"a", "scalar"}, {"b", "scalar"}, {"c", "scalar"}, {"d", "scalar"}});
+    SET_VARS({{"V","scalar"}, {"U", "scalar"}, {"a", "scalar"}, {"b", "scalar"}, {"c", "scalar"}, {"d", "scalar"}});
 };
 IMPLEMENT_MODEL(IzhikevichV);
 
@@ -36,7 +36,7 @@ void modelDefinition(NNmodel &model)
 
   // Izhikevich model parameters
   auto paramValues = IzhikevichV::ParamValues(10.0);
-  auto initValues = IzhikevichV::InitValues(-65.0, -20.0, 0.02, 0.2, -65.0, 8.0);
+  auto initValues = IzhikevichV::VarValues(-65.0, -20.0, 0.02, 0.2, -65.0, 8.0);
 
   // Create population of Izhikevich neurons
   model.addNeuronPopulation<IzhikevichV>("Neurons", 4, paramValues, initValues);
