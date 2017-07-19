@@ -14,11 +14,12 @@ namespace Parameters
     // connection probability
     const double probabilityConnection = 0.1;
 
-    // regime
-    const unsigned int numSets = 100;
-    const unsigned int setSize = 50;
+    // input sets
+    const unsigned int numStimuliSets = 100;
+    const unsigned int stimuliSetSize = 50;
+    const double stimuliCurrent = 40.0;
 
-    const double stimuliDurationMs = 1.0;
+    // regime
     const double minInterStimuliIntervalMs = 100.0;
     const double maxInterStimuliIntervalMs = 300.0;
 }
