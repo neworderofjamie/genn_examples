@@ -61,8 +61,8 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(-1.0);
 
     // Create IF_curr neuron
-    model.addNeuronPopulation<Izhikevich>("E", 800, excParams, izkInit);
-    model.addNeuronPopulation<Izhikevich>("I", 200, inhParams, izkInit);
+    model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
+    model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,

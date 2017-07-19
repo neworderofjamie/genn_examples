@@ -8,6 +8,8 @@
 
 #include "izhikevich_pavlovian_CODE/definitions.h"
 
+#include "parameters.h"
+
 int main()
 {
     auto  allocStart = chrono::steady_clock::now();
@@ -19,10 +21,14 @@ int main()
     initialize();
 
     std::mt19937 gen;
-    buildFixedProbabilityConnector(200, 200, 0.1, CII, &allocateII, gen);
-    buildFixedProbabilityConnector(200, 800, 0.1, CIE, &allocateIE, gen);
-    buildFixedProbabilityConnector(800, 800, 0.1, CEE, &allocateEE, gen);
-    buildFixedProbabilityConnector(800, 200, 0.1, CEI, &allocateEI, gen);
+    buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory,
+                                   Parameters::probabilityConnection, CII, &allocateII, gen);
+    buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory,
+                                   Parameters::probabilityConnection, CIE, &allocateIE, gen);
+    buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory,
+                                   Parameters::probabilityConnection, CEE, &allocateEE, gen);
+    buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory,
+                                   Parameters::probabilityConnection, CEI, &allocateEI, gen);
 
     // Final setup
     initizhikevich_pavlovian();
@@ -40,21 +46,20 @@ int main()
     std::uniform_real_distribution<> inputCurrent(-6.5, 6.5);
 
     // Loop through timesteps
-    //unsigned int prevThalamicInputNeuron = 0;
     for(unsigned int t = 0; t < 1000; t++)
     {
         // Generate uniformly distributed numbers to fill host array
         // **TODO** move to GPU
-        std::generate_n(IextE, 800,
+        std::generate_n(IextE, Parameters::numExcitatory,
             [&inputCurrent, &gen](){ return inputCurrent(gen); });
-        std::generate_n(IextI, 200,
+        std::generate_n(IextI, Parameters::numInhibitory,
             [&inputCurrent, &gen](){ return inputCurrent(gen); });
 
         // Simulate
 #ifndef CPU_ONLY
         // Upload random input currents to GPU
-        CHECK_CUDA_ERRORS(cudaMemcpy(d_IextE, IextE, 800 * sizeof(scalar), cudaMemcpyHostToDevice));
-        CHECK_CUDA_ERRORS(cudaMemcpy(d_IextI, IextI, 200 * sizeof(scalar), cudaMemcpyHostToDevice));
+        CHECK_CUDA_ERRORS(cudaMemcpy(d_IextE, IextE, Parameters::numExcitatory * sizeof(scalar), cudaMemcpyHostToDevice));
+        CHECK_CUDA_ERRORS(cudaMemcpy(d_IextI, IextI, Parameters::numInhibitory * sizeof(scalar), cudaMemcpyHostToDevice));
 
         stepTimeGPU();
 
