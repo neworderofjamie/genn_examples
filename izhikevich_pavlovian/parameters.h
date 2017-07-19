@@ -7,6 +7,14 @@ namespace Parameters
 {
     const double timestepMs = 1.0;
 
+    // Simulation duration
+    const double durationMs = 60.0 * 60.0 * 1000.0;
+
+    // How much of start and end of simulation to record
+    // **NOTE** we want to see at least one rewarded stimuli in each recording window
+    const double recordStartMs = 40.0 * 1000.0;
+    const double recordEndMs = 40.0 * 1000.0;
+
     // STDP params
     const double tauD = 200.0;
 

@@ -84,7 +84,7 @@ int main()
     SpikeCSVRecorder e_spikes("e_spikes.csv", glbSpkCntE, glbSpkE);
     SpikeCSVRecorder i_spikes("i_spikes.csv", glbSpkCntI, glbSpkI);
 
-    std::ofstream rewardedStimulusStream("rewarded_stimulus_times.csv");
+    std::ofstream stimulusStream("stimulus_times.csv");
     std::ofstream rewardStream("reward_times.csv");
 
     {
@@ -109,8 +109,13 @@ int main()
         unsigned int nextRewardTimestep = std::numeric_limits<unsigned int>::max();
 
         // Loop through timesteps
-        for(unsigned int t = 0; t < 160000/*1000 * 60 * 60*/; t++)
+        const unsigned int duration = (unsigned int)std::round(Parameters::durationMs / Parameters::timestepMs);
+        const unsigned int recordBeginningStop = (unsigned int)std::round(Parameters::recordStartMs / Parameters::timestepMs);
+        const unsigned int recordEndStart = (unsigned int)std::round((Parameters::durationMs - Parameters::recordEndMs) / Parameters::timestepMs);
+        for(unsigned int t = 0; t < duration; t++)
         {
+            const bool shouldRecord = (t < recordBeginningStop) || (t > recordEndStart);
+
             // Generate uniformly distributed numbers to fill host array
             // **TODO** move to GPU
             std::generate_n(IextE, Parameters::numExcitatory,
@@ -132,14 +137,17 @@ int main()
                     }
                 }
 
+                // Record stimulus time and set
+                if(shouldRecord) {
+                    stimulusStream << (scalar)t * DT << "," << nextStimuliSet << std::endl;
+                }
+
                 // If this is the rewarded stimuli
                 if(nextStimuliSet == 0) {
                     // Draw time until next reward
                     nextRewardTimestep = t + rewardDelay(gen);
 
                     std::cout << "\tRewarding at timestep " << nextRewardTimestep << std::endl;
-
-                    rewardedStimulusStream << (scalar)t * DT << std::endl;
                 }
 
                 // Pick time and set for next stimuli
@@ -153,7 +161,10 @@ int main()
                 injectDopamineEE = true;
                 injectDopamineEI = true;
 
-                rewardStream << (scalar)t * DT << std::endl;
+                // Record reward time
+                if(shouldRecord) {
+                    rewardStream << (scalar)t * DT << std::endl;
+                }
             }
 
             // Simulate
@@ -165,8 +176,10 @@ int main()
             stepTimeGPU();
 
             // Download spikes from GPU
-            pullECurrentSpikesFromDevice();
-            pullICurrentSpikesFromDevice();
+            if(shouldRecord) {
+                pullECurrentSpikesFromDevice();
+                pullICurrentSpikesFromDevice();
+            }
 #else
             stepTimeCPU();
 #endif
@@ -189,9 +202,12 @@ int main()
                 injectDopamineEE = false;
                 injectDopamineEI = false;
             }
+
             // Record spikes
-            e_spikes.record(t);
-            i_spikes.record(t);
+            if(shouldRecord) {
+                e_spikes.record(t);
+                i_spikes.record(t);
+            }
         }
     }
 
