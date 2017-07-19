@@ -1,8 +1,10 @@
-#include <cmath>
-#include <vector>
-
+// GeNN includes
 #include "modelSpec.h"
 
+// Common includes
+#include "../common/stdp_dopamine.h"
+
+// Model includes
 #include "parameters.h"
 
 // Standard Izhikevich model with variable input current
@@ -55,24 +57,38 @@ void modelDefinition(NNmodel &model)
         -13.0,    // U
         0.0);   // Iext
 
-    // Static synapse parameters
-    WeightUpdateModels::StaticPulse::VarValues excSynInit(1.0);
+    STDPDopamine::ParamValues dopeParams(
+        20.0,   // 0 - Potentiation time constant (ms)
+        20.0,   // 1 - Depression time constant (ms)
+        1000.0, // 2 - Synaptic tag time constant (ms)
+        200.0,  // 3 - Dopamine time constant (ms)
+        1.0,    // 4 - Rate of potentiation
+        1.5,    // 5 - Rate of depression
+        0.0,    // 6 - Minimum weight
+        4.0);   // 7 - Maximum weight
 
+    STDPDopamine::VarValues dopeInitVars(
+        1.0,    // Synaptic weight
+        0.0,    // Synaptic tag
+        0.0);   // Time of last synaptic tag update
+
+
+    // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(-1.0);
 
     // Create IF_curr neuron
     model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
     model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
+        "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "E",
-        {}, excSynInit,
+        dopeParams, dopeInitVars,
         {}, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
+        "EI", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "I",
-        {}, excSynInit,
+        dopeParams, dopeInitVars,
         {}, {});
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,

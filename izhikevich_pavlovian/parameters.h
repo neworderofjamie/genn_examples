@@ -22,4 +22,7 @@ namespace Parameters
     // regime
     const double minInterStimuliIntervalMs = 100.0;
     const double maxInterStimuliIntervalMs = 300.0;
+
+    // reward
+    const double rewardDelayMs = 1000.0;
 }

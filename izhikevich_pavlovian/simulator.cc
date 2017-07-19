@@ -36,6 +36,22 @@ int main()
                                     Parameters::probabilityConnection, CEI, &allocateEI, gen);
     }
 
+    {
+        Timer<> t("Initializing sparse synapse variables:");
+
+        // Initialize excitatory weights
+        std::fill_n(gEI, CEI.connN, 1.0f);
+        std::fill_n(gEE, CEE.connN, 1.0f);
+
+        // Initialize synaptic tags
+        std::fill_n(cEI, CEI.connN, 0.0f);
+        std::fill_n(cEE, CEE.connN, 0.0f);
+
+        // Initialize times to last update
+        std::fill_n(tCEI, CEI.connN, 0.0f);
+        std::fill_n(tCEE, CEE.connN, 0.0f);
+    }
+
     // Final setup
     {
         Timer<> t("Sparse init:");
@@ -68,12 +84,10 @@ int main()
     SpikeCSVRecorder e_spikes("e_spikes.csv", glbSpkCntE, glbSpkE);
     SpikeCSVRecorder i_spikes("i_spikes.csv", glbSpkCntI, glbSpkI);
 
-
     {
         Timer<> t("Simulation:");
 
-
-         // Create distribution to pick an input to apply thamalic input to
+        // Create distribution to pick an input to apply thamalic input to
         std::uniform_real_distribution<> inputCurrent(-6.5, 6.5);
 
         // Create distribution to pick inter stimuli intervals
@@ -82,8 +96,11 @@ int main()
 
         std::uniform_int_distribution<> stimuliSet(0, Parameters::numStimuliSets - 1);
 
+        std::uniform_int_distribution<> rewardDelay(0, (unsigned int)std::round(Parameters::rewardDelayMs / Parameters::timestepMs));
+
          // Draw time until first stimuli
         unsigned int nextStimuliTimestep = interStimuliInterval(gen);
+        unsigned int nextRewardTimestep = std::numeric_limits<unsigned int>::max();
         unsigned int nextStimuliSet = 0;
 
         // Loop through timesteps
@@ -115,6 +132,9 @@ int main()
                 nextStimuliSet = stimuliSet(gen);
             }
 
+            if(t == nextRewardTimestep) {
+
+            }
             // Simulate
 #ifndef CPU_ONLY
             // Upload random input currents to GPU
