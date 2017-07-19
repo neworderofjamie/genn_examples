@@ -84,6 +84,9 @@ int main()
     SpikeCSVRecorder e_spikes("e_spikes.csv", glbSpkCntE, glbSpkE);
     SpikeCSVRecorder i_spikes("i_spikes.csv", glbSpkCntI, glbSpkI);
 
+    std::ofstream rewardedStimulusStream("rewarded_stimulus_times.csv");
+    std::ofstream rewardStream("reward_times.csv");
+
     {
         Timer<> t("Simulation:");
 
@@ -106,7 +109,7 @@ int main()
         unsigned int nextRewardTimestep = std::numeric_limits<unsigned int>::max();
 
         // Loop through timesteps
-        for(unsigned int t = 0; t < 1000 * 60 * 60; t++)
+        for(unsigned int t = 0; t < 160000/*1000 * 60 * 60*/; t++)
         {
             // Generate uniformly distributed numbers to fill host array
             // **TODO** move to GPU
@@ -135,6 +138,8 @@ int main()
                     nextRewardTimestep = t + rewardDelay(gen);
 
                     std::cout << "\tRewarding at timestep " << nextRewardTimestep << std::endl;
+
+                    rewardedStimulusStream << (scalar)t * DT << std::endl;
                 }
 
                 // Pick time and set for next stimuli
@@ -147,6 +152,8 @@ int main()
                 std::cout << "Applying reward at timestep " << t << std::endl;
                 injectDopamineEE = true;
                 injectDopamineEI = true;
+
+                rewardStream << (scalar)t * DT << std::endl;
             }
 
             // Simulate
