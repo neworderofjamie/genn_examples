@@ -7,6 +7,9 @@ namespace Parameters
 {
     const double timestepMs = 1.0;
 
+    // STDP params
+    const double tauD = 200.0;
+
     // number of cells
     const unsigned int numExcitatory = 800;
     const unsigned int numInhibitory = 200;

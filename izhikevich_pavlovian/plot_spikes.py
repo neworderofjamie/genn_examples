@@ -4,7 +4,7 @@ import numpy as np
 
 num_excitatory = 800
 num_inhibitory = 200
-duration_ms = 1000
+duration_ms = 10000
 bin_ms = 10
 
 with open("e_spikes.csv", "rb") as e_spikes_file, open("i_spikes.csv", "rb") as i_spikes_file:

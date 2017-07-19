@@ -98,13 +98,15 @@ int main()
 
         std::uniform_int_distribution<> rewardDelay(0, (unsigned int)std::round(Parameters::rewardDelayMs / Parameters::timestepMs));
 
-         // Draw time until first stimuli
+        // Draw time until first stimuli and which set that should be
         unsigned int nextStimuliTimestep = interStimuliInterval(gen);
+        unsigned int nextStimuliSet = stimuliSet(gen);
+
+        // Invalidate next reward timestep
         unsigned int nextRewardTimestep = std::numeric_limits<unsigned int>::max();
-        unsigned int nextStimuliSet = 0;
 
         // Loop through timesteps
-        for(unsigned int t = 0; t < 1000; t++)
+        for(unsigned int t = 0; t < 1000 * 60 * 60; t++)
         {
             // Generate uniformly distributed numbers to fill host array
             // **TODO** move to GPU
@@ -127,14 +129,26 @@ int main()
                     }
                 }
 
+                // If this is the rewarded stimuli
+                if(nextStimuliSet == 0) {
+                    // Draw time until next reward
+                    nextRewardTimestep = t + rewardDelay(gen);
+
+                    std::cout << "\tRewarding at timestep " << nextRewardTimestep << std::endl;
+                }
+
                 // Pick time and set for next stimuli
                 nextStimuliTimestep = t + interStimuliInterval(gen);
                 nextStimuliSet = stimuliSet(gen);
             }
 
+            // If we should reward in this timestep, inject dopamine
             if(t == nextRewardTimestep) {
-
+                std::cout << "Applying reward at timestep " << t << std::endl;
+                injectDopamineEE = true;
+                injectDopamineEI = true;
             }
+
             // Simulate
 #ifndef CPU_ONLY
             // Upload random input currents to GPU
@@ -149,7 +163,25 @@ int main()
 #else
             stepTimeCPU();
 #endif
+            if(t == nextRewardTimestep) {
+                const scalar tMs =  (scalar)t * DT;
 
+                // Decay global dopamine traces
+                dEE = dEE * std::exp(-tMs / Parameters::tauD);
+                dEI = dEI * std::exp(-tMs / Parameters::tauD);
+
+                // Add effect of dopamine spike
+                dEE += 0.5f;
+                dEI += 0.5f;
+
+                // Update last reward time
+                tDEE = tMs;
+                tDEI = tMs;
+
+                // Clear dopamine injection flags
+                injectDopamineEE = false;
+                injectDopamineEI = false;
+            }
             // Record spikes
             e_spikes.record(t);
             i_spikes.record(t);

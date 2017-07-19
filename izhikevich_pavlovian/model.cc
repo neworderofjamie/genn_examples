@@ -58,14 +58,14 @@ void modelDefinition(NNmodel &model)
         0.0);   // Iext
 
     STDPDopamine::ParamValues dopeParams(
-        20.0,   // 0 - Potentiation time constant (ms)
-        20.0,   // 1 - Depression time constant (ms)
-        1000.0, // 2 - Synaptic tag time constant (ms)
-        200.0,  // 3 - Dopamine time constant (ms)
-        1.0,    // 4 - Rate of potentiation
-        1.5,    // 5 - Rate of depression
-        0.0,    // 6 - Minimum weight
-        4.0);   // 7 - Maximum weight
+        20.0,               // 0 - Potentiation time constant (ms)
+        20.0,               // 1 - Depression time constant (ms)
+        1000.0,             // 2 - Synaptic tag time constant (ms)
+        Parameters::tauD,   // 3 - Dopamine time constant (ms)
+        0.1,                // 4 - Rate of potentiation
+        0.15,               // 5 - Rate of depression
+        0.0,                // 6 - Minimum weight
+        4.0);               // 7 - Maximum weight
 
     STDPDopamine::VarValues dopeInitVars(
         1.0,    // Synaptic weight
