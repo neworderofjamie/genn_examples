@@ -2,6 +2,7 @@
 #include "modelSpec.h"
 
 // Common includes
+#include "../common/connectors.h"
 #include "../common/stdp_dopamine.h"
 
 // Model includes
@@ -80,26 +81,36 @@ void modelDefinition(NNmodel &model)
     model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
     model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
 
-    model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
+    auto ee = model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "E",
         dopeParams, dopeInitVars,
         {}, {});
-    model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
+    auto ei = model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EI", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "I",
         dopeParams, dopeInitVars,
         {}, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+    auto ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhSynInit,
         {}, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+    auto ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhSynInit,
         {}, {});
+
+    // Calculate max connections
+    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
+                                                                      Parameters::probabilityConnection));
+    ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
+                                                                      Parameters::probabilityConnection));
+    ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
+                                                                      Parameters::probabilityConnection));
+    ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
+                                                                      Parameters::probabilityConnection));
 
     // **TODO** set max connections
     model.finalize();
