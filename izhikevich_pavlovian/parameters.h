@@ -5,7 +5,7 @@
 //------------------------------------------------------------------------
 namespace Parameters
 {
-    const double timestep = 1.0;
+    const double timestepMs = 1.0;
 
     // number of cells
     const unsigned int numExcitatory = 800;
@@ -13,4 +13,12 @@ namespace Parameters
 
     // connection probability
     const double probabilityConnection = 0.1;
+
+    // regime
+    const unsigned int numSets = 100;
+    const unsigned int setSize = 50;
+
+    const double stimuliDurationMs = 1.0;
+    const double minInterStimuliIntervalMs = 100.0;
+    const double maxInterStimuliIntervalMs = 300.0;
 }

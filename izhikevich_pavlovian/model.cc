@@ -29,7 +29,7 @@ IMPLEMENT_MODEL(Izhikevich);
 void modelDefinition(NNmodel &model)
 {
     initGeNN();
-    model.setDT(1.0);
+    model.setDT(Parameters::timestepMs);
     model.setName("izhikevich_pavlovian");
 
     //---------------------------------------------------------------------------
