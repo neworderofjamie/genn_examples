@@ -1,14 +1,62 @@
+// Standard C++ includes
 #include <algorithm>
+#include <bitset>
 #include <numeric>
 #include <random>
 
+// Common includes
 #include "../common/connectors.h"
 #include "../common/spike_csv_recorder.h"
 #include "../common/timer.h"
 
+// GeNN generated code includes
 #include "izhikevich_pavlovian_CODE/definitions.h"
 
+// Model includes
 #include "parameters.h"
+
+//------------------------------------------------------------------------
+// Anonymous namespace
+//------------------------------------------------------------------------
+namespace
+{
+unsigned int convertMsToTimesteps(double ms)
+{
+    return (unsigned int)std::round(ms / Parameters::timestepMs);
+}
+
+template<unsigned int NumPre>
+std::pair<float, float> getMeanOutgoingWeight(const SparseProjection &projection, const scalar *weights,
+                                              const std::bitset<NumPre> &rewardedNeuronSet) {
+    // Loop through pre-synaptic neurons
+    scalar totalOutgoingWeight = 0.0f;
+    scalar totalRewardedOutgoingWeight = 0.0f;
+    for(unsigned int i = 0; i < NumPre; i++) {
+        // Get indices of row start and end and hence row-length
+        const unsigned int rowStart = projection.indInG[i];
+        const unsigned int rowEnd = projection.indInG[i + 1];
+
+        // Sum weights in row
+        const scalar totalRowOutgoingWeight = std::accumulate(&weights[rowStart], &weights[rowEnd], 0.0f);
+
+        // Divide by row length to get mean outgoing weight from this presynaptic neuron
+        const scalar meanRowOutgoingWeight = totalRowOutgoingWeight / (float)(rowEnd - rowStart);
+
+        // Add to total
+        totalOutgoingWeight += meanRowOutgoingWeight;
+
+        // If this presynaptic neuron is in the rewarded neuron set, add the mean to this total as well
+        if(rewardedNeuronSet.test(i)) {
+            totalRewardedOutgoingWeight += meanRowOutgoingWeight;
+        }
+     }
+
+     // Divide total by number of presynaptic neurons and total rewarded
+     // by number of rewarded neurons to get averages and return
+     return std::make_pair(totalOutgoingWeight / (float)NumPre,
+                           totalRewardedOutgoingWeight / (float)rewardedNeuronSet.count());
+}
+}
 
 int main()
 {
@@ -59,6 +107,8 @@ int main()
     }
 
     std::vector<std::vector<unsigned int>> inputSets;
+    std::bitset<Parameters::numExcitatory> rewardedExcStimuliSet;
+
     {
         Timer<> t("Stimuli generation:");
 
@@ -78,6 +128,13 @@ int main()
             i.resize(Parameters::stimuliSetSize);
             std::copy_n(neuronIndices.begin(), Parameters::stimuliSetSize, i.begin());
         }
+
+        // Create bitset version of excitatory neurons in rewarded stimuli set
+        for(unsigned int n : inputSets[0]) {
+            if(n < Parameters::numExcitatory) {
+                rewardedExcStimuliSet.set(n);
+            }
+        }
     }
 
     // Open CSV output files
@@ -86,6 +143,7 @@ int main()
 
     std::ofstream stimulusStream("stimulus_times.csv");
     std::ofstream rewardStream("reward_times.csv");
+    std::ofstream weightEvolutionStream("weight_evolution.csv");
 
     {
         Timer<> t("Simulation:");
@@ -94,8 +152,8 @@ int main()
         std::uniform_real_distribution<> inputCurrent(-6.5, 6.5);
 
         // Create distribution to pick inter stimuli intervals
-        std::uniform_int_distribution<> interStimuliInterval((unsigned int)std::round(Parameters::minInterStimuliIntervalMs / Parameters::timestepMs),
-                                                            (unsigned int)std::round(Parameters::maxInterStimuliIntervalMs / Parameters::timestepMs));
+        std::uniform_int_distribution<> interStimuliInterval(convertMsToTimesteps(Parameters::minInterStimuliIntervalMs),
+                                                             convertMsToTimesteps(Parameters::maxInterStimuliIntervalMs));
 
         std::uniform_int_distribution<> stimuliSet(0, Parameters::numStimuliSets - 1);
 
@@ -108,13 +166,17 @@ int main()
         // Invalidate next reward timestep
         unsigned int nextRewardTimestep = std::numeric_limits<unsigned int>::max();
 
+        // Convert simulation regime parameters to timesteps
+        const unsigned int duration = convertMsToTimesteps(Parameters::durationMs);
+        const unsigned int recordBeginningStop = convertMsToTimesteps(Parameters::recordStartMs);
+        const unsigned int recordEndStart = convertMsToTimesteps(Parameters::durationMs - Parameters::recordEndMs);
+        const unsigned int weightRecordInterval = convertMsToTimesteps(Parameters::weightRecordIntervalMs);
+
         // Loop through timesteps
-        const unsigned int duration = (unsigned int)std::round(Parameters::durationMs / Parameters::timestepMs);
-        const unsigned int recordBeginningStop = (unsigned int)std::round(Parameters::recordStartMs / Parameters::timestepMs);
-        const unsigned int recordEndStart = (unsigned int)std::round((Parameters::durationMs - Parameters::recordEndMs) / Parameters::timestepMs);
         for(unsigned int t = 0; t < duration; t++)
         {
-            const bool shouldRecord = (t < recordBeginningStop) || (t > recordEndStart);
+            // Are we in one of the stages of the simulation where we should record spikes
+            const bool shouldRecordSpikes = (t < recordBeginningStop) || (t > recordEndStart);
 
             // Generate uniformly distributed numbers to fill host array
             // **TODO** move to GPU
@@ -125,7 +187,7 @@ int main()
 
             // If we should be applying input in
             if(t == nextStimuliTimestep) {
-                std::cout << "Applying stimuli set " << nextStimuliSet << " at timestep " << t << std::endl;
+                std::cout << "\tApplying stimuli set " << nextStimuliSet << " at timestep " << t << std::endl;
 
                 // Loop through neurons in input set and add stimuli current
                 for(unsigned int n : inputSets[nextStimuliSet]) {
@@ -138,7 +200,7 @@ int main()
                 }
 
                 // Record stimulus time and set
-                if(shouldRecord) {
+                if(shouldRecordSpikes) {
                     stimulusStream << (scalar)t * DT << "," << nextStimuliSet << std::endl;
                 }
 
@@ -147,7 +209,7 @@ int main()
                     // Draw time until next reward
                     nextRewardTimestep = t + rewardDelay(gen);
 
-                    std::cout << "\tRewarding at timestep " << nextRewardTimestep << std::endl;
+                    std::cout << "\t\tRewarding at timestep " << nextRewardTimestep << std::endl;
                 }
 
                 // Pick time and set for next stimuli
@@ -157,32 +219,40 @@ int main()
 
             // If we should reward in this timestep, inject dopamine
             if(t == nextRewardTimestep) {
-                std::cout << "Applying reward at timestep " << t << std::endl;
+                std::cout << "\tApplying reward at timestep " << t << std::endl;
                 injectDopamineEE = true;
                 injectDopamineEI = true;
 
                 // Record reward time
-                if(shouldRecord) {
+                if(shouldRecordSpikes) {
                     rewardStream << (scalar)t * DT << std::endl;
                 }
             }
 
-            // Simulate
 #ifndef CPU_ONLY
             // Upload random input currents to GPU
             CHECK_CUDA_ERRORS(cudaMemcpy(d_IextE, IextE, Parameters::numExcitatory * sizeof(scalar), cudaMemcpyHostToDevice));
             CHECK_CUDA_ERRORS(cudaMemcpy(d_IextI, IextI, Parameters::numInhibitory * sizeof(scalar), cudaMemcpyHostToDevice));
 
+            // Simulate on GPU
             stepTimeGPU();
 
-            // Download spikes from GPU
-            if(shouldRecord) {
+            // If we should be recording spikes, download them from GPU
+            if(shouldRecordSpikes) {
                 pullECurrentSpikesFromDevice();
                 pullICurrentSpikesFromDevice();
             }
+
+            // If we should record weights this time step, download them from GPU
+            if((t % weightRecordInterval) == 0) {
+                CHECK_CUDA_ERRORS(cudaMemcpy(gEE, d_gEE, CEE.connN * sizeof(scalar), cudaMemcpyDeviceToHost));
+                CHECK_CUDA_ERRORS(cudaMemcpy(gEI, d_gEI, CEI.connN * sizeof(scalar), cudaMemcpyDeviceToHost));
+            }
 #else
+            // Simulate on CPU
             stepTimeCPU();
 #endif
+            // If a dopamine spike has been injected this timestep
             if(t == nextRewardTimestep) {
                 const scalar tMs =  (scalar)t * DT;
 
@@ -203,8 +273,19 @@ int main()
                 injectDopamineEI = false;
             }
 
-            // Record spikes
-            if(shouldRecord) {
+             // If we should record weights this time step
+            if((t % weightRecordInterval) == 0) {
+                // Calculate the mean outgoing weights within the EE and EI projections
+                auto eeOutgoing = getMeanOutgoingWeight<Parameters::numExcitatory>(CEE, gEE, rewardedExcStimuliSet);
+                auto eiOutgoing = getMeanOutgoingWeight<Parameters::numExcitatory>(CEI, gEI, rewardedExcStimuliSet);
+
+                // Take the average of these two and write to file
+                weightEvolutionStream << (eeOutgoing.first + eiOutgoing.first) / 2.0f << ","<< (eeOutgoing.second + eiOutgoing.second) / 2.0f << std::endl;
+
+            }
+
+            // If we should be recording spikes, write spikes to file
+            if(shouldRecordSpikes) {
                 e_spikes.record(t);
                 i_spikes.record(t);
             }
