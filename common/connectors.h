@@ -6,6 +6,7 @@
 #include <vector>
 
 // Standard C includes
+#include <cassert>
 #include <cmath>
 
 // GeNN includes
@@ -21,54 +22,53 @@ typedef void (*AllocateFn)(unsigned int);
 //----------------------------------------------------------------------------
 // Calculate log factorial using lookup table and log gamma function from standard library
 // Adopted from numerical recipes in C p170
-double lnFact(int n)
+inline double lnFact(int n)
 {
     // **NOTE** a static array is automatically initialized  to zero.
     static double a[101];
-
     if (n < 0) {
         throw std::runtime_error("Negative factorial in routine factln");
     }
     else if (n <= 1) {
         return 0.0;
     }
-    //In range of table.
+    // In range of table.
     else if (n <= 100) {
         return a[n] ? a[n] : (a[n] = lgamma(n + 1.0));
     }
-    // Out  of range  of  table.
+    // Out of range of table.
     else {
         return lgamma(n + 1.0);
     }
 }
 //----------------------------------------------------------------------------
-// Calculate binomial coefficient using log factorial
+// Calculate natural log of binomial coefficient using log factorial
 // Adopted from numerical recipes in C p169
-double binomialCoefficient(int n, int k)
+inline double lnBinomialCoefficient(int n, int k)
 {
-    return floor(0.5 + exp(lnFact(n) - lnFact(k) - lnFact(n - k)));
+    return lnFact(n) - lnFact(k) - lnFact(n - k);
 }
 //----------------------------------------------------------------------------
 // Evaluates PDF of binomial distribution
 // Adopted from C++ 'prob' libray found https://people.sc.fsu.edu/~jburkardt/
-double binomialPDF(int x, int a, double b)
+inline double binomialPDF(int n, int k, double p)
 {
-    if(a < 1) {
+    if(n < 1) {
         return 0.0;
     }
-    else if(x < 0 || a < x) {
+    else if(k < 0 || n < k) {
         return 0.0;
     }
-    else if(b == 0.0) {
-        if(x == 0) {
+    else if(p == 0.0) {
+        if(k == 0) {
             return 1.0;
         }
         else {
             return 0.0;
         }
     }
-    else if(b == 1.0) {
-        if(x == a) {
+    else if(p == 1.0) {
+        if(k == n) {
            return 1.0;
         }
         else {
@@ -76,32 +76,59 @@ double binomialPDF(int x, int a, double b)
         }
     }
     else {
-        return binomialCoefficient(a, x) * pow(b, x) * pow(1.0 - b, a - x);
+        return exp(lnBinomialCoefficient(n, k) + (k * log(p)) + ((n - k) * log(1.0 - p)));
     }
 }
 //----------------------------------------------------------------------------
 // Evaluates inverse CDF of binomial distribution
 // Adopted from C++ 'prob' libray found https://people.sc.fsu.edu/~jburkardt/
-unsigned int binomialInverseCDF(double cdf, unsigned int a, double b)
+inline unsigned int binomialInverseCDF(double cdf, unsigned int n, double p)
 {
     if(cdf < 0.0 || 1.0 < cdf) {
         throw std::runtime_error("binomialInverseCDF error - CDF < 0 or 1 < CDF");
     }
 
     double cdf2 = 0.0;
-    for (unsigned int x = 0; x <= a; x++)
+    for (unsigned int k = 0; k <= n; k++)
     {
-        const double pdf = binomialPDF(x, a, b);
+        const double pdf = binomialPDF(n, k, p);
         cdf2 += pdf;
 
-        if (cdf <= cdf2) {
-            return x;
+        if (cdf2 > cdf) {
+            return k;
         }
 
     }
 
     throw std::runtime_error("Invalid CDF parameterse");
 }
+//----------------------------------------------------------------------------
+inline void addSynapseToSparseProjection(unsigned int i, unsigned int j, unsigned int numPre,
+                                         SparseProjection &sparseProjection)
+{
+    // Get index of current end of row in sparse projection
+    const unsigned int rowEndIndex = sparseProjection.indInG[i + 1];
+
+    // Also get index of last synapse
+    const unsigned int lastSynapseIndex = sparseProjection.indInG[numPre];
+
+    // If these aren't the same (there are existing synapses after this one), shuffle up the indices
+    if(rowEndIndex != lastSynapseIndex) {
+        std::move_backward(&sparseProjection.ind[rowEndIndex], &sparseProjection.ind[lastSynapseIndex],
+                            &sparseProjection.ind[lastSynapseIndex + 1]);
+    }
+
+    // Insert new synapse
+    sparseProjection.ind[rowEndIndex] = j;
+
+    // Increment all subsequent indices
+    std::transform(&sparseProjection.indInG[i + 1], &sparseProjection.indInG[numPre + 1], &sparseProjection.indInG[i + 1],
+                   [](unsigned int index)
+                   {
+                       return (index + 1);
+                   });
+}
+
 //----------------------------------------------------------------------------
 template <typename Generator>
 void buildFixedProbabilityConnector(unsigned int numPre, unsigned int numPost, float probability,
@@ -148,10 +175,55 @@ void buildFixedProbabilityConnector(unsigned int numPre, unsigned int numPost, f
   std::copy(tempInd.begin(), tempInd.end(), &projection.ind[0]);
 }
 //----------------------------------------------------------------------------
-unsigned int calcFixedProbabilityConnectorMaxConnections(unsigned int numPre, unsigned int numPost, float probability)
+unsigned int calcFixedProbabilityConnectorMaxConnections(unsigned int numPre, unsigned int numPost, double probability)
 {
     // Calculate suitable quantile for 0.9999 change when drawing numPre times
-    const float quantile = pow(0.9999, 1.0 / (float)numPre);
+    const double quantile = pow(0.9999, 1.0 / (double)numPre);
 
     return binomialInverseCDF(quantile, numPost, probability);
+}
+
+//----------------------------------------------------------------------------
+template <typename Generator>
+void buildFixedNumberPreConnector(unsigned int numPre, unsigned int numPost, unsigned int numConnections,
+                                  SparseProjection &projection, AllocateFn allocate, Generator &gen)
+{
+    // Allocate sparse projection
+    allocate(numPost * numConnections);
+
+    // Zero all indInG
+    std::fill(&projection.indInG[0], &projection.indInG[numPre + 1], 0);
+
+    // Generate array of presynaptic indices
+    std::vector<unsigned int> preIndices(numPre);
+    std::iota(preIndices.begin(), preIndices.end(), 0);
+
+    // Loop through postsynaptic neurons
+    for(unsigned int j = 0; j < numPost; j++) {
+        // Loop through connections to make
+        for(unsigned int c = 1; c <= numConnections; c++) {
+            // Create distribution to select from remaining available neurons
+            std::uniform_int_distribution<> dis(0, numPre - c);
+
+            // Pick a presynaptic neuron
+            const unsigned int i = preIndices[dis(gen)];
+
+            // Add synapse to projection
+            addSynapseToSparseProjection(i, j, numPre, projection);
+
+            // Swap the last available preindex with the one we have now used
+            std::swap(preIndices[i], preIndices[numPre - c]);
+        }
+    }
+
+    // Check correct number of connections were added
+    assert(projection.indInG[numPre] == projection.connN);
+}
+//----------------------------------------------------------------------------
+unsigned int calcFixedNumberPreConnectorMaxConnections(unsigned int numPre, unsigned int numPost, unsigned int numConnections)
+{
+    // Calculate suitable quantile for 0.9999 change when drawing numPre times
+    const double quantile = pow(0.9999, 1.0 / (double)numPre);
+
+    return binomialInverseCDF(quantile, numPost, (double)numConnections / (double)numPre);
 }
