@@ -221,7 +221,7 @@ public:
     //----------------------------------------------------------------------------
     // OpenCVDVS virtuals
     //----------------------------------------------------------------------------
-    virtual std::pair<float*, unsigned int> update(unsigned int i) override
+    virtual std::pair<float*, unsigned int> update(unsigned int i, std::mutex &mutex) override
     {
         // Get references to current and previous down-sampled frame
         auto &curDownSampledFrame = m_DownsampledFrames[i % 2];
@@ -242,6 +242,7 @@ public:
         
         // If this isn't first frame, calculate difference with previous frame
         if(i > 0) {
+            std::lock_guard<std::mutex> lock(outputMutex);
             if(isAbsolute()) {
                 cv::gpu::absdiff(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
             }
