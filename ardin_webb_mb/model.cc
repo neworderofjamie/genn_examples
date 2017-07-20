@@ -18,8 +18,8 @@ public:
     DECLARE_MODEL(Izhikevich, 8, 3);
 
     SET_SIM_CODE(
-        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext)) * DT; //at two times for numerical stability\n"
-        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext)) * DT;\n"
+        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext)) * (DT / $(C)); //at two times for numerical stability\n"
+        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext)) * (DT / $(C));\n"
         "$(U) += $(a) * ($(b) * ($(V) - $(Vrest)) - $(U)) * DT;\n");
 
     SET_THRESHOLD_CONDITION_CODE("$(V) >= $(Vthresh)");
@@ -144,9 +144,12 @@ void modelDefinition(NNmodel &model)
 
 
     // Calculate max connections
-    pnToKC->setMaxConnections(calcFixedNumberPreConnectorMaxConnections(Parameters::numPN, Parameters::numKC,
-                                                                        Parameters::numPNSynapsesPerKC));
+    const unsigned int maxConn = calcFixedNumberPreConnectorMaxConnections(Parameters::numPN, Parameters::numKC,
+                                                                           Parameters::numPNSynapsesPerKC);
+    std::cout << "Max connections:" << maxConn << std::endl;
+    pnToKC->setMaxConnections(maxConn);
+    //pnToKC->setMaxConnections(calcFixedNumberPreConnectorMaxConnections(Parameters::numPN, Parameters::numKC,
+    //                                                                    Parameters::numPNSynapsesPerKC));
 
-    // **TODO** set max connections
     model.finalize();
 }
