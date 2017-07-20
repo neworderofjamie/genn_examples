@@ -7,6 +7,13 @@ namespace Parameters
 {
     constexpr double timestepMs = 1.0;
 
+    // Simulation duration
+    constexpr double durationMs = 50.0;
+
+    // Regime parameters
+    constexpr double rewardTimeMs = 40.0;
+    constexpr double presentDurationMs = 40.0;
+
     // Network dimensions
     constexpr unsigned int numPN = 360;
     constexpr unsigned int numKC = 20000;

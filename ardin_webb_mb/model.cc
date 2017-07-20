@@ -121,9 +121,9 @@ void modelDefinition(NNmodel &model)
         2.0 * 8.0);         // 7 - Maximum weight
 
     STDPDopamine::VarValues kcToENWeightUpdateInitVars(
-        1.0,    // Synaptic weight
-        0.0,    // Synaptic tag
-        0.0);   // Time of last synaptic tag update*/
+        2.0 * 8.0,  // Synaptic weight
+        0.0,        // Synaptic tag
+        0.0);       // Time of last synaptic tag update*/
 
     // Create neuron populations
     model.addNeuronPopulation<Izhikevich>("PN", Parameters::numPN, pnParams, izkInit);
