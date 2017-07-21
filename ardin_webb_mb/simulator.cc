@@ -75,13 +75,12 @@ int main()
             throw std::runtime_error("Couldn't read test data");
         }
 
-        // Transform raw data into scaled stimuli current
+        // Transform raw data into floating point and scale into current
         std::transform(data.begin(), data.end(), stimuliCurrent.begin(),
                        [](uint8_t d)
                        {
-                           return (scalar)d * (scalar)(5250.0 / 255.0);
+                           return (scalar)d * (scalar)(5250.0f / 255.0f);
                        });
-
     }
 
     // Open CSV output files

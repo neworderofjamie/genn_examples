@@ -22,6 +22,9 @@ namespace Parameters
     // Learning parameters
     constexpr double tauD = 20.0;
 
+     // **HACK** 0.1 is a random scaling factor
+    constexpr double weightScale = 0.1;
+
     // How many PN neurons are connected to each KC
     constexpr unsigned int numPNSynapsesPerKC = 10;
 }

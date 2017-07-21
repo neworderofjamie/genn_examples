@@ -90,8 +90,8 @@ void modelDefinition(NNmodel &model)
     // Izhikevich initial conditions
     // **TODO** search for correct values
     Izhikevich::VarValues izkInit(
-        -65.0,  // V
-        -13.0,    // U
+        -70.0,  // V
+        -14.0,    // U
         0.0);   // Iext
 
     //---------------------------------------------------------------------------
@@ -108,27 +108,27 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Weight update model parameters
     //---------------------------------------------------------------------------
-    WeightUpdateModels::StaticPulse::VarValues pnToKCWeightUpdateParams(0.25 * 0.93);
+    WeightUpdateModels::StaticPulse::VarValues pnToKCWeightUpdateParams(0.25 * 0.93 * Parameters::weightScale);
 
     STDPDopamine::ParamValues kcToENWeightUpdateParams(
-        15.0,               // 0 - Potentiation time constant (ms)
-        15.0,               // 1 - Depression time constant (ms)
-        40.0,               // 2 - Synaptic tag time constant (ms)
-        Parameters::tauD,   // 3 - Dopamine time constant (ms)
-        -1.0,               // 4 - Rate of potentiation
-        1.0,                // 5 - Rate of depression
-        0.0,                // 6 - Minimum weight
-        2.0 * 8.0);         // 7 - Maximum weight
+        15.0,                                   // 0 - Potentiation time constant (ms)
+        15.0,                                   // 1 - Depression time constant (ms)
+        40.0,                                   // 2 - Synaptic tag time constant (ms)
+        Parameters::tauD,                       // 3 - Dopamine time constant (ms)
+        -1.0,                                   // 4 - Rate of potentiation
+        1.0,                                    // 5 - Rate of depression
+        0.0,                                    // 6 - Minimum weight
+        2.0 * 8.0 * Parameters::weightScale);   // 7 - Maximum weight
 
     STDPDopamine::VarValues kcToENWeightUpdateInitVars(
-        2.0 * 8.0,  // Synaptic weight
-        0.0,        // Synaptic tag
-        0.0);       // Time of last synaptic tag update*/
+        2.0 * 8.0 * Parameters::weightScale,    // Synaptic weight
+        0.0,                                    // Synaptic tag
+        0.0);                                   // Time of last synaptic tag update*/
 
     // Create neuron populations
     model.addNeuronPopulation<Izhikevich>("PN", Parameters::numPN, pnParams, izkInit);
     model.addNeuronPopulation<Izhikevich>("KC", Parameters::numKC, kcParams, izkInit);
-    model.addNeuronPopulation<Izhikevich>("EN", Parameters::numEN, kcParams, izkInit);
+    model.addNeuronPopulation<Izhikevich>("EN", Parameters::numEN, enParams, izkInit);
 
     auto pnToKC = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCond>(
         "pnToKC", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
@@ -146,10 +146,9 @@ void modelDefinition(NNmodel &model)
     // Calculate max connections
     const unsigned int maxConn = calcFixedNumberPreConnectorMaxConnections(Parameters::numPN, Parameters::numKC,
                                                                            Parameters::numPNSynapsesPerKC);
+
     std::cout << "Max connections:" << maxConn << std::endl;
     pnToKC->setMaxConnections(maxConn);
-    //pnToKC->setMaxConnections(calcFixedNumberPreConnectorMaxConnections(Parameters::numPN, Parameters::numKC,
-    //                                                                    Parameters::numPNSynapsesPerKC));
 
     model.finalize();
 }
