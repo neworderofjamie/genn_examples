@@ -35,10 +35,6 @@ with open("pn_spikes.csv", "rb") as pn_spikes_file, \
     en_spike_times = np.asarray(en_spikes_columns[0], dtype=float)
     en_spike_neuron_id = np.asarray(en_spikes_columns[1], dtype=int)
 
-    #random_pn_neuron_ids = np.arange(num_pn)
-    #np.random.shuffle(random_pn_neuron_ids)
-    #pn_spike_neuron_id = random_pn_neuron_ids[pn_spike_neuron_id]
-
     bins = np.arange(duration_ms + 1)
     pn_activations = np.histogram(pn_spike_times, bins=bins)[0]
     kc_activations = np.histogram(kc_spike_times, bins=bins)[0]
