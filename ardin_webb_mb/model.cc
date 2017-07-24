@@ -3,81 +3,101 @@
 
 // Common includes
 #include "../common/connectors.h"
+#include "../common/exp_curr.h"
+#include "../common/lif.h"
 #include "../common/stdp_dopamine.h"
 
 // Model includes
 #include "parameters.h"
 
 //---------------------------------------------------------------------------
-// Standard Izhikevich model with variable input current
-// and explicit threshold and reset
+// Standard LIF model extended to take an additional
+// input current from an extra global variable
 //---------------------------------------------------------------------------
-class Izhikevich : public NeuronModels::Base
+class LIFVarOffset : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Izhikevich, 8, 3);
+    DECLARE_MODEL(LIFVarOffset, 6, 3);
 
     SET_SIM_CODE(
-        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext)) * (DT / $(C)); //at two times for numerical stability\n"
-        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext)) * (DT / $(C));\n"
-        "$(U) += $(a) * ($(b) * ($(V) - $(Vrest)) - $(U)) * DT;\n");
+        "if ($(RefracTime) <= 0.0)\n"
+        "{\n"
+        "   scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);\n"
+        "   $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
+        "}\n"
+        "else\n"
+        "{\n"
+        "  $(RefracTime) -= DT;\n"
+        "}\n"
+    );
 
-    SET_THRESHOLD_CONDITION_CODE("$(V) >= $(Vthresh)");
+    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
+
     SET_RESET_CODE(
-        "$(V) = $(c);\n"
-        "$(U) += $(d);\n");
+        "$(V) = $(Vreset);\n"
+        "$(RefracTime) = $(TauRefrac);\n");
 
     SET_PARAM_NAMES({
-        "C",        // 0
-        "a",        // 1
-        "b",        // 2
-        "c",        // 3
-        "d",        // 4
-        "k",        // 5
-        "Vrest",    // 6 - Resting membrane potential
-        "Vthresh",  // 7 - Threshold potential
-    });
-    SET_VARS({
-        {"V","scalar"},         // Membrane potential
-        {"U", "scalar"},        // Recovery current
-        {"Iext", "scalar"}});   // External input current
-};
-IMPLEMENT_MODEL(Izhikevich);
+        "C",          // Membrane capacitance
+        "TauM",       // Membrane time constant [ms]
+        "Vrest",      // Resting membrane potential [mV]
+        "Vreset",     // Reset voltage [mV]
+        "Vthresh",    // Spiking threshold [mV]
+        "TauRefrac"});
 
-class IzhikevichImage : public NeuronModels::Base
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
+
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ioffset", "scalar"}});
+};
+IMPLEMENT_MODEL(LIFVarOffset);
+
+//---------------------------------------------------------------------------
+// Standard LIF model extended to take an additional
+// input current from an extra global variable
+//---------------------------------------------------------------------------
+class LIFExtCurrent : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(IzhikevichImage, 8, 3);
+    DECLARE_MODEL(LIFExtCurrent, 6, 3);
 
     SET_SIM_CODE(
-        "const scalar Iimg = *($(image) + $(offset) + $(id));\n"
-        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext) + Iimg) * (DT / $(C)); //at two times for numerical stability\n"
-        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext) + Iimg) * (DT / $(C));\n"
-        "$(U) += $(a) * ($(b) * ($(V) - $(Vrest)) - $(U)) * DT;\n");
+        "if ($(RefracTime) <= 0.0)\n"
+        "{\n"
+        "   const scalar Iext = *($(Iext) + $(IextOffset) + $(id));\n"
+        "   scalar alpha = (($(Isyn) + $(Ioffset) + Iext) * $(Rmembrane)) + $(Vrest);\n"
+        "   $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
+        "}\n"
+        "else\n"
+        "{\n"
+        "  $(RefracTime) -= DT;\n"
+        "}\n"
+    );
 
-    SET_THRESHOLD_CONDITION_CODE("$(V) >= $(Vthresh)");
+    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
+
     SET_RESET_CODE(
-        "$(V) = $(c);\n"
-        "$(U) += $(d);\n");
+        "$(V) = $(Vreset);\n"
+        "$(RefracTime) = $(TauRefrac);\n");
 
     SET_PARAM_NAMES({
-        "C",        // 0
-        "a",        // 1
-        "b",        // 2
-        "c",        // 3
-        "d",        // 4
-        "k",        // 5
-        "Vrest",    // 6 - Resting membrane potential
-        "Vthresh",  // 7 - Threshold potential
-    });
-    SET_VARS({
-        {"V","scalar"},         // Membrane potential
-        {"U", "scalar"},        // Recovery current
-        {"Iext", "scalar"}});   // External input current
+        "C",          // Membrane capacitance
+        "TauM",       // Membrane time constant [ms]
+        "Vrest",      // Resting membrane potential [mV]
+        "Vreset",     // Reset voltage [mV]
+        "Vthresh",    // Spiking threshold [mV]
+        "TauRefrac"});
 
-    SET_EXTRA_GLOBAL_PARAMS({{"image", "scalar *"}, {"offset", "unsigned int"}});
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
+
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ioffset", "scalar"}});
+
+    SET_EXTRA_GLOBAL_PARAMS({{"Iext", "scalar *"}, {"IextOffset", "unsigned int"}});
 };
-IMPLEMENT_MODEL(IzhikevichImage);
+IMPLEMENT_MODEL(LIFExtCurrent);
 
 void modelDefinition(NNmodel &model)
 {
@@ -88,90 +108,62 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Neuron model parameters
     //---------------------------------------------------------------------------
-    // PN model parameters
-    IzhikevichImage::ParamValues pnParams(
-        100.0,  // 0 - C
-        0.3,    // 1 - a
-        -0.2,   // 2 - b
-        -65.0,  // 3 - c
-        8.0,    // 4 - d
-        2.0,    // 5 - k
-        -60.0,  // 6 - Resting membrane potential
-        -40.0); // 7 - Threshold
+    // LIF model parameters
+    LIFExtCurrent::ParamValues lifParams(
+        0.2,    // 0 - C
+        20.0,   // 1 - TauM
+        -60.0,  // 2 - Vrest
+        -60.0,  // 3 - Vreset
+        -50.0,  // 4 - Vthresh
+        2.0);    // 5 - TauRefrac
 
-    // KC model parameters
-    Izhikevich::ParamValues kcParams(
-        4.0,    // 0 - C
-        0.01,   // 1 - a
-        -0.3,   // 2 - b
-        -65.0,  // 3 - c
-        8.0,    // 4 - d
-        0.015,  // 5 - k
-        -85.0,  // 6 - Resting membrane potential
-        -25.0); // 7 - Threshold
-
-    // EN model parameters
-    Izhikevich::ParamValues enParams(
-        100.0,  // 0 - C
-        0.3,    // 1 - a
-        -0.2,   // 2 - b
-        -65.0,  // 3 - c
-        8.0,    // 4 - d
-        2.0,    // 5 - k
-        -60.0,  // 6 - Resting membrane potential
-        -40.0); // 7 - Threshold
-
-
-    // Izhikevich initial conditions
-    // **TODO** search for correct values
-    Izhikevich::VarValues izkInit(
-        -70.0,  // V
-        -14.0,    // U
-        0.0);   // Iext
+    // LIF initial conditions
+    LIFExtCurrent::VarValues lifInit(
+        -60.0,  // 0 - V
+        0.0,    // 1 - RefracTime
+        0.0);   // 2 - Ioffset
 
     //---------------------------------------------------------------------------
     // Postsynaptic model parameters
     //---------------------------------------------------------------------------
-    PostsynapticModels::ExpCond::ParamValues pnToKCPostsynapticParams(
-        3.0,    // 0 - Synaptic time constant (ms)
-        0.0);   // 1 - Reversal potential (mV)
+    ExpCurr::ParamValues pnToKCPostsynapticParams(
+        3.0);   // 0 - Synaptic time constant (ms)
 
-    PostsynapticModels::ExpCond::ParamValues kcToENPostsynapticParams(
-        8.0,    // 0 - Synaptic time constant (ms)
-        0.0);   // 1 - Reversal potential (mV)
+    ExpCurr::ParamValues kcToENPostsynapticParams(
+        8.0);   // 0 - Synaptic time constant (ms)
 
     //---------------------------------------------------------------------------
     // Weight update model parameters
     //---------------------------------------------------------------------------
-    WeightUpdateModels::StaticPulse::VarValues pnToKCWeightUpdateParams(0.25 * 0.93 * Parameters::pnToKCWeightScale);
+    WeightUpdateModels::StaticPulse::VarValues pnToKCWeightUpdateParams(Parameters::pnToKCWeight);
 
     STDPDopamine::ParamValues kcToENWeightUpdateParams(
-        15.0,                                       // 0 - Potentiation time constant (ms)
-        15.0,                                       // 1 - Depression time constant (ms)
-        40.0,                                       // 2 - Synaptic tag time constant (ms)
-        Parameters::tauD,                           // 3 - Dopamine time constant (ms)
-        -1.0,                                       // 4 - Rate of potentiation
-        1.0,                                        // 5 - Rate of depression
-        0.0,                                        // 6 - Minimum weight
-        2.0 * 8.0 * Parameters::kcToENWeightScale); // 7 - Maximum weight
+        15.0,                       // 0 - Potentiation time constant (ms)
+        15.0,                       // 1 - Depression time constant (ms)
+        40.0,                       // 2 - Synaptic tag time constant (ms)
+        Parameters::tauD,           // 3 - Dopamine time constant (ms)
+        -1.0,                       // 4 - Rate of potentiation
+        1.0,                        // 5 - Rate of depression
+        0.0,                        // 6 - Minimum weight
+        Parameters::kcToENWeight);  // 7 - Maximum weight
 
     STDPDopamine::VarValues kcToENWeightUpdateInitVars(
-        2.0 * 8.0 * Parameters::kcToENWeightScale,  // Synaptic weight
-        0.0,                                        // Synaptic tag
-        0.0);                                       // Time of last synaptic tag update*/
+        Parameters::kcToENWeight,   // Synaptic weight
+        0.0,                        // Synaptic tag
+        0.0);                       // Time of last synaptic tag update
 
     // Create neuron populations
-    model.addNeuronPopulation<IzhikevichImage>("PN", Parameters::numPN, pnParams, izkInit);
-    model.addNeuronPopulation<Izhikevich>("KC", Parameters::numKC, kcParams, izkInit);
-    model.addNeuronPopulation<Izhikevich>("EN", Parameters::numEN, enParams, izkInit);
+    model.addNeuronPopulation<LIFExtCurrent>("PN", Parameters::numPN, lifParams, lifInit);
+    model.addNeuronPopulation<LIFVarOffset>("KC", Parameters::numKC, lifParams, lifInit);
+    model.addNeuronPopulation<LIFVarOffset>("EN", Parameters::numEN, lifParams, lifInit);
 
-    auto pnToKC = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCond>(
+    auto pnToKC = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "pnToKC", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "PN", "KC",
         {}, pnToKCWeightUpdateParams,
         pnToKCPostsynapticParams, {});
 
-    model.addSynapsePopulation<STDPDopamine, PostsynapticModels::ExpCond>(
+    model.addSynapsePopulation<STDPDopamine, ExpCurr>(
         "kcToEN", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "KC", "EN",
         kcToENWeightUpdateParams, kcToENWeightUpdateInitVars,

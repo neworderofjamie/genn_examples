@@ -27,6 +27,7 @@ extern "C"
 // Model includes
 #include "parameters.h"
 
+//#define RECORD_SYNAPSE_STATE
 //------------------------------------------------------------------------
 // Anonymous namespace
 //------------------------------------------------------------------------
@@ -57,6 +58,17 @@ int main()
 
         buildFixedNumberPreConnector(Parameters::numPN, Parameters::numKC,
                                      Parameters::numPNSynapsesPerKC, CpnToKC, &allocatepnToKC, gen);
+
+        /*allocatekcToEN(Parameters::numKC);
+        for(unsigned int i = 0; i < Parameters::numKC; i++) {
+            CkcToEN.indInG[i] = i;
+            CkcToEN.ind[i] = 0;
+        }
+        CkcToEN.indInG[Parameters::numKC] = Parameters::numKC;
+
+        std::fill_n(gkcToEN, Parameters::numKC, Parameters::kcToENWeight);
+        std::fill_n(ckcToEN, Parameters::numKC, 0.0f);
+        std::fill_n(tCkcToEN, Parameters::numKC, 0.0f);*/
     }
 
     // Final setup
@@ -74,7 +86,7 @@ int main()
         Timer<> t("Stimuli generation:");
 
         glob_t globBuffer;
-        glob("data/test*.png", GLOB_TILDE, nullptr, &globBuffer);
+        glob("ant2_data/test*.png", GLOB_TILDE, nullptr, &globBuffer);
         std::cout << globBuffer.gl_pathc << " test images found" << std::endl;
 
         try
@@ -92,11 +104,11 @@ int main()
             std::fill_n(&stimuliCurrent[0], Parameters::numPN, 0.0f);
 
             // Load training image
-            read_png("data/train.png", 5250.0f, false, &stimuliCurrent[Parameters::numPN]);
+            read_png("ant2_data/train.png", Parameters::inputCurrentScale, false, &stimuliCurrent[Parameters::numPN]);
 
             // Load testing images
             for(size_t i = 0; i < globBuffer.gl_pathc; i++) {
-                read_png(globBuffer.gl_pathv[i], 5250.0f, false, &stimuliCurrent[(i + 2) * Parameters::numPN]);
+                read_png(globBuffer.gl_pathv[i], Parameters::inputCurrentScale, false, &stimuliCurrent[(i + 2) * Parameters::numPN]);
             }
 
 #ifndef CPU_ONLY
@@ -106,9 +118,9 @@ int main()
 
             // Set correct image pointer
 #ifdef CPU_ONLY
-            imagePN = stimuliCurrent;
+            IextPN = stimuliCurrent;
 #else
-            imagePN = d_stimuliCurrent;
+            IextPN = d_stimuliCurrent;
 #endif
 
         }
@@ -121,14 +133,16 @@ int main()
         }
     }
 
+    dkcToEN = 0.0f;
+
     // Open CSV output files
     SpikeCSVRecorder pnSpikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
     SpikeCSVRecorder kcSpikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
     SpikeCSVRecorder enSpikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
 
-    //std::ofstream synapticTagStream("kc_en_syn.csv");
-
-    std::ofstream kcStateStream("kc_state.csv");
+#ifdef RECORD_SYNAPSE_STATE
+    std::ofstream synapticTagStream("kc_en_syn.csv");
+#endif  // RECORD_SYNAPSE_STATE
 
     {
         Timer<> t("Simulation:");
@@ -151,12 +165,12 @@ int main()
         {
             // Generate background input currents
             // **TODO** move to GPU
-            std::generate_n(IextPN, Parameters::numPN,
+            /*std::generate_n(IoffsetPN, Parameters::numPN,
                 [&inputCurrent, &gen](){ return inputCurrent(gen); });
-            std::generate_n(IextKC, Parameters::numKC,
+            std::generate_n(IoffsetKC, Parameters::numKC,
                 [&inputCurrent, &gen](){ return inputCurrent(gen); });
-            std::generate_n(IextEN, Parameters::numEN,
-                [&inputCurrent, &gen](){ return inputCurrent(gen); });
+            std::generate_n(IoffsetEN, Parameters::numEN,
+                [&inputCurrent, &gen](){ return inputCurrent(gen); });*/
 
             // If we are in stimuli period where we should be presenting an image
             const auto tStimuli = std::div((long)t, (long)stimuliDuration);
@@ -166,24 +180,24 @@ int main()
                 }
 
                 // Update offset to point to correct block of pixel data
-                offsetPN = Parameters::numPN * (1 + tStimuli.quot);
+                IextOffsetPN = Parameters::numPN * (1 + tStimuli.quot);
             }
             // Otherwise update offset to point to block of zeros
             else {
-                offsetPN = 0;
+                IextOffsetPN = 0;
             }
 
             // If we should reward in this timestep, inject dopamine
-            /*if(t == rewardTimestep) {
+            if(t == rewardTimestep) {
                 std::cout << "\tApplying reward at timestep " << t << std::endl;
                 injectDopaminekcToEN = true;
-            }*/
+            }
 
 #ifndef CPU_ONLY
             // Upload random input currents to GPU
-            CHECK_CUDA_ERRORS(cudaMemcpy(d_IextPN, IextPN, Parameters::numPN * sizeof(scalar), cudaMemcpyHostToDevice));
-            CHECK_CUDA_ERRORS(cudaMemcpy(d_IextKC, IextKC, Parameters::numKC * sizeof(scalar), cudaMemcpyHostToDevice));
-            CHECK_CUDA_ERRORS(cudaMemcpy(d_IextEN, IextEN, Parameters::numEN * sizeof(scalar), cudaMemcpyHostToDevice));
+            /*CHECK_CUDA_ERRORS(cudaMemcpy(d_IoffsetPN, IoffsetPN, Parameters::numPN * sizeof(scalar), cudaMemcpyHostToDevice));
+            CHECK_CUDA_ERRORS(cudaMemcpy(d_IoffsetKC, IoffsetKC, Parameters::numKC * sizeof(scalar), cudaMemcpyHostToDevice));
+            CHECK_CUDA_ERRORS(cudaMemcpy(d_IoffsetEN, IoffsetEN, Parameters::numEN * sizeof(scalar), cudaMemcpyHostToDevice));*/
 
             // Simulate on GPU
             stepTimeGPU();
@@ -193,12 +207,11 @@ int main()
             pullKCCurrentSpikesFromDevice();
             pullENCurrentSpikesFromDevice();
 
-            //CHECK_CUDA_ERRORS(cudaMemcpy(VKC, d_VKC, 20000 * sizeof(scalar), cudaMemcpyDeviceToHost));
-            //CHECK_CUDA_ERRORS(cudaMemcpy(UKC, d_UKC, 20000 * sizeof(scalar), cudaMemcpyDeviceToHost));
-
+#ifdef RECORD_SYNAPSE_STATE
             // Download synaptic weights and tags
-            //CHECK_CUDA_ERRORS(cudaMemcpy(ckcToEN, d_ckcToEN, Parameters::numKC * Parameters::numEN * sizeof(scalar), cudaMemcpyDeviceToHost));
-            //CHECK_CUDA_ERRORS(cudaMemcpy(gkcToEN, d_gkcToEN, Parameters::numKC * Parameters::numEN * sizeof(scalar), cudaMemcpyDeviceToHost));
+            CHECK_CUDA_ERRORS(cudaMemcpy(ckcToEN, d_ckcToEN, Parameters::numKC * Parameters::numEN * sizeof(scalar), cudaMemcpyDeviceToHost));
+            CHECK_CUDA_ERRORS(cudaMemcpy(gkcToEN, d_gkcToEN, Parameters::numKC * Parameters::numEN * sizeof(scalar), cudaMemcpyDeviceToHost));
+#endif  // RECORD_SYNAPSE_STATE
 #else
             // Simulate on CPU
             stepTimeCPU();
@@ -208,25 +221,28 @@ int main()
             //}
 
             // If a dopamine spike has been injected this timestep
-            /*if(t == rewardTimestep) {
+            if(t == rewardTimestep) {
                 const scalar tMs =  (scalar)t * DT;
 
                 // Decay global dopamine traces
-                dkcToEN = dkcToEN * std::exp(-tMs / Parameters::tauD);
+                dkcToEN = dkcToEN * std::exp(-(tMs - tDkcToEN) / Parameters::tauD);
 
                 // Add effect of dopamine spike
-                dkcToEN += 0.5f;
+                dkcToEN += Parameters::dopamineStrength;
 
                 // Update last reward time
                 tDkcToEN = tMs;
 
                 // Clear dopamine injection flags
                 injectDopaminekcToEN = false;
-            }*/
+            }
 
-            /*for(unsigned int i = 0; i < Parameters::numKC * Parameters::numEN; i++) {
+#ifdef RECORD_SYNAPSE_STATE
+            for(unsigned int i = 0; i < Parameters::numKC * Parameters::numEN; i++) {
                 synapticTagStream << t << "," << i << "," << ckcToEN[i] << "," << gkcToEN[i] << std::endl;
-            }*/
+            }
+#endif  // RECORD_SYNAPSE_STATE
+
             // Record spikes
             pnSpikes.record(t);
             kcSpikes.record(t);
