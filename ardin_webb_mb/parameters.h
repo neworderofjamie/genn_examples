@@ -8,7 +8,7 @@ namespace Parameters
     constexpr double timestepMs = 1.0;
 
     // Simulation duration
-    constexpr double durationMs = 50.0;
+    constexpr double durationMs = 75.0;
 
     // Regime parameters
     constexpr double rewardTimeMs = 40.0;
@@ -22,8 +22,9 @@ namespace Parameters
     // Learning parameters
     constexpr double tauD = 20.0;
 
-     // **HACK** 0.1 is a random scaling factor
-    constexpr double weightScale = 0.1;
+    // **HACK** these are manually tuned to match dynamics in fig 3
+    constexpr double pnToKCWeightScale = 0.1;
+    constexpr double kcToENWeightScale = 0.005;
 
     // How many PN neurons are connected to each KC
     constexpr unsigned int numPNSynapsesPerKC = 10;

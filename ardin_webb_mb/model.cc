@@ -108,22 +108,22 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Weight update model parameters
     //---------------------------------------------------------------------------
-    WeightUpdateModels::StaticPulse::VarValues pnToKCWeightUpdateParams(0.25 * 0.93 * Parameters::weightScale);
+    WeightUpdateModels::StaticPulse::VarValues pnToKCWeightUpdateParams(0.25 * 0.93 * Parameters::pnToKCWeightScale);
 
     STDPDopamine::ParamValues kcToENWeightUpdateParams(
-        15.0,                                   // 0 - Potentiation time constant (ms)
-        15.0,                                   // 1 - Depression time constant (ms)
-        40.0,                                   // 2 - Synaptic tag time constant (ms)
-        Parameters::tauD,                       // 3 - Dopamine time constant (ms)
-        -1.0,                                   // 4 - Rate of potentiation
-        1.0,                                    // 5 - Rate of depression
-        0.0,                                    // 6 - Minimum weight
-        2.0 * 8.0 * Parameters::weightScale);   // 7 - Maximum weight
+        15.0,                                       // 0 - Potentiation time constant (ms)
+        15.0,                                       // 1 - Depression time constant (ms)
+        40.0,                                       // 2 - Synaptic tag time constant (ms)
+        Parameters::tauD,                           // 3 - Dopamine time constant (ms)
+        -1.0,                                       // 4 - Rate of potentiation
+        1.0,                                        // 5 - Rate of depression
+        0.0,                                        // 6 - Minimum weight
+        2.0 * 8.0 * Parameters::kcToENWeightScale); // 7 - Maximum weight
 
     STDPDopamine::VarValues kcToENWeightUpdateInitVars(
-        2.0 * 8.0 * Parameters::weightScale,    // Synaptic weight
-        0.0,                                    // Synaptic tag
-        0.0);                                   // Time of last synaptic tag update*/
+        2.0 * 8.0 * Parameters::kcToENWeightScale,  // Synaptic weight
+        0.0,                                        // Synaptic tag
+        0.0);                                       // Time of last synaptic tag update*/
 
     // Create neuron populations
     model.addNeuronPopulation<Izhikevich>("PN", Parameters::numPN, pnParams, izkInit);

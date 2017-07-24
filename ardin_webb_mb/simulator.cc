@@ -84,9 +84,11 @@ int main()
     }
 
     // Open CSV output files
-    SpikeCSVRecorder pn_spikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
-    SpikeCSVRecorder kc_spikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
-    SpikeCSVRecorder en_spikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
+    SpikeCSVRecorder pnSpikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
+    SpikeCSVRecorder kcSpikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
+    SpikeCSVRecorder enSpikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
+
+    std::ofstream synapticTagStream("kc_en_syn.csv");
 
     {
         Timer<> t("Simulation:");
@@ -136,6 +138,10 @@ int main()
             pullPNCurrentSpikesFromDevice();
             pullKCCurrentSpikesFromDevice();
             pullENCurrentSpikesFromDevice();
+
+            // Download synaptic weights and tags
+            CHECK_CUDA_ERRORS(cudaMemcpy(ckcToEN, d_ckcToEN, Parameters::numKC * Parameters::numEN * sizeof(scalar), cudaMemcpyDeviceToHost));
+            CHECK_CUDA_ERRORS(cudaMemcpy(gkcToEN, d_gkcToEN, Parameters::numKC * Parameters::numEN * sizeof(scalar), cudaMemcpyDeviceToHost));
 #else
             // Simulate on CPU
             stepTimeCPU();
@@ -157,10 +163,13 @@ int main()
                 injectDopaminekcToEN = false;
             }
 
+            for(unsigned int i = 0; i < Parameters::numKC * Parameters::numEN; i++) {
+                synapticTagStream << t << "," << i << "," << ckcToEN[i] << "," << gkcToEN[i] << std::endl;
+            }
             // Record spikes
-            pn_spikes.record(t);
-            kc_spikes.record(t);
-            en_spikes.record(t);
+            pnSpikes.record(t);
+            kcSpikes.record(t);
+            enSpikes.record(t);
         }
     }
 
