@@ -44,6 +44,41 @@ public:
 };
 IMPLEMENT_MODEL(Izhikevich);
 
+class IzhikevichImage : public NeuronModels::Base
+{
+public:
+    DECLARE_MODEL(IzhikevichImage, 8, 3);
+
+    SET_SIM_CODE(
+        "const scalar Iimg = *($(image) + $(offset) + $(id));\n"
+        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext) + Iimg) * (DT / $(C)); //at two times for numerical stability\n"
+        "$(V) += 0.5 * (($(k) * ($(V) - $(Vrest)) * ($(V) - $(Vthresh)))- $(U) + $(Isyn) + $(Iext) + Iimg) * (DT / $(C));\n"
+        "$(U) += $(a) * ($(b) * ($(V) - $(Vrest)) - $(U)) * DT;\n");
+
+    SET_THRESHOLD_CONDITION_CODE("$(V) >= $(Vthresh)");
+    SET_RESET_CODE(
+        "$(V) = $(c);\n"
+        "$(U) += $(d);\n");
+
+    SET_PARAM_NAMES({
+        "C",        // 0
+        "a",        // 1
+        "b",        // 2
+        "c",        // 3
+        "d",        // 4
+        "k",        // 5
+        "Vrest",    // 6 - Resting membrane potential
+        "Vthresh",  // 7 - Threshold potential
+    });
+    SET_VARS({
+        {"V","scalar"},         // Membrane potential
+        {"U", "scalar"},        // Recovery current
+        {"Iext", "scalar"}});   // External input current
+
+    SET_EXTRA_GLOBAL_PARAMS({{"image", "scalar *"}, {"offset", "unsigned int"}});
+};
+IMPLEMENT_MODEL(IzhikevichImage);
+
 void modelDefinition(NNmodel &model)
 {
     initGeNN();
@@ -54,7 +89,7 @@ void modelDefinition(NNmodel &model)
     // Neuron model parameters
     //---------------------------------------------------------------------------
     // PN model parameters
-    Izhikevich::ParamValues pnParams(
+    IzhikevichImage::ParamValues pnParams(
         100.0,  // 0 - C
         0.3,    // 1 - a
         -0.2,   // 2 - b
@@ -71,7 +106,7 @@ void modelDefinition(NNmodel &model)
         -0.3,   // 2 - b
         -65.0,  // 3 - c
         8.0,    // 4 - d
-        0.035,  // 5 - k
+        0.015,  // 5 - k
         -85.0,  // 6 - Resting membrane potential
         -25.0); // 7 - Threshold
 
@@ -126,7 +161,7 @@ void modelDefinition(NNmodel &model)
         0.0);                                       // Time of last synaptic tag update*/
 
     // Create neuron populations
-    model.addNeuronPopulation<Izhikevich>("PN", Parameters::numPN, pnParams, izkInit);
+    model.addNeuronPopulation<IzhikevichImage>("PN", Parameters::numPN, pnParams, izkInit);
     model.addNeuronPopulation<Izhikevich>("KC", Parameters::numKC, kcParams, izkInit);
     model.addNeuronPopulation<Izhikevich>("EN", Parameters::numEN, enParams, izkInit);
 

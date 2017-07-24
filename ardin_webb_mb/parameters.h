@@ -7,12 +7,10 @@ namespace Parameters
 {
     constexpr double timestepMs = 1.0;
 
-    // Simulation duration
-    constexpr double durationMs = 75.0;
-
     // Regime parameters
     constexpr double rewardTimeMs = 40.0;
     constexpr double presentDurationMs = 40.0;
+    constexpr double interStimuliDurationMs = 100.0;
 
     // Network dimensions
     constexpr unsigned int numPN = 360;
@@ -23,7 +21,7 @@ namespace Parameters
     constexpr double tauD = 20.0;
 
     // **HACK** these are manually tuned to match dynamics in fig 3
-    constexpr double pnToKCWeightScale = 0.1;
+    constexpr double pnToKCWeightScale = 0.07;
     constexpr double kcToENWeightScale = 0.005;
 
     // How many PN neurons are connected to each KC
