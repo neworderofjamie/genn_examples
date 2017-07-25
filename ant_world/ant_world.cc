@@ -1,10 +1,14 @@
 // Standard C++ includes
 #include <algorithm>
+#include <bitset>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <tuple>
 #include <vector>
+
+// Standard C includes
+#include <cmath>
 
 // GL
 #include <GL/glew.h>
@@ -23,8 +27,31 @@
 //----------------------------------------------------------------------------
 namespace
 {
+// What colour should the ground be?
 constexpr GLfloat groundColour[] = {0.898f, 0.718f, 0.353f};
+
+// What colour should the brightest tussocks be?
 constexpr GLfloat worldColour[] = {0.0f, 1.0f, 0.0f};
+
+// How fast does the ant move?
+constexpr float antTurnSpeed = 1.0f;
+constexpr float antMoveSpeed = 0.1f;
+
+// Constant to multiply degrees by to get radians
+constexpr float degreesToRadians = 0.017453293f;
+
+// Enumeration of keys
+enum Key
+{
+    KeyLeft,
+    KeyRight,
+    KeyUp,
+    KeyDown,
+    KeyMax
+};
+
+// Bitset used for passing which keys have been pressed between key callback and render loop
+typedef std::bitset<KeyMax> KeyBitset;
 
 // Loads world file from matlab format into position and colour vertex buffer objects
 std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, bool falseColour=true)
@@ -53,13 +80,13 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, 
         std::vector<GLfloat> positions((6 + (numTriangles * 3)) * 3);
 
         // Add first ground triangle vertex positions
-        positions[0] = -10.0f;  positions[1] = -10.0f;  positions[2] = 0.0f;
+        positions[0] = 0.0f;    positions[1] = 0.0f;    positions[2] = 0.0f;
         positions[3] = 10.5f;   positions[4] = 10.5f;   positions[5] = 0.0f;
-        positions[6] = -10.0f;  positions[7] = 10.5f;   positions[8] = 0.0f;
+        positions[6] = 0.0f;    positions[7] = 10.5f;   positions[8] = 0.0f;
 
         // Add second ground triangle vertex positions
-        positions[9] = -10.0f;  positions[10] = -10.0f; positions[11] = 0.0f;
-        positions[12] = 10.5f;  positions[13] = -10.0f; positions[14] = 0.0f;
+        positions[9] = 0.0f;    positions[10] = 0.0f;   positions[11] = 0.0f;
+        positions[12] = 10.5f;  positions[13] = 0.0f;   positions[14] = 0.0f;
         positions[15] = 10.5f;  positions[16] = 10.5f;  positions[17] = 0.0f;
 
         // Loop through components(X, Y and Z)
@@ -139,8 +166,38 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, 
     // Return VBO handles and index count
     return std::make_tuple(vbo[0], vbo[1], numTriangles * 3);
 }
-}   // anonymous namespace
+//----------------------------------------------------------------------------
+void keyCallback(GLFWwindow *window, int key, int, int action, int)
+{
+    // If action isn't a press or a release, do nothing
+    if(action != GLFW_PRESS && action != GLFW_RELEASE) {
+        return;
+    }
 
+    // Determine what state key bit should be set to
+    const bool newKeyState = (action == GLFW_PRESS);
+
+    // Extract key bitset from window's user pointer
+    KeyBitset *keybits = (KeyBitset*)glfwGetWindowUserPointer(window);
+
+    // Apply new key state to bits of key bits
+    switch(key) {
+        case GLFW_KEY_LEFT:
+            keybits->set(KeyLeft, newKeyState);
+            break;
+        case GLFW_KEY_RIGHT:
+            keybits->set(KeyRight, newKeyState);
+            break;
+        case GLFW_KEY_UP:
+            keybits->set(KeyUp, newKeyState);
+            break;
+        case GLFW_KEY_DOWN:
+            keybits->set(KeyDown, newKeyState);
+            break;
+    }
+}
+}   // anonymous namespace
+//----------------------------------------------------------------------------
 int main()
 {
     // Initialize the library
@@ -149,7 +206,7 @@ int main()
     }
 
     // Create a windowed mode window and its OpenGL context
-    GLFWwindow *window = glfwCreateWindow(640, 178, "Hello World", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(640, 178, "Ant World", nullptr, nullptr);
     if(!window)
     {
         glfwTerminate();
@@ -167,6 +224,16 @@ int main()
 
     // Enable VSync
     glfwSwapInterval(1);
+
+    // Set clear colour to match matlab
+    glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
+
+    // Create key bitset and set it as window user pointer
+    KeyBitset keybits;
+    glfwSetWindowUserPointer(window, &keybits);
+
+    // Set key callback
+    glfwSetKeyCallback(window, keyCallback);
 
     // Load world into OpenGL
     GLuint worldPositionVBO;
@@ -211,12 +278,35 @@ int main()
         glTranslatef(-5.0f, -5.0f, -0.2f);
     }
 
-    std::cout << "Loaded world" << std::endl;
-
     // Loop until the user closes the window
+    float antHeading = 0.0f;
+    float antX = 5.0f;
+    float antY = 5.0f;
     while (!glfwWindowShouldClose(window)) {
         // Clear colour
         glClear(GL_COLOR_BUFFER_BIT);
+
+        // Update heading and ant position based on keys
+        if(keybits.test(KeyLeft)) {
+            antHeading -= antTurnSpeed;
+        }
+        if(keybits.test(KeyRight)) {
+            antHeading += antTurnSpeed;
+        }
+        if(keybits.test(KeyUp)) {
+            antX += antMoveSpeed * sin(antHeading * degreesToRadians);
+            antY += antMoveSpeed * cos(antHeading * degreesToRadians);
+        }
+        if(keybits.test(KeyDown)) {
+            antX -= antMoveSpeed * sin(antHeading * degreesToRadians);
+            antY -= antMoveSpeed * cos(antHeading * degreesToRadians);
+        }
+
+        // Build new modelview transform
+        glLoadIdentity();
+        glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
+        glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
+        glTranslatef(-antX, -antY, -0.2f);
 
         // Draw world
         glDrawArrays(GL_TRIANGLES, 0, numVertices);
