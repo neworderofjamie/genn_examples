@@ -1,2 +1,2 @@
-g++ -std=c++11 ant_world.cc -lglfw -lGL -lGLEW -o ant_world
+g++ -std=c++11 -Wall -Wpedantic ant_world.cc -lglfw -lGL -lGLU -lGLEW -o ant_world
 

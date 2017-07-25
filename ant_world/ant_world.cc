@@ -8,13 +8,26 @@
 
 // GL
 #include <GL/glew.h>
+#include <GL/glu.h>
 
 // GLFW
 #include <GLFW/glfw3.h>
 
+//----------------------------------------------------------------------------
+// Macros
+//----------------------------------------------------------------------------
 #define BUFFER_OFFSET(i) ((void*)(i))
 
-std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
+//----------------------------------------------------------------------------
+// Anonymous namespace
+//----------------------------------------------------------------------------
+namespace
+{
+constexpr GLfloat groundColour[] = {0.898f, 0.718f, 0.353f};
+constexpr GLfloat worldColour[] = {0.0f, 1.0f, 0.0f};
+
+// Loads world file from matlab format into position and colour vertex buffer objects
+std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, bool falseColour=true)
 {
     // Generate two vertex buffer objects, one for positions and one for colours
     GLuint vbo[2];
@@ -36,8 +49,18 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
         // Bind positions buffer
         glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 
-        // Reserve 3 XYZ positions for each triangle
-        std::vector<GLfloat> positions(numTriangles * 3 * 3);
+        // Reserve 3 XYZ positions for each triangle and 6 for the ground
+        std::vector<GLfloat> positions((6 + (numTriangles * 3)) * 3);
+
+        // Add first ground triangle vertex positions
+        positions[0] = -10.0f;  positions[1] = -10.0f;  positions[2] = 0.0f;
+        positions[3] = 10.5f;   positions[4] = 10.5f;   positions[5] = 0.0f;
+        positions[6] = -10.0f;  positions[7] = 10.5f;   positions[8] = 0.0f;
+
+        // Add second ground triangle vertex positions
+        positions[9] = -10.0f;  positions[10] = -10.0f; positions[11] = 0.0f;
+        positions[12] = 10.5f;  positions[13] = -10.0f; positions[14] = 0.0f;
+        positions[15] = 10.5f;  positions[16] = 10.5f;  positions[17] = 0.0f;
 
         // Loop through components(X, Y and Z)
         for(unsigned int c = 0; c < 3; c++) {
@@ -50,7 +73,7 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
                     input.read(reinterpret_cast<char*>(&trianglePosition), sizeof(double));
 
                     // Copy three coordinates from triangle into correct place in vertex array
-                    positions[(t * 9) + (v * 3) + c] = (GLfloat)trianglePosition;
+                    positions[18 + (t * 9) + (v * 3) + c] = (GLfloat)trianglePosition;
                 }
             }
         }
@@ -63,32 +86,60 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
         // Bind colours buffer
         glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
 
-        // Reserve 3 RGB colours for each triangle
-        std::vector<GLfloat> colours(numTriangles * 3 * 3);
+        // Reserve 3 RGB colours for each triangle and for the ground
+        std::vector<GLfloat> colours((6 + (numTriangles * 3)) * 3);
 
-        // Loop through components (R, G and B)
-        for(unsigned int c = 0; c < 3; c++) {
+        // Ground triangle colours
+        for(unsigned int c = 0; c < (6 * 3); c += 3) {
+            colours[c] = groundColour[0];
+            colours[c + 1] = groundColour[1];
+            colours[c + 2] = groundColour[2];
+        }
+
+        // If we should 'false colour' world
+        if(falseColour) {
             // Loop through triangles
             for(unsigned int t = 0; t < numTriangles; t++) {
                 // Read triangle colour component
+                // **NOTE** we only bother reading the R channel because colours are greyscale anyway
                 double triangleColour;
                 input.read(reinterpret_cast<char*>(&triangleColour), sizeof(double));
 
-                // Copy it into correct position for each vertex in triangle
-                colours[(t * 9) + c] = (GLfloat)triangleColour;
-                colours[(t * 9) + c + 3] = (GLfloat)triangleColour;
-                colours[(t * 9) + c + 6] = (GLfloat)triangleColour;
+                // Loop through vertices that make up triangle and
+                // set to world colour multiplied by triangle colour
+                for(unsigned int v = 0; v < 3; v++) {
+                    colours[18 + (t * 9) + (v * 3)] = worldColour[0] * triangleColour;
+                    colours[18 + (t * 9) + (v * 3) + 1] = worldColour[1] * triangleColour;
+                    colours[18 + (t * 9) + (v * 3) + 2] = worldColour[2] * triangleColour;
+                }
             }
         }
+        // Otherwise
+        else {
+            // Loop through components (R, G and B)
+            for(unsigned int c = 0; c < 3; c++) {
+                // Loop through triangles
+                for(unsigned int t = 0; t < numTriangles; t++) {
+                    // Read triangle colour component
+                    double triangleColour;
+                    input.read(reinterpret_cast<char*>(&triangleColour), sizeof(double));
 
-        std::cout << colours[0] << "," << colours[1] << "," << colours[2] << std::endl;
+                    // Copy it into correct position for each vertex in triangle
+                    colours[18 + (t * 9) + c] = (GLfloat)triangleColour;
+                    colours[18 + (t * 9) + c + 3] = (GLfloat)triangleColour;
+                    colours[18 + (t * 9) + c + 6] = (GLfloat)triangleColour;
+                }
+            }
+        }
 
         // Upload colours
         glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(GLfloat), colours.data(), GL_STATIC_DRAW);
     }
 
+    // Return VBO handles and index count
     return std::make_tuple(vbo[0], vbo[1], numTriangles * 3);
 }
+}   // anonymous namespace
 
 int main()
 {
@@ -98,7 +149,7 @@ int main()
     }
 
     // Create a windowed mode window and its OpenGL context
-    GLFWwindow *window = glfwCreateWindow(640, 480, "Hello World", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(640, 178, "Hello World", nullptr, nullptr);
     if(!window)
     {
         glfwTerminate();
@@ -133,18 +184,32 @@ int main()
     glEnableClientState(GL_COLOR_ARRAY);
     glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
 
+    bool ortho = false;
     glMatrixMode(GL_PROJECTION);
 
     // Setup camera to look down on whole world
-    glOrtho(-5.0, 5.0,
-            -5.0, 5.0,
-            10, -1.0);
-
+    if(ortho) {
+        glOrtho(-5.0, 5.0,
+                -5.0, 5.0,
+                10, -1.0);
+    }
+    else {
+        gluPerspective(76.0,
+                       36.0 / 10.0,
+                       0.0001, 10.0);
+    }
     glMatrixMode(GL_MODELVIEW);
 
     // Centre the world
     glLoadIdentity();
-    glTranslatef(-5.0f, -5.0f, 0.0f);
+
+    if(ortho) {
+        glTranslatef(-5.0f, -5.0f, 0.0f);
+    }
+    else {
+        glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
+        glTranslatef(-5.0f, -5.0f, -0.2f);
+    }
 
     std::cout << "Loaded world" << std::endl;
 
@@ -163,6 +228,7 @@ int main()
         glfwPollEvents();
     }
 
+    // Delete vertex buffer objects
     glDeleteBuffers(1, &worldPositionVBO);
     glDeleteBuffers(1, &worldColourVBO);
 
