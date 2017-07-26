@@ -35,10 +35,16 @@ constexpr GLfloat worldColour[] = {0.0f, 1.0f, 0.0f};
 
 // How fast does the ant move?
 constexpr float antTurnSpeed = 1.0f;
-constexpr float antMoveSpeed = 0.1f;
+constexpr float antMoveSpeed = 0.05f;
 
 // Constant to multiply degrees by to get radians
 constexpr float degreesToRadians = 0.017453293f;
+
+constexpr int displayRenderWidth = 640;
+constexpr int displayRenderHeight = 178;
+
+constexpr int offscreenRenderWidth = 36;
+constexpr int offscreenRenderHeight = 10;
 
 // Enumeration of keys
 enum Key
@@ -71,7 +77,6 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, 
     const std::streampos numTriangles = input.tellg() / (sizeof(double) * 12);
     input.seekg(0);
     std::cout << "World has " << numTriangles << " triangles" << std::endl;
-
     {
         // Bind positions buffer
         glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
@@ -196,6 +201,11 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
             break;
     }
 }
+//----------------------------------------------------------------------------
+unsigned int nextLargestPOT(unsigned int x)
+{
+    return (1 << (32 - __builtin_clz(x - 1)));
+}
 }   // anonymous namespace
 //----------------------------------------------------------------------------
 int main()
@@ -206,7 +216,7 @@ int main()
     }
 
     // Create a windowed mode window and its OpenGL context
-    GLFWwindow *window = glfwCreateWindow(640, 178, "Ant World", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(displayRenderWidth, displayRenderHeight, "Ant World", nullptr, nullptr);
     if(!window)
     {
         glfwTerminate();
@@ -219,21 +229,44 @@ int main()
     // Initialize GLEW
     if(glewInit() != GLEW_OK) {
         throw std::runtime_error("Failed to initialize GLEW");
-        return -1;
     }
 
     // Enable VSync
     glfwSwapInterval(1);
 
-    // Set clear colour to match matlab
+    // Set clear colour to match matlab and enable depth test
     glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
-
-    // Create key bitset and set it as window user pointer
+    glEnable(GL_DEPTH_TEST);
+    
+    // Create key bitset and setc it as window user pointer
     KeyBitset keybits;
     glfwSetWindowUserPointer(window, &keybits);
 
     // Set key callback
     glfwSetKeyCallback(window, keyCallback);
+
+    // Create frame buffer object to render to
+    GLuint offscreenRenderFBO;
+    glGenFramebuffers(1, &offscreenRenderFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, offscreenRenderFBO);
+
+    // Generate two render buffers - one for depth and one for colour
+    GLuint offscreenRenderBuffers[2];
+    glGenRenderbuffers(2, offscreenRenderBuffers);
+
+    // Create an offscreen colour render buffer
+    glBindRenderbuffer(GL_RENDERBUFFER, offscreenRenderBuffers[0]);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8,
+                          nextLargestPOT(offscreenRenderWidth), nextLargestPOT(offscreenRenderHeight));
+
+    // Create an offscreen depth render buffer
+    glBindRenderbuffer(GL_RENDERBUFFER, offscreenRenderBuffers[1]);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT,
+                          nextLargestPOT(offscreenRenderWidth), nextLargestPOT(offscreenRenderHeight));
+
+    // Attach both render buffers to the FBO
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, offscreenRenderBuffers[0]);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, offscreenRenderBuffers[1]);
 
     // Load world into OpenGL
     GLuint worldPositionVBO;
@@ -283,9 +316,6 @@ int main()
     float antX = 5.0f;
     float antY = 5.0f;
     while (!glfwWindowShouldClose(window)) {
-        // Clear colour
-        glClear(GL_COLOR_BUFFER_BIT);
-
         // Update heading and ant position based on keys
         if(keybits.test(KeyLeft)) {
             antHeading -= antTurnSpeed;
@@ -308,7 +338,16 @@ int main()
         glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
         glTranslatef(-antX, -antY, -0.2f);
 
-        // Draw world
+        // Draw once to window
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glViewport(0, 0, displayRenderWidth, displayRenderHeight);
+        glDrawArrays(GL_TRIANGLES, 0, numVertices);
+
+        // Draw again to offscreen FBO
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, offscreenRenderFBO);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glViewport(0, 0, offscreenRenderWidth, offscreenRenderHeight);
         glDrawArrays(GL_TRIANGLES, 0, numVertices);
 
         // Swap front and back buffers
@@ -317,6 +356,12 @@ int main()
         // Poll for and process events
         glfwPollEvents();
     }
+
+    // Delete render buffers
+    glDeleteRenderbuffers(2, offscreenRenderBuffers);
+
+    // Delete FBO
+    glDeleteFramebuffers(1, &offscreenRenderFBO);
 
     // Delete vertex buffer objects
     glDeleteBuffers(1, &worldPositionVBO);
