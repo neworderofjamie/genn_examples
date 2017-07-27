@@ -60,9 +60,6 @@ constexpr float degreesToRadians = 0.017453293f;
 constexpr int displayRenderWidth = 640;
 constexpr int displayRenderHeight = 178;
 
-constexpr int offscreenRenderWidth = 74;
-constexpr int offscreenRenderHeight = 19;
-
 // Enumeration of keys
 enum Key
 {
@@ -76,9 +73,6 @@ enum Key
 
 // Bitset used for passing which keys have been pressed between key callback and render loop
 typedef std::bitset<KeyMax> KeyBitset;
-
-// **NOTE** texture references NEED to be global or cudaBindTextureToArray produces 'Invalid texture reference' errors
-texture<float, 2, cudaReadModeElementType> cudaTextureRef;
 
 // Loads world file from matlab format into position and colour vertex buffer objects
 std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, bool falseColour=true)
@@ -225,14 +219,9 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
             break;
 
         case GLFW_KEY_SPACE:
-            keybits->set(KeySpace, newKeyState);
+            keybits->set(KeySnapshot, newKeyState);
             break;
     }
-}
-//----------------------------------------------------------------------------
-unsigned int nextLargestPOT(unsigned int x)
-{
-    return (1 << (32 - __builtin_clz(x - 1)));
 }
 }   // anonymous namespace
 //----------------------------------------------------------------------------
@@ -259,17 +248,6 @@ int main()
         throw std::runtime_error("Failed to initialize GLEW");
     }
 
-    unsigned int numCUDADevices = 0;
-    int cudaDevices[1];
-    CHECK_CUDA_ERRORS(cudaGLGetDevices(&numCUDADevices, cudaDevices, 1, cudaGLDeviceListAll));
-    if(numCUDADevices == 0) {
-        throw std::runtime_error("No CUDA devices found");
-    }
-    else {
-        std::cout << "Using CUDA device " << cudaDevices[0] << std::endl;
-        CHECK_CUDA_ERRORS(cudaSetDevice(cudaDevices[0]));
-    }
-
     // Enable VSync
     glfwSwapInterval(1);
 
@@ -283,33 +261,6 @@ int main()
 
     // Set key callback
     glfwSetKeyCallback(window, keyCallback);
-    
-    // Create frame buffer object to render to
-    GLuint offscreenRenderFBO;
-    glGenFramebuffers(1, &offscreenRenderFBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, offscreenRenderFBO);
-
-    // Generate two render buffers - one for depth and one for colour
-    GLuint offscreenRenderBuffers[2];
-    glGenRenderbuffers(2, offscreenRenderBuffers);
-
-    // Create an offscreen colour render buffer
-    glBindRenderbuffer(GL_RENDERBUFFER, offscreenRenderBuffers[0]);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_R32F,
-                          nextLargestPOT(offscreenRenderWidth), nextLargestPOT(offscreenRenderHeight));
-
-    // Create an offscreen depth render buffer
-    glBindRenderbuffer(GL_RENDERBUFFER, offscreenRenderBuffers[1]);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT,
-                          nextLargestPOT(offscreenRenderWidth), nextLargestPOT(offscreenRenderHeight));
-
-    // Attach both render buffers to the FBO
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, offscreenRenderBuffers[0]);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, offscreenRenderBuffers[1]);*/
-
-    // Register colour render buffer with CUDA
-    cudaGraphicsResource *cudaRenderBuffer = nullptr;
-    CHECK_CUDA_ERRORS(cudaGraphicsGLRegisterImage(&cudaRenderBuffer, offscreenRenderBuffers[0], GL_RENDERBUFFER, cudaGraphicsRegisterFlagsReadOnly));
 
     // Load world into OpenGL
     GLuint worldPositionVBO;
@@ -354,18 +305,13 @@ int main()
         glTranslatef(-5.0f, -5.0f, -0.2f);
     }
 
-    cudaTextureRef.addressMode[0] = cudaAddressModeClamp;
-    cudaTextureRef.addressMode[1] = cudaAddressModeClamp;
-    cudaTextureRef.filterMode = cudaFilterModePoint;
-    cudaTextureRef.normalized = false;
-
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0,
+    // Create buffer to hold pixels read from screen
+    std::vector<uint8_t> snapshotData(displayRenderWidth * displayRenderWidth * 3);
 
     // Loop until the user closes the window
     float antHeading = 0.0f;
     float antX = 5.0f;
     float antY = 5.0f;
-    std::vector<uint8_t> snapShotData(displayRenderWidth * displayRenderWidth * 3);
     while (!glfwWindowShouldClose(window)) {
         // Update heading and ant position based on keys
         if(keybits.test(KeyLeft)) {
@@ -389,42 +335,24 @@ int main()
         glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
         glTranslatef(-antX, -antY, -0.2f);
 
-        // Draw once to window
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glViewport(0, 0, displayRenderWidth, displayRenderHeight);
-
+        // Draw to window
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDrawArrays(GL_TRIANGLES, 0, numVertices);
-
-        // Draw again to offscreen FBO
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, offscreenRenderFBO);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glViewport(0, 0, offscreenRenderWidth, offscreenRenderHeight);
         glDrawArrays(GL_TRIANGLES, 0, numVertices);
 
         // Swap front and back buffers
         glfwSwapBuffers(window);
 
-        // Map render buffer for use in CUDA
-        CHECK_CUDA_ERRORS(cudaGraphicsMapResources(1, &cudaRenderBuffer));
+        if(keybits.test(KeySnapshot)) {
+            glReadPixels(0, 0, displayRenderWidth, displayRenderHeight,
+                         GL_RGB, GL_UNSIGNED_BYTE, snapshotData.data());
 
-        cudaArray *renderedData;
-        CHECK_CUDA_ERRORS(cudaGraphicsSubResourceGetMappedArray(&renderedData, cudaRenderBuffer, 0, 0));
-
-        CHECK_CUDA_ERRORS(cudaBindTextureToArray(cudaTextureRef, renderedData));
-
-        // Unmap render for buffer after CUDA processing is complete
-        CHECK_CUDA_ERRORS(cudaGraphicsUnmapResources(1, &cudaRenderBuffer));
+            std::ofstream test("snapshot.bin", std::ios::binary);
+            test.write(reinterpret_cast<const char*>(snapshotData.data()), snapshotData.size());
+        }
 
         // Poll for and process events
         glfwPollEvents();
     }
-
-    // Delete render buffers
-    glDeleteRenderbuffers(2, offscreenRenderBuffers);
-
-    // Delete FBO
-    glDeleteFramebuffers(1, &offscreenRenderFBO);
 
     // Delete vertex buffer objects
     glDeleteBuffers(1, &worldPositionVBO);
