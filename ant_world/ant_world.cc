@@ -3,6 +3,7 @@
 #include <bitset>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -10,17 +11,33 @@
 // Standard C includes
 #include <cmath>
 
-// GL
+// OpenCV includes
+#include <opencv2/highgui/highgui.hpp>
+
+// OpenGL includes
 #include <GL/glew.h>
 #include <GL/glu.h>
 
 // GLFW
 #include <GLFW/glfw3.h>
 
+// CUDA includes
+#include <cuda_gl_interop.h>
+#include <cuda_runtime.h>
+
 //----------------------------------------------------------------------------
 // Macros
 //----------------------------------------------------------------------------
 #define BUFFER_OFFSET(i) ((void*)(i))
+#define CHECK_CUDA_ERRORS(call) {                                                                   \
+    cudaError_t error = call;                                                                       \
+    if (error != cudaSuccess) {                                                                     \
+            std::ostringstream errorMessageStream;                                                  \
+            errorMessageStream << "cuda error:" __FILE__ << ": " << __LINE__ << " ";                \
+            errorMessageStream << cudaGetErrorString(error) << "(" << error << ")" << std::endl;    \
+            throw std::runtime_error(errorMessageStream.str());                                     \
+        }                                                                                           \
+    }
 
 //----------------------------------------------------------------------------
 // Anonymous namespace
@@ -43,8 +60,8 @@ constexpr float degreesToRadians = 0.017453293f;
 constexpr int displayRenderWidth = 640;
 constexpr int displayRenderHeight = 178;
 
-constexpr int offscreenRenderWidth = 36;
-constexpr int offscreenRenderHeight = 10;
+constexpr int offscreenRenderWidth = 74;
+constexpr int offscreenRenderHeight = 19;
 
 // Enumeration of keys
 enum Key
@@ -53,11 +70,15 @@ enum Key
     KeyRight,
     KeyUp,
     KeyDown,
+    KeySnapshot,
     KeyMax
 };
 
 // Bitset used for passing which keys have been pressed between key callback and render loop
 typedef std::bitset<KeyMax> KeyBitset;
+
+// **NOTE** texture references NEED to be global or cudaBindTextureToArray produces 'Invalid texture reference' errors
+texture<float, 2, cudaReadModeElementType> cudaTextureRef;
 
 // Loads world file from matlab format into position and colour vertex buffer objects
 std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, bool falseColour=true)
@@ -190,14 +211,21 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
         case GLFW_KEY_LEFT:
             keybits->set(KeyLeft, newKeyState);
             break;
+
         case GLFW_KEY_RIGHT:
             keybits->set(KeyRight, newKeyState);
             break;
+
         case GLFW_KEY_UP:
             keybits->set(KeyUp, newKeyState);
             break;
+
         case GLFW_KEY_DOWN:
             keybits->set(KeyDown, newKeyState);
+            break;
+
+        case GLFW_KEY_SPACE:
+            keybits->set(KeySpace, newKeyState);
             break;
     }
 }
@@ -231,6 +259,17 @@ int main()
         throw std::runtime_error("Failed to initialize GLEW");
     }
 
+    unsigned int numCUDADevices = 0;
+    int cudaDevices[1];
+    CHECK_CUDA_ERRORS(cudaGLGetDevices(&numCUDADevices, cudaDevices, 1, cudaGLDeviceListAll));
+    if(numCUDADevices == 0) {
+        throw std::runtime_error("No CUDA devices found");
+    }
+    else {
+        std::cout << "Using CUDA device " << cudaDevices[0] << std::endl;
+        CHECK_CUDA_ERRORS(cudaSetDevice(cudaDevices[0]));
+    }
+
     // Enable VSync
     glfwSwapInterval(1);
 
@@ -244,7 +283,7 @@ int main()
 
     // Set key callback
     glfwSetKeyCallback(window, keyCallback);
-
+    
     // Create frame buffer object to render to
     GLuint offscreenRenderFBO;
     glGenFramebuffers(1, &offscreenRenderFBO);
@@ -256,7 +295,7 @@ int main()
 
     // Create an offscreen colour render buffer
     glBindRenderbuffer(GL_RENDERBUFFER, offscreenRenderBuffers[0]);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8,
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_R32F,
                           nextLargestPOT(offscreenRenderWidth), nextLargestPOT(offscreenRenderHeight));
 
     // Create an offscreen depth render buffer
@@ -266,7 +305,11 @@ int main()
 
     // Attach both render buffers to the FBO
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, offscreenRenderBuffers[0]);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, offscreenRenderBuffers[1]);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, offscreenRenderBuffers[1]);*/
+
+    // Register colour render buffer with CUDA
+    cudaGraphicsResource *cudaRenderBuffer = nullptr;
+    CHECK_CUDA_ERRORS(cudaGraphicsGLRegisterImage(&cudaRenderBuffer, offscreenRenderBuffers[0], GL_RENDERBUFFER, cudaGraphicsRegisterFlagsReadOnly));
 
     // Load world into OpenGL
     GLuint worldPositionVBO;
@@ -311,10 +354,18 @@ int main()
         glTranslatef(-5.0f, -5.0f, -0.2f);
     }
 
+    cudaTextureRef.addressMode[0] = cudaAddressModeClamp;
+    cudaTextureRef.addressMode[1] = cudaAddressModeClamp;
+    cudaTextureRef.filterMode = cudaFilterModePoint;
+    cudaTextureRef.normalized = false;
+
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0,
+
     // Loop until the user closes the window
     float antHeading = 0.0f;
     float antX = 5.0f;
     float antY = 5.0f;
+    std::vector<uint8_t> snapShotData(displayRenderWidth * displayRenderWidth * 3);
     while (!glfwWindowShouldClose(window)) {
         // Update heading and ant position based on keys
         if(keybits.test(KeyLeft)) {
@@ -340,8 +391,9 @@ int main()
 
         // Draw once to window
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glViewport(0, 0, displayRenderWidth, displayRenderHeight);
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDrawArrays(GL_TRIANGLES, 0, numVertices);
 
         // Draw again to offscreen FBO
@@ -352,6 +404,17 @@ int main()
 
         // Swap front and back buffers
         glfwSwapBuffers(window);
+
+        // Map render buffer for use in CUDA
+        CHECK_CUDA_ERRORS(cudaGraphicsMapResources(1, &cudaRenderBuffer));
+
+        cudaArray *renderedData;
+        CHECK_CUDA_ERRORS(cudaGraphicsSubResourceGetMappedArray(&renderedData, cudaRenderBuffer, 0, 0));
+
+        CHECK_CUDA_ERRORS(cudaBindTextureToArray(cudaTextureRef, renderedData));
+
+        // Unmap render for buffer after CUDA processing is complete
+        CHECK_CUDA_ERRORS(cudaGraphicsUnmapResources(1, &cudaRenderBuffer));
 
         // Poll for and process events
         glfwPollEvents();
