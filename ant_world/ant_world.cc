@@ -12,7 +12,7 @@
 #include <cmath>
 
 // OpenCV includes
-#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/opencv.hpp>
 
 // OpenGL includes
 #include <GL/glew.h>
@@ -59,6 +59,12 @@ constexpr float degreesToRadians = 0.017453293f;
 
 constexpr int displayRenderWidth = 640;
 constexpr int displayRenderHeight = 178;
+
+constexpr int intermediateSnapshotWidth = 74;
+constexpr int intermediateSnapshowHeight = 19;
+
+constexpr int finalSnapshotWidth = 36;
+constexpr int finalSnapshowHeight = 10;
 
 // Enumeration of keys
 enum Key
@@ -305,8 +311,24 @@ int main()
         glTranslatef(-5.0f, -5.0f, -0.2f);
     }
 
-    // Create buffer to hold pixels read from screen
-    std::vector<uint8_t> snapshotData(displayRenderWidth * displayRenderWidth * 3);
+    // Host OpenCV array to hold pixels read from screen
+    cv::Mat snapshot(displayRenderHeight, displayRenderWidth, CV_8UC3);
+
+    // Host OpenCV array to hold intermediate resolution colour snapshot
+    cv::Mat intermediateSnapshot(intermediateSnapshowHeight, intermediateSnapshotWidth, CV_8UC3);
+
+    // Host OpenCV array to hold intermediate resolution greyscale snapshot
+    cv::Mat intermediateSnapshotGreyscale(intermediateSnapshowHeight, intermediateSnapshotWidth, CV_8UC1);
+
+    // Host OpenCV array to hold final resolution greyscale snapshot
+    cv::Mat finalSnapshot(finalSnapshowHeight, finalSnapshotWidth, CV_8UC1);
+
+    // GPU OpenCV array to hold
+    cv::cuda::GpuMat finalSnapshotGPU(finalSnapshowHeight, finalSnapshotWidth, CV_8UC1);
+
+    // Create CLAHE algorithm for histogram normalization
+    // **NOTE** parameters to match Matlab defaults
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(0.01 * 255.0, cv::Size(8, 8));
 
     // Loop until the user closes the window
     float antHeading = 0.0f;
@@ -342,12 +364,35 @@ int main()
         // Swap front and back buffers
         glfwSwapBuffers(window);
 
+        // If snapshot key is pressed
         if(keybits.test(KeySnapshot)) {
+            // Read pixels from framebuffer
+            // **TODO** it should be theoretically possible to go directly from frame buffer to GpuMat
             glReadPixels(0, 0, displayRenderWidth, displayRenderHeight,
-                         GL_RGB, GL_UNSIGNED_BYTE, snapshotData.data());
+                         GL_BGR, GL_UNSIGNED_BYTE, snapshot.data);
 
-            std::ofstream test("snapshot.bin", std::ios::binary);
-            test.write(reinterpret_cast<const char*>(snapshotData.data()), snapshotData.size());
+            // Downsample to intermediate size
+            cv::resize(snapshot, intermediateSnapshot,
+                       cv::Size(intermediateSnapshotWidth, intermediateSnapshowHeight));
+
+            // Convert to greyscale
+            cv::cvtColor(intermediateSnapshot, intermediateSnapshotGreyscale, CV_BGR2GRAY);
+
+            // Invert image
+            cv::subtract(255, intermediateSnapshotGreyscale, intermediateSnapshotGreyscale);
+
+            // Apply histogram normalization
+            clahe->apply(intermediateSnapshotGreyscale, intermediateSnapshotGreyscale);
+
+            // Finally resample down to final size
+            cv::resize(intermediateSnapshotGreyscale, finalSnapshot,
+                       cv::Size(finalSnapshotWidth, finalSnapshowHeight),
+                       0.0, 0.0, CV_INTER_CUBIC);
+
+            cv::imwrite("snapshot.png", finalSnapshot);
+
+            // Upload final snapshot to GPU
+            finalSnapshotGPU.upload(finalSnapshot);
         }
 
         // Poll for and process events
