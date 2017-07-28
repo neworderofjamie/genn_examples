@@ -2,7 +2,9 @@
 #include <algorithm>
 #include <bitset>
 #include <fstream>
+#include <future>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -25,19 +27,21 @@
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 
+// Common includes
+#include "../common/connectors.h"
+#include "../common/spike_csv_recorder.h"
+#include "../common/timer.h"
+
+// GeNN generated code includes
+#include "ant_world_CODE/definitions.h"
+
+// Model includes
+#include "parameters.h"
+
 //----------------------------------------------------------------------------
 // Macros
 //----------------------------------------------------------------------------
 #define BUFFER_OFFSET(i) ((void*)(i))
-#define CHECK_CUDA_ERRORS(call) {                                                                   \
-    cudaError_t error = call;                                                                       \
-    if (error != cudaSuccess) {                                                                     \
-            std::ostringstream errorMessageStream;                                                  \
-            errorMessageStream << "cuda error:" __FILE__ << ": " << __LINE__ << " ";                \
-            errorMessageStream << cudaGetErrorString(error) << "(" << error << ")" << std::endl;    \
-            throw std::runtime_error(errorMessageStream.str());                                     \
-        }                                                                                           \
-    }
 
 //----------------------------------------------------------------------------
 // Anonymous namespace
@@ -63,8 +67,6 @@ constexpr int displayRenderHeight = 178;
 constexpr int intermediateSnapshotWidth = 74;
 constexpr int intermediateSnapshowHeight = 19;
 
-constexpr int finalSnapshotWidth = 36;
-constexpr int finalSnapshowHeight = 10;
 
 // Enumeration of keys
 enum Key
@@ -229,6 +231,112 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
             break;
     }
 }
+//----------------------------------------------------------------------------
+unsigned int convertMsToTimesteps(double ms)
+{
+    return (unsigned int)std::round(ms / Parameters::timestepMs);
+}
+//----------------------------------------------------------------------------
+void initGeNN()
+{
+    std::mt19937 gen;
+
+    {
+        Timer<> t("Allocation:");
+        allocateMem();
+    }
+
+    {
+        Timer<> t("Initialization:");
+        initialize();
+    }
+
+    {
+        Timer<> t("Building connectivity:");
+
+        buildFixedNumberPreConnector(Parameters::numPN, Parameters::numKC,
+                                     Parameters::numPNSynapsesPerKC, CpnToKC, &allocatepnToKC, gen);
+    }
+
+    // Final setup
+    {
+        Timer<> t("Sparse init:");
+        initant_world();
+    }
+}
+//----------------------------------------------------------------------------
+void presentToMB(uint8_t *inputData, unsigned int inputDataStep)
+{
+    // Convert simulation regime parameters to timesteps
+    const unsigned int rewardTimestep = convertMsToTimesteps(Parameters::rewardTimeMs);
+    const unsigned int presentDuration = convertMsToTimesteps(Parameters::presentDurationMs);
+    const unsigned int postStimuliDuration = convertMsToTimesteps(Parameters::postStimuliDurationMs);
+
+    const unsigned int duration = presentDuration + postStimuliDuration;
+
+    std::cout << "Simulating for " << duration << " timesteps" << std::endl;
+
+    // Open CSV output files
+    SpikeCSVRecorder pnSpikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
+    SpikeCSVRecorder kcSpikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
+    SpikeCSVRecorder enSpikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
+
+    // Update input data step
+    IextStepPN = inputDataStep;
+
+    // Loop through timesteps
+    for(unsigned int t = 0; t < duration; t++)
+    {
+        // If we should be presenting an image
+        if(t < presentDuration) {
+            IextPN = NULL;
+        }
+        // Otherwise update offset to point to block of zeros
+        else {
+            IextPN = inputData;
+        }
+
+        // If we should reward in this timestep, inject dopamine
+        if(t == rewardTimestep) {
+            std::cout << "\tApplying reward at timestep " << t << std::endl;
+            injectDopaminekcToEN = true;
+        }
+
+#ifndef CPU_ONLY
+        // Simulate on GPU
+        stepTimeGPU();
+
+        // Download spikes
+        pullPNCurrentSpikesFromDevice();
+        pullKCCurrentSpikesFromDevice();
+        pullENCurrentSpikesFromDevice();
+#else
+        // Simulate on CPU
+        stepTimeCPU();
+#endif
+        // If a dopamine spike has been injected this timestep
+        if(t == rewardTimestep) {
+            const scalar tMs =  (scalar)t * DT;
+
+            // Decay global dopamine traces
+            dkcToEN = dkcToEN * std::exp(-(tMs - tDkcToEN) / Parameters::tauD);
+
+            // Add effect of dopamine spike
+            dkcToEN += Parameters::dopamineStrength;
+
+            // Update last reward time
+            tDkcToEN = tMs;
+
+            // Clear dopamine injection flags
+            injectDopaminekcToEN = false;
+        }
+
+        // Record spikes
+        pnSpikes.record(t);
+        kcSpikes.record(t);
+        enSpikes.record(t);
+    }
+}
 }   // anonymous namespace
 //----------------------------------------------------------------------------
 int main()
@@ -311,6 +419,9 @@ int main()
         glTranslatef(-5.0f, -5.0f, -0.2f);
     }
 
+    // Initialize GeNN
+    initGeNN();
+
     // Host OpenCV array to hold pixels read from screen
     cv::Mat snapshot(displayRenderHeight, displayRenderWidth, CV_8UC3);
 
@@ -321,10 +432,10 @@ int main()
     cv::Mat intermediateSnapshotGreyscale(intermediateSnapshowHeight, intermediateSnapshotWidth, CV_8UC1);
 
     // Host OpenCV array to hold final resolution greyscale snapshot
-    cv::Mat finalSnapshot(finalSnapshowHeight, finalSnapshotWidth, CV_8UC1);
+    cv::Mat finalSnapshot(Parameters::inputHeight, Parameters::inputWidth, CV_8UC1);
 
     // GPU OpenCV array to hold
-    cv::cuda::GpuMat finalSnapshotGPU(finalSnapshowHeight, finalSnapshotWidth, CV_8UC1);
+    cv::cuda::GpuMat finalSnapshotGPU(Parameters::inputHeight, Parameters::inputWidth, CV_8UC1);
 
     // Create CLAHE algorithm for histogram normalization
     // **NOTE** parameters to match Matlab defaults
@@ -334,6 +445,7 @@ int main()
     float antHeading = 0.0f;
     float antX = 5.0f;
     float antY = 5.0f;
+    std::future<void> gennResult;
     while (!glfwWindowShouldClose(window)) {
         // Update heading and ant position based on keys
         if(keybits.test(KeyLeft)) {
@@ -386,13 +498,18 @@ int main()
 
             // Finally resample down to final size
             cv::resize(intermediateSnapshotGreyscale, finalSnapshot,
-                       cv::Size(finalSnapshotWidth, finalSnapshowHeight),
+                       cv::Size(Parameters::inputWidth, Parameters::inputHeight),
                        0.0, 0.0, CV_INTER_CUBIC);
 
             cv::imwrite("snapshot.png", finalSnapshot);
 
             // Upload final snapshot to GPU
             finalSnapshotGPU.upload(finalSnapshot);
+
+            // Extract device pointers and step
+            auto finalSnapshotPtrStep = (cv::cuda::PtrStep<uint8_t>)finalSnapshotGPU;
+            gennResult = std::async(std::launch::async, presentToMB,
+                                    finalSnapshotPtrStep.data, finalSnapshotPtrStep.step);
         }
 
         // Poll for and process events
