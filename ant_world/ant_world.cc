@@ -4,6 +4,7 @@
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <sstream>
 #include <string>
@@ -61,13 +62,19 @@ constexpr float antMoveSpeed = 0.05f;
 
 // Constant to multiply degrees by to get radians
 constexpr float degreesToRadians = 0.017453293f;
-
+constexpr float radiansToDegrees = 57.295779513f;
 constexpr int displayRenderWidth = 640;
 constexpr int displayRenderHeight = 178;
 
 constexpr int intermediateSnapshotWidth = 74;
 constexpr int intermediateSnapshowHeight = 19;
 
+enum class State
+{
+    Training,
+    Testing,
+    Idle,
+};
 
 // Enumeration of keys
 enum Key
@@ -78,6 +85,7 @@ enum Key
     KeyDown,
     KeyTrainSnapshot,
     KeyTestSnapshot,
+    KeyReset,
     KeyMax
 };
 
@@ -85,7 +93,7 @@ enum Key
 typedef std::bitset<KeyMax> KeyBitset;
 
 // Loads world file from matlab format into position and colour vertex buffer objects
-std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, bool falseColour=true)
+std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
 {
     // Generate two vertex buffer objects, one for positions and one for colours
     GLuint vbo[2];
@@ -136,7 +144,7 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, 
         }
 
         // Upload positions
-        glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(GLfloat), positions.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(GLfloat), positions.data(), GL_STATIC_READ);
     }
 
     {
@@ -153,48 +161,63 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename, 
             colours[c + 2] = groundColour[2];
         }
 
-        // If we should 'false colour' world
-        if(falseColour) {
-            // Loop through triangles
-            for(unsigned int t = 0; t < numTriangles; t++) {
-                // Read triangle colour component
-                // **NOTE** we only bother reading the R channel because colours are greyscale anyway
-                double triangleColour;
-                input.read(reinterpret_cast<char*>(&triangleColour), sizeof(double));
+        // Loop through triangles
+        for(unsigned int t = 0; t < numTriangles; t++) {
+            // Read triangle colour component
+            // **NOTE** we only bother reading the R channel because colours are greyscale anyway
+            double triangleColour;
+            input.read(reinterpret_cast<char*>(&triangleColour), sizeof(double));
 
-                // Loop through vertices that make up triangle and
-                // set to world colour multiplied by triangle colour
-                for(unsigned int v = 0; v < 3; v++) {
-                    colours[18 + (t * 9) + (v * 3)] = worldColour[0] * triangleColour;
-                    colours[18 + (t * 9) + (v * 3) + 1] = worldColour[1] * triangleColour;
-                    colours[18 + (t * 9) + (v * 3) + 2] = worldColour[2] * triangleColour;
-                }
-            }
-        }
-        // Otherwise
-        else {
-            // Loop through components (R, G and B)
-            for(unsigned int c = 0; c < 3; c++) {
-                // Loop through triangles
-                for(unsigned int t = 0; t < numTriangles; t++) {
-                    // Read triangle colour component
-                    double triangleColour;
-                    input.read(reinterpret_cast<char*>(&triangleColour), sizeof(double));
-
-                    // Copy it into correct position for each vertex in triangle
-                    colours[18 + (t * 9) + c] = (GLfloat)triangleColour;
-                    colours[18 + (t * 9) + c + 3] = (GLfloat)triangleColour;
-                    colours[18 + (t * 9) + c + 6] = (GLfloat)triangleColour;
-                }
+            // Loop through vertices that make up triangle and
+            // set to world colour multiplied by triangle colour
+            for(unsigned int v = 0; v < 3; v++) {
+                colours[18 + (t * 9) + (v * 3)] = worldColour[0] * triangleColour;
+                colours[18 + (t * 9) + (v * 3) + 1] = worldColour[1] * triangleColour;
+                colours[18 + (t * 9) + (v * 3) + 2] = worldColour[2] * triangleColour;
             }
         }
 
         // Upload colours
-        glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(GLfloat), colours.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(GLfloat), colours.data(), GL_STATIC_READ);
     }
 
     // Return VBO handles and index count
     return std::make_tuple(vbo[0], vbo[1], numTriangles * 3);
+}
+//----------------------------------------------------------------------------
+std::vector<std::array<float, 3>> loadRoute(const std::string &filename)
+{
+    // Open file for binary IO
+    std::ifstream input(filename, std::ios::binary);
+    if(!input.good()) {
+        throw std::runtime_error("Cannot open route file:" + filename);
+    }
+
+    // Seek to end of file, get size and rewind
+    input.seekg(0, std::ios_base::end);
+    const std::streampos numPoints = input.tellg() / (sizeof(double) * 3);
+    input.seekg(0);
+    std::cout << "Route has " << numPoints << " points" << std::endl;
+
+    // Resize route
+    std::vector<std::array<float, 3>> route(numPoints);
+
+    // Loop through components(X, Y and heading)
+    for(unsigned int c = 0; c < 3; c++) {
+        // Heading is correctly scaled by X and Y need converting into metres
+        const float scale = (c == 2) ? 1.0f : (1.0f / 100.0f);
+
+        // Loop through points on path
+        for(unsigned int i = 0; i < numPoints; i++) {
+            // Read point component
+            double pointPosition;
+            input.read(reinterpret_cast<char*>(&pointPosition), sizeof(double));
+
+            // Convert to float, scale and insert into route
+            route[i][c] = (float)pointPosition * scale;
+        }
+    }
+    return route;
 }
 //----------------------------------------------------------------------------
 void keyCallback(GLFWwindow *window, int key, int, int action, int)
@@ -235,7 +258,84 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
         case GLFW_KEY_ENTER:
             keybits->set(KeyTestSnapshot, newKeyState);
             break;
+
+        case GLFW_KEY_R:
+            keybits->set(KeyReset, newKeyState);
+            break;
     }
+}
+//----------------------------------------------------------------------------
+void renderAntView(float antX, float antY, float antHeading,
+                   GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices)
+{
+    // Bind world position VBO
+    glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+
+    // Bind world colour VBO
+    glBindBuffer(GL_ARRAY_BUFFER, worldColourVBO);
+    glEnableClientState(GL_COLOR_ARRAY);
+    glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+
+    // Configure perspective projection matrix
+    // **TODO** save these rather than calculating each time
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(76.0,
+                   36.0 / 10.0,
+                   0.0001, 10.0);
+
+    // Build ants-eye-view modelview matrix
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
+    glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
+    glTranslatef(-antX, -antY, -0.2f);
+
+    // Draw world
+    glDrawArrays(GL_TRIANGLES, 0, numWorldVertices);
+}
+//----------------------------------------------------------------------------
+void renderTopDownView(GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices,
+                       GLuint routeVBO, unsigned int numRouteVertices)
+{
+    // Bind world position VBO
+    glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+
+    // Bind world colour VBO
+    glBindBuffer(GL_ARRAY_BUFFER, worldColourVBO);
+    glEnableClientState(GL_COLOR_ARRAY);
+    glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+
+    // Configure top-down orthographic projection matrix
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-5.0, 5.0,
+            -5.0, 5.0,
+            -10, 1.0);
+
+    // Build modelview matrix to centre world
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glTranslatef(-5.0f, -5.0f, 0.0f);
+
+    // Draw world
+    glDrawArrays(GL_TRIANGLES, 0, numWorldVertices);
+
+    // Bind route VBO
+    // **NOTE** we're only using X and Y components of route and striding over the angle
+    glBindBuffer(GL_ARRAY_BUFFER, routeVBO);
+    glVertexPointer(2, GL_FLOAT, 3 * sizeof(float), BUFFER_OFFSET(0));
+
+    // Disable colours
+    glDisableClientState(GL_COLOR_ARRAY);
+
+    // Translate above the terrain and draw route
+    glTranslatef(0.0f, 0.0f, 1.0f);
+    glDrawArrays(GL_LINE_STRIP, 0, numRouteVertices);
 }
 //----------------------------------------------------------------------------
 unsigned int convertMsToTimesteps(double ms)
@@ -271,7 +371,7 @@ void initGeNN()
     }
 }
 //----------------------------------------------------------------------------
-void presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool reward)
+unsigned int presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool reward)
 {
     Timer<> timer("Simulation:");
 
@@ -359,6 +459,7 @@ void presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool reward)
     }
 
     std::cout << numENSpikes << " EN spikes" << std::endl;
+    return numENSpikes;
 }
 }   // anonymous namespace
 //----------------------------------------------------------------------------
@@ -370,7 +471,8 @@ int main()
     }
 
     // Create a windowed mode window and its OpenGL context
-    GLFWwindow *window = glfwCreateWindow(displayRenderWidth, displayRenderHeight, "Ant World", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(displayRenderWidth, displayRenderHeight + displayRenderWidth + 10,
+                                          "Ant World", nullptr, nullptr);
     if(!window)
     {
         glfwTerminate();
@@ -391,7 +493,8 @@ int main()
     // Set clear colour to match matlab and enable depth test
     glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
-    
+    glLineWidth(4.0f);
+
     // Create key bitset and setc it as window user pointer
     KeyBitset keybits;
     glfwSetWindowUserPointer(window, &keybits);
@@ -399,48 +502,21 @@ int main()
     // Set key callback
     glfwSetKeyCallback(window, keyCallback);
 
+    // Load route
+    auto route = loadRoute("ant1_route1.bin");
+
+    // Create VBO from route
+    // **NOTE** we're not actually going to be rendering the 3rd component as it's an angle not a z-coordinate
+    GLuint routeVBO;
+    glGenBuffers(1, &routeVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, routeVBO);
+    glBufferData(GL_ARRAY_BUFFER, route.size() * sizeof(GLfloat) * 3, route.data(), GL_STATIC_READ);
+
     // Load world into OpenGL
     GLuint worldPositionVBO;
     GLuint worldColourVBO;
     unsigned int numVertices;
     std::tie(worldPositionVBO, worldColourVBO, numVertices) = loadWorld("world5000_gray.bin");
-
-    // Bind world position VBO
-    glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
-
-    // Bind world colour VBO
-    glBindBuffer(GL_ARRAY_BUFFER, worldColourVBO);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
-
-    bool ortho = false;
-    glMatrixMode(GL_PROJECTION);
-
-    // Setup camera to look down on whole world
-    if(ortho) {
-        glOrtho(-5.0, 5.0,
-                -5.0, 5.0,
-                10, -1.0);
-    }
-    else {
-        gluPerspective(76.0,
-                       36.0 / 10.0,
-                       0.0001, 10.0);
-    }
-    glMatrixMode(GL_MODELVIEW);
-
-    // Centre the world
-    glLoadIdentity();
-
-    if(ortho) {
-        glTranslatef(-5.0f, -5.0f, 0.0f);
-    }
-    else {
-        glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
-        glTranslatef(-5.0f, -5.0f, -0.2f);
-    }
 
     // Initialize GeNN
     initGeNN();
@@ -465,11 +541,29 @@ int main()
     cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(0.01 * 255.0, cv::Size(8, 8));
 
     // Loop until the user closes the window
-    float antHeading = 0.0f;
-    float antX = 5.0f;
-    float antY = 5.0f;
-    std::future<void> gennResult;
+    float antHeading = route[0][2];
+    float antX = route[0][0];
+    float antY = route[0][1];
+
+    State state = State::Training;
+
+    unsigned int numSnapshots = 0;
+    float distanceSinceLastPoint = 0.0f;
+    unsigned int trainPoint = 1;
+
+    unsigned int testingScan = 0;
+
+    unsigned int bestTest = 0;
+    unsigned int bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+
+    std::ofstream replay("test.csv");
+
+    std::future<unsigned int> gennResult;
     while (!glfwWindowShouldClose(window)) {
+        bool trainSnapshot = false;
+        bool testSnapshot = false;
+        const bool gennIdle = !gennResult.valid() || (gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready);
+
         // Update heading and ant position based on keys
         if(keybits.test(KeyLeft)) {
             antHeading -= antTurnSpeed;
@@ -485,29 +579,145 @@ int main()
             antX -= antMoveSpeed * sin(antHeading * degreesToRadians);
             antY -= antMoveSpeed * cos(antHeading * degreesToRadians);
         }
+        if(keybits.test(KeyReset)) {
+            antHeading = route[0][2];
+            antX = route[0][0];
+            antY = route[0][1];
+        }
 
-        // Build new modelview transform
-        glLoadIdentity();
-        glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
-        glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
-        glTranslatef(-antX, -antY, -0.2f);
+        // If GeNN is idle, trigger snapshots if keys are pressed
+        if(gennIdle && keybits.test(KeyTrainSnapshot)) {
+            trainSnapshot = true;
+        }
+        if(gennIdle && keybits.test(KeyTestSnapshot)) {
+            testSnapshot = true;
+        }
 
-        // Draw to window
+        // If we're training
+        if(state == State::Training) {
+            // If GeNN isn't training and we have more route points to train
+            if(gennIdle && trainPoint < route.size()) {
+                // Snap ant to next route point
+                antX = route[trainPoint][0];
+                antY = route[trainPoint][1];
+
+                // Calculate distance from last point
+                const float deltaX = antX - route[trainPoint - 1][0];
+                const float deltaY = antY - route[trainPoint - 1][1];
+                const float distance = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));
+
+                antHeading = radiansToDegrees * atan2(deltaX, deltaY);
+
+                // Add distance to total
+                distanceSinceLastPoint += distance;
+
+                // If we've gone further than 10cm
+                if(distanceSinceLastPoint > (10.0 / 100.0f)) {
+                    // Set flag to train this snapshot
+                    trainSnapshot = true;
+
+                    //
+                    numSnapshots++;
+
+                    // Reset counter
+                    distanceSinceLastPoint = 0.0f;
+                }
+
+                // Go onto next training point
+                trainPoint++;
+            }
+            // Otherwise, if we've reached end of route
+            else if(gennIdle && trainPoint == route.size()) {
+                std::cout << "Training complete (" << numSnapshots << " snapshots)" << std::endl;
+
+                // Go to testing state
+                /*state = State::Testing;
+
+                // Snap ant back to start of route, facing in starting scan direction
+                antX = route[0][0];
+                antY = route[0][1];
+                antHeading = route[0][2] - 60.0f;
+
+                // Reset scan
+                testingScan = 0;
+                bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+
+                // Take snapshot
+                testSnapshot = true;*/
+            }
+        }
+        else if(state == State::Testing) {
+            if(gennIdle) {
+                // If the last snapshot was more familiar than the current best update
+                const unsigned int numSpikes = gennResult.get();
+                if(numSpikes < bestTestENSpikes) {
+                    bestTest = testingScan;
+                    bestTestENSpikes = numSpikes;
+
+                    std::cout << "Updated result: " << bestTest << " is most familiar direction with " << bestTestENSpikes << " spikes" << std::endl;
+                }
+
+                // Go onto next scan
+                testingScan++;
+
+                // If scan isn't complete
+                if(testingScan < 12) {
+                    // Scan right
+                    antHeading += 10.0f;
+
+                    // Take test snapshot
+                    testSnapshot = true;
+                }
+                else {
+                    std::cout << "Scan complete: " << bestTest << " is most familiar direction with " << bestTestENSpikes << " spikes" << std::endl;
+
+                    // Return ant to it's best heading
+                    antHeading -= 10.0f * (float)(12 - bestTest);
+
+                    // Move ant forward by 10cm
+                    antX += 0.01f * sin(antHeading * degreesToRadians);
+                    antY += 0.01f * cos(antHeading * degreesToRadians);
+
+                    replay << antX << "," << antY << std::endl;
+
+                    // Reset scan
+                    antHeading -= 60.0f;
+                    testingScan = 0;
+                    bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+
+                    // Take snapshot
+                    testSnapshot = true;
+                }
+            }
+        }
+
+        // Clear window
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDrawArrays(GL_TRIANGLES, 0, numVertices);
+
+        // Render ant's eye view at top of the screen
+        glViewport(0, displayRenderWidth + 10,
+                   displayRenderWidth, displayRenderHeight);
+        renderAntView(antX, antY, antHeading,
+                      worldPositionVBO, worldColourVBO,
+                      numVertices);
+
+        // Render top-down view at bottom of the screen
+        glViewport(0, 0,
+                   displayRenderWidth, displayRenderWidth);
+        renderTopDownView(worldPositionVBO, worldColourVBO, numVertices,
+                          routeVBO, route.size());
+
 
         // Swap front and back buffers
         glfwSwapBuffers(window);
 
-        // If no previous snapshots have been taken or the processing of the
-        // previous one is complete and one of the snapshotting keys has been pressed
-        if((!gennResult.valid() || gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready)
-            && (keybits.test(KeyTrainSnapshot) || keybits.test(KeyTestSnapshot))) {
+        // If we should take a snapshot
+        if(trainSnapshot || testSnapshot) {
             Timer<> timer("Snapshot generation:");
 
             // Read pixels from framebuffer
             // **TODO** it should be theoretically possible to go directly from frame buffer to GpuMat
-            glReadPixels(0, 0, displayRenderWidth, displayRenderHeight,
+            glReadPixels(0, displayRenderWidth + 10, displayRenderWidth, displayRenderHeight,
                          GL_BGR, GL_UNSIGNED_BYTE, snapshot.data);
 
             // Downsample to intermediate size
@@ -533,13 +743,12 @@ int main()
             // Upload final snapshot to GPU
             finalSnapshotGPU.upload(finalSnapshot);
 
-            // We should only apply reward if we're training
-            const bool reward = keybits.test(KeyTrainSnapshot);
-
             // Extract device pointers and step
             auto finalSnapshotPtrStep = (cv::cuda::PtrStep<uint8_t>)finalSnapshotGPU;
+
+            // Start simulation, applying reward if we are training
             gennResult = std::async(std::launch::async, presentToMB,
-                                    finalSnapshotPtrStep.data, finalSnapshotPtrStep.step, reward);
+                                    finalSnapshotPtrStep.data, finalSnapshotPtrStep.step, trainSnapshot);
         }
 
         // Poll for and process events
