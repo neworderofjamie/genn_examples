@@ -248,17 +248,17 @@ void initGeNN()
     std::mt19937 gen;
 
     {
-        Timer<> t("Allocation:");
+        Timer<> timer("Allocation:");
         allocateMem();
     }
 
     {
-        Timer<> t("Initialization:");
+        Timer<> timer("Initialization:");
         initialize();
     }
 
     {
-        Timer<> t("Building connectivity:");
+        Timer<> timer("Building connectivity:");
 
         buildFixedNumberPreConnector(Parameters::numPN, Parameters::numKC,
                                      Parameters::numPNSynapsesPerKC, CpnToKC, &allocatepnToKC, gen);
@@ -266,13 +266,15 @@ void initGeNN()
 
     // Final setup
     {
-        Timer<> t("Sparse init:");
+        Timer<> timer("Sparse init:");
         initant_world();
     }
 }
 //----------------------------------------------------------------------------
 void presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool reward)
 {
+    Timer<> timer("Simulation:");
+
     // Convert simulation regime parameters to timesteps
     const unsigned long long startTimestep = iT;
     const unsigned long long rewardTimestep = iT + convertMsToTimesteps(Parameters::rewardTimeMs);
@@ -333,7 +335,7 @@ void presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool reward)
         stepTimeCPU();
 #endif
         // If a dopamine spike has been injected this timestep
-        if(reward && iT == rewardTimestep) {
+        if(injectDopaminekcToEN) {
             // Decay global dopamine traces
             dkcToEN = dkcToEN * std::exp(-(t - tDkcToEN) / Parameters::tauD);
 
@@ -501,6 +503,8 @@ int main()
         // previous one is complete and one of the snapshotting keys has been pressed
         if((!gennResult.valid() || gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready)
             && (keybits.test(KeyTrainSnapshot) || keybits.test(KeyTestSnapshot))) {
+            Timer<> timer("Snapshot generation:");
+
             // Read pixels from framebuffer
             // **TODO** it should be theoretically possible to go directly from frame buffer to GpuMat
             glReadPixels(0, 0, displayRenderWidth, displayRenderHeight,
