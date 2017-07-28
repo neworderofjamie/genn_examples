@@ -42,6 +42,7 @@
 // Macros
 //----------------------------------------------------------------------------
 #define BUFFER_OFFSET(i) ((void*)(i))
+//#define RECORD_SPIKES
 
 //----------------------------------------------------------------------------
 // Anonymous namespace
@@ -75,7 +76,8 @@ enum Key
     KeyRight,
     KeyUp,
     KeyDown,
-    KeySnapshot,
+    KeyTrainSnapshot,
+    KeyTestSnapshot,
     KeyMax
 };
 
@@ -227,7 +229,11 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
             break;
 
         case GLFW_KEY_SPACE:
-            keybits->set(KeySnapshot, newKeyState);
+            keybits->set(KeyTrainSnapshot, newKeyState);
+            break;
+
+        case GLFW_KEY_ENTER:
+            keybits->set(KeyTestSnapshot, newKeyState);
             break;
     }
 }
@@ -265,40 +271,48 @@ void initGeNN()
     }
 }
 //----------------------------------------------------------------------------
-void presentToMB(uint8_t *inputData, unsigned int inputDataStep)
+void presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool reward)
 {
     // Convert simulation regime parameters to timesteps
-    const unsigned int rewardTimestep = convertMsToTimesteps(Parameters::rewardTimeMs);
+    const unsigned long long startTimestep = iT;
+    const unsigned long long rewardTimestep = iT + convertMsToTimesteps(Parameters::rewardTimeMs);
     const unsigned int presentDuration = convertMsToTimesteps(Parameters::presentDurationMs);
     const unsigned int postStimuliDuration = convertMsToTimesteps(Parameters::postStimuliDurationMs);
 
     const unsigned int duration = presentDuration + postStimuliDuration;
-
-    std::cout << "Simulating for " << duration << " timesteps" << std::endl;
+    const unsigned long long endPresentTimestep = iT + presentDuration;
+    const unsigned long long endTimestep = iT + duration;
+    std::cout << "Simulating from " << startTimestep << " to " << endTimestep << std::endl;
+    std::cout << "Presenting snapshot until " << endPresentTimestep << std::endl;
+    if(reward) {
+        std::cout << "Rewarding at " << rewardTimestep << std::endl;
+    }
 
     // Open CSV output files
+#ifdef RECORD_SPIKES
     SpikeCSVRecorder pnSpikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
     SpikeCSVRecorder kcSpikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
     SpikeCSVRecorder enSpikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
+#endif  // RECORD_SPIKES
 
     // Update input data step
     IextStepPN = inputDataStep;
 
     // Loop through timesteps
-    for(unsigned int t = 0; t < duration; t++)
+    unsigned int numENSpikes = 0;
+    while(iT < endTimestep)
     {
         // If we should be presenting an image
-        if(t < presentDuration) {
-            IextPN = NULL;
+        if(iT < endPresentTimestep) {
+            IextPN = inputData;
         }
         // Otherwise update offset to point to block of zeros
         else {
-            IextPN = inputData;
+            IextPN = nullptr;
         }
 
         // If we should reward in this timestep, inject dopamine
-        if(t == rewardTimestep) {
-            std::cout << "\tApplying reward at timestep " << t << std::endl;
+        if(reward && iT == rewardTimestep) {
             injectDopaminekcToEN = true;
         }
 
@@ -307,35 +321,42 @@ void presentToMB(uint8_t *inputData, unsigned int inputDataStep)
         stepTimeGPU();
 
         // Download spikes
+#ifdef RECORD_SPIKES
         pullPNCurrentSpikesFromDevice();
         pullKCCurrentSpikesFromDevice();
         pullENCurrentSpikesFromDevice();
+#else
+        CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCntEN, d_glbSpkCntEN, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+#endif
 #else
         // Simulate on CPU
         stepTimeCPU();
 #endif
         // If a dopamine spike has been injected this timestep
-        if(t == rewardTimestep) {
-            const scalar tMs =  (scalar)t * DT;
-
+        if(reward && iT == rewardTimestep) {
             // Decay global dopamine traces
-            dkcToEN = dkcToEN * std::exp(-(tMs - tDkcToEN) / Parameters::tauD);
+            dkcToEN = dkcToEN * std::exp(-(t - tDkcToEN) / Parameters::tauD);
 
             // Add effect of dopamine spike
             dkcToEN += Parameters::dopamineStrength;
 
             // Update last reward time
-            tDkcToEN = tMs;
+            tDkcToEN = t;
 
             // Clear dopamine injection flags
             injectDopaminekcToEN = false;
         }
 
+        numENSpikes += spikeCount_EN;
+#ifdef RECORD_SPIKES
         // Record spikes
-        pnSpikes.record(t);
-        kcSpikes.record(t);
-        enSpikes.record(t);
+        pnSpikes.record(iT - startTimestep);
+        kcSpikes.record(iT - startTimestep);
+        enSpikes.record(iT - startTimestep);
+#endif  // RECORD_SPIKES
     }
+
+    std::cout << numENSpikes << " EN spikes" << std::endl;
 }
 }   // anonymous namespace
 //----------------------------------------------------------------------------
@@ -363,7 +384,7 @@ int main()
     }
 
     // Enable VSync
-    glfwSwapInterval(1);
+    glfwSwapInterval(2);
 
     // Set clear colour to match matlab and enable depth test
     glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
@@ -476,8 +497,10 @@ int main()
         // Swap front and back buffers
         glfwSwapBuffers(window);
 
-        // If snapshot key is pressed
-        if(keybits.test(KeySnapshot)) {
+        // If no previous snapshots have been taken or the processing of the
+        // previous one is complete and one of the snapshotting keys has been pressed
+        if((!gennResult.valid() || gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready)
+            && (keybits.test(KeyTrainSnapshot) || keybits.test(KeyTestSnapshot))) {
             // Read pixels from framebuffer
             // **TODO** it should be theoretically possible to go directly from frame buffer to GpuMat
             glReadPixels(0, 0, displayRenderWidth, displayRenderHeight,
@@ -506,10 +529,13 @@ int main()
             // Upload final snapshot to GPU
             finalSnapshotGPU.upload(finalSnapshot);
 
+            // We should only apply reward if we're training
+            const bool reward = keybits.test(KeyTrainSnapshot);
+
             // Extract device pointers and step
             auto finalSnapshotPtrStep = (cv::cuda::PtrStep<uint8_t>)finalSnapshotGPU;
             gennResult = std::async(std::launch::async, presentToMB,
-                                    finalSnapshotPtrStep.data, finalSnapshotPtrStep.step);
+                                    finalSnapshotPtrStep.data, finalSnapshotPtrStep.step, reward);
         }
 
         // Poll for and process events

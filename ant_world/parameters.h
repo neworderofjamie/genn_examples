@@ -10,7 +10,7 @@ namespace Parameters
     // Regime parameters
     constexpr double rewardTimeMs = 40.0;
     constexpr double presentDurationMs = 40.0;
-    constexpr double postStimuliDurationMs = 40.0;
+    constexpr double postStimuliDurationMs = 200.0;
 
     // Network dimensions
     constexpr unsigned int inputWidth = 36;
