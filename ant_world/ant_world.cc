@@ -332,44 +332,18 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
     }
 }
 //----------------------------------------------------------------------------
-void renderAntView(float antX, float antY, float antHeading,
-                   GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices,
-                   GLuint renderMeshPositionVBO, GLuint renderMeshTextureCoordsVBO, unsigned int numRenderMeshVertices,
-                   GLuint cubemapFBO, GLuint cubemapTexture)
+void generateCubeFaceLookAtMatrices(GLfloat (&matrices)[6][16])
 {
-    // Configure viewport to cubemap-sized square
-    glViewport(0, 0, 256, 256);
-
-    // Bind world position VBO
-    glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
-
-    // Bind world colour VBO
-    glBindBuffer(GL_ARRAY_BUFFER, worldColourVBO);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
-
-    // Bind the cubemap FBO for offscreen rendering
-    glBindFramebuffer(GL_FRAMEBUFFER, cubemapFBO);
-
-    // Configure perspective projection matrix
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(90.0,
-                   1.0,
-                   0.001, 100.0);
-
+    // Set matrix model (which matrix stack you trash is somewhat arbitrary)
     glMatrixMode(GL_MODELVIEW);
 
-    // Loop through each heading we need to render
-    for(GLenum f = GL_TEXTURE_CUBE_MAP_POSITIVE_X; f < GL_TEXTURE_CUBE_MAP_POSITIVE_X + 6; f++) {
-        // Attach correct frame buffer face to frame buffer
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, f, cubemapTexture, 0);
-
-        // Build ants-eye-view modelview matrix
+    // Loop through cube faces
+    for(unsigned int f = 0; f < 6; f++) {
+        // Load identity matrix
         glLoadIdentity();
-        switch (f)
+
+        // Load lookup matrix
+        switch (f + GL_TEXTURE_CUBE_MAP_POSITIVE_X)
         {
             case GL_TEXTURE_CUBE_MAP_POSITIVE_X:
                 gluLookAt(0.0,  0.0,    0.0,
@@ -411,9 +385,60 @@ void renderAntView(float antX, float antY, float antHeading,
                 break;
         };
 
-        glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
-        glTranslatef(-antX, -antY, -0.1f);
+        // Save matrix
+        glGetFloatv(GL_MODELVIEW_MATRIX, matrices[f]);
+    }
+}
+//----------------------------------------------------------------------------
+void renderAntView(float antX, float antY, float antHeading,
+                   GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices,
+                   GLuint renderMeshPositionVBO, GLuint renderMeshTextureCoordsVBO, unsigned int numRenderMeshVertices,
+                   GLuint cubemapFBO, GLuint cubemapTexture, const GLfloat (&cubeFaceLookAtMatrices)[6][16])
+{
+    // Configure viewport to cubemap-sized square
+    glViewport(0, 0, 256, 256);
 
+    // Bind world position VBO
+    glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+
+    // Bind world colour VBO
+    glBindBuffer(GL_ARRAY_BUFFER, worldColourVBO);
+    glEnableClientState(GL_COLOR_ARRAY);
+    glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+
+    // Bind the cubemap FBO for offscreen rendering
+    glBindFramebuffer(GL_FRAMEBUFFER, cubemapFBO);
+
+    // Configure perspective projection matrix
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(90.0,
+                   1.0,
+                   0.001, 100.0);
+
+    glMatrixMode(GL_MODELVIEW);
+
+    // Save ant transform to matrix
+    float antMatrix[16];
+    glLoadIdentity();
+    glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
+    glTranslatef(-antX, -antY, -0.01f);
+    glGetFloatv(GL_MODELVIEW_MATRIX, antMatrix);
+
+    // Loop through each heading we need to render
+    for(GLenum f = 0; f < 6; f++) {
+        // Attach correct frame buffer face to frame buffer
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, f + GL_TEXTURE_CUBE_MAP_POSITIVE_X, cubemapTexture, 0);
+
+        // Load look at matrix for this cube face
+        glLoadMatrixf(cubeFaceLookAtMatrices[f]);
+
+        // Multiply this by ant transform
+        glMultMatrixf(antMatrix);
+
+        // Clear colour and depth buffer
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Draw world
@@ -733,6 +758,10 @@ int main()
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    // Pre-generate lookat matrices to point at cubemap faces
+    GLfloat cubeFaceLookAtMatrices[6][16];
+    generateCubeFaceLookAtMatrices(cubeFaceLookAtMatrices);
+
     // Initialize GeNN
     initGeNN();
 
@@ -912,7 +941,7 @@ int main()
         renderAntView(antX, antY, antHeading,
                       worldPositionVBO, worldColourVBO, numVertices,
                       renderMeshPositionVBO, renderMeshTextureCoordsVBO, numRenderMeshVertices,
-                      fbo, cubemap);
+                      fbo, cubemap, cubeFaceLookAtMatrices);
 
         // Render top-down view at bottom of the screen
         renderTopDownView(worldPositionVBO, worldColourVBO, numVertices,
