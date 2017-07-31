@@ -220,6 +220,66 @@ std::vector<std::array<float, 3>> loadRoute(const std::string &filename)
     return route;
 }
 //----------------------------------------------------------------------------
+std::tuple<GLuint, GLuint, unsigned int> buildRenderMesh(float horizontalFOV, unsigned int numSegments)
+{
+    // We need a vertical for each segment and one extra
+    const unsigned int numVerticals = numSegments + 1;
+
+    // Reserve 2 XY positions and 2 SRT texture coordinates for each vertical
+    std::vector<GLfloat> positions;
+    std::vector<GLfloat> textureCoords;
+    positions.reserve(numVerticals * 2 * 2);
+    textureCoords.reserve(numVerticals * 3 * 2);
+
+    // Loop through vertices
+    const float segmentWidth = 1.0f / (float)numSegments;
+    const float startAngle = -horizontalFOV / 2.0f;
+    const float angleStep = horizontalFOV / (float)numSegments;
+    for(unsigned int i = 0; i < numVerticals; i++) {
+        // Calculate screenspace segment position
+        const float x = segmentWidth * (float)i;
+
+        // Calculate angle of vertical and hence S and T components of texture coordinate
+        const float angle = startAngle + ((float)i * angleStep);
+        const float s = sin(angle * degreesToRadians);
+        const float t = cos(angle * degreesToRadians);
+
+        std::cout << i << " - angle:" << angle << ", s:" << s << ", t:" << t << ", x:" << x << std::endl;
+        // Add bottom vertex position
+        positions.push_back(x);
+        positions.push_back(1.0f);
+
+        // Add bottom texture coordinate
+        textureCoords.push_back(s);
+        textureCoords.push_back(-1.0f);
+        textureCoords.push_back(t);
+
+        // Add top vertex position
+        positions.push_back(x);
+        positions.push_back(0.0f);
+
+        // Add top texture coordinate
+        textureCoords.push_back(s);
+        textureCoords.push_back(1.0f);
+        textureCoords.push_back(t);
+    }
+
+     // Generate two vertex buffer objects, one for positions and one for texture coordinates
+    GLuint vbo[2];
+    glGenBuffers(2, vbo);
+
+    // Bind and upload positions buffer
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(GLfloat), positions.data(), GL_STATIC_READ);
+
+    // Bind and upload texture coordinates buffer
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+    glBufferData(GL_ARRAY_BUFFER, textureCoords.size() * sizeof(GLfloat), textureCoords.data(), GL_STATIC_READ);
+
+    // Return VBO handles and vertex count
+    return std::make_tuple(vbo[0], vbo[1], numVerticals * 2);
+}
+//----------------------------------------------------------------------------
 void keyCallback(GLFWwindow *window, int key, int, int action, int)
 {
     // If action isn't a press or a release, do nothing
@@ -266,8 +326,33 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
 }
 //----------------------------------------------------------------------------
 void renderAntView(float antX, float antY, float antHeading,
-                   GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices)
+                   GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices,
+                   GLuint renderMeshPositionVBO, GLuint renderMeshTextureCoordsVBO, unsigned int numRenderMeshVertices,
+                   GLuint cubemapFBO, GLuint cubemapTexture)
 {
+    // Headings to render cubemap from
+    const GLfloat renderHeading[] = {
+        antHeading - 90.0f,
+        antHeading,
+        antHeading + 90.0f,
+        antHeading + 180.0f,
+    };
+
+    // Corresponding cubemap faces to render these views to
+    const GLenum renderCubemapFaces[] = {
+        GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+        GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+        GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+        GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+    };
+
+    constexpr unsigned int numHeadings = sizeof(renderHeading) / sizeof(GLfloat);
+    static_assert(numHeadings == (sizeof(renderCubemapFaces) / sizeof(GLenum)),
+                  "Number of headings to render doesn't match number of cube map faces");
+
+    // Configure viewport to cubemap-sized square
+    glViewport(0, 0, 256, 256);
+
     // Bind world position VBO
     glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
     glEnableClientState(GL_VERTEX_ARRAY);
@@ -278,28 +363,82 @@ void renderAntView(float antX, float antY, float antHeading,
     glEnableClientState(GL_COLOR_ARRAY);
     glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
 
+    // Bind the cubemap FBO for offscreen rendering
+    glBindFramebuffer(GL_FRAMEBUFFER, cubemapFBO);
+
     // Configure perspective projection matrix
-    // **TODO** save these rather than calculating each time
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(76.0,
-                   36.0 / 10.0,
-                   0.0001, 10.0);
+    gluPerspective(90.0,
+                   1.0,
+                   0.001, 10.0);
 
-    // Build ants-eye-view modelview matrix
+    glMatrixMode(GL_MODELVIEW);
+
+    // Loop through each heading we need to render
+    for(unsigned int f = 0; f < numHeadings; f++) {
+        // Attach correct frame buffer face to frame buffer
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, renderCubemapFaces[f], cubemapTexture, 0);
+
+        // Build ants-eye-view modelview matrix
+        glLoadIdentity();
+        glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
+        glRotatef(renderHeading[f], 0.0f, 0.0f, 1.0f);
+        glTranslatef(-antX, -antY, -0.01f);
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Draw world
+        glDrawArrays(GL_TRIANGLES, 0, numWorldVertices);
+    }
+
+    // Unbind the FBO for onscreen rendering
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // Set viewport to strip at stop of window
+    glViewport(0, displayRenderWidth + 10,
+               displayRenderWidth, displayRenderHeight);
+
+    // Bind cubemap texture
+    glEnable(GL_TEXTURE_CUBE_MAP);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluOrtho2D(0.0, 1.0,
+               0.0, 1.0);
+
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
-    glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
-    glTranslatef(-antX, -antY, -0.2f);
 
-    // Draw world
-    glDrawArrays(GL_TRIANGLES, 0, numWorldVertices);
+    // Bind render mesh position VBO
+    glBindBuffer(GL_ARRAY_BUFFER, renderMeshPositionVBO);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(2, GL_FLOAT, 0, BUFFER_OFFSET(0));
+
+    // Bind render mesh texture coordinate VBO
+    glBindBuffer(GL_ARRAY_BUFFER, renderMeshTextureCoordsVBO);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glTexCoordPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+
+    // Disable colours
+    glDisableClientState(GL_COLOR_ARRAY);
+
+    // Draw render mesh quad strip
+    glDrawArrays(GL_QUAD_STRIP, 0, numRenderMeshVertices);
+
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    glDisable(GL_TEXTURE_CUBE_MAP);
+
 }
 //----------------------------------------------------------------------------
 void renderTopDownView(GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices,
                        GLuint routeVBO, unsigned int numRouteVertices)
 {
+    // Set viewport to square at bottom of screen
+    glViewport(0, 0, displayRenderWidth, displayRenderWidth);
+
     // Bind world position VBO
     glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
     glEnableClientState(GL_VERTEX_ARRAY);
@@ -518,6 +657,52 @@ int main()
     unsigned int numVertices;
     std::tie(worldPositionVBO, worldColourVBO, numVertices) = loadWorld("world5000_gray.bin");
 
+    // Build mesh to render cubemap to screen
+    GLuint renderMeshPositionVBO;
+    GLuint renderMeshTextureCoordsVBO;
+    unsigned int numRenderMeshVertices;
+    std::tie(renderMeshPositionVBO, renderMeshTextureCoordsVBO, numRenderMeshVertices) = buildRenderMesh(296.0f, 4);
+
+    // Create FBO for rendering to cubemap and bind
+    GLuint fbo;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    // Create cubemap and bind
+    GLuint cubemap;
+    glGenTextures(1, &cubemap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap);
+
+    // Create textures for all faces of cubemap
+    // **NOTE** even though we don't need top and bottom faces we still need to create them or rendering fails
+    for(unsigned int t = 0; t < 6; t++) {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + t, 0, GL_RGB,
+                     256, 256, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    }
+    glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    // Create depth render buffer
+    GLuint depthbuff;
+    glGenRenderbuffers(1, &depthbuff);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthbuff);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 256, 256);
+
+    // Attach depth buffer to frame buffer
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthbuff);
+
+    // Check frame buffer is created correctly
+    if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        throw std::runtime_error("Frame buffer not complete");
+    }
+
+    // Unbind cube map and frame buffer
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     // Initialize GeNN
     initGeNN();
 
@@ -541,11 +726,11 @@ int main()
     cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(0.01 * 255.0, cv::Size(8, 8));
 
     // Loop until the user closes the window
-    float antHeading = route[0][2];
     float antX = route[0][0];
     float antY = route[0][1];
+    float antHeading = route[0][2] - 90.0f;
 
-    State state = State::Training;
+    State state = State::Idle;
 
     unsigned int numSnapshots = 0;
     float distanceSinceLastPoint = 0.0f;
@@ -600,13 +785,12 @@ int main()
                 // Snap ant to next route point
                 antX = route[trainPoint][0];
                 antY = route[trainPoint][1];
+                antHeading = route[trainPoint][2] - 90.0f;
 
                 // Calculate distance from last point
                 const float deltaX = antX - route[trainPoint - 1][0];
                 const float deltaY = antY - route[trainPoint - 1][1];
                 const float distance = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));
-
-                antHeading = radiansToDegrees * atan2(deltaX, deltaY);
 
                 // Add distance to total
                 distanceSinceLastPoint += distance;
@@ -616,7 +800,7 @@ int main()
                     // Set flag to train this snapshot
                     trainSnapshot = true;
 
-                    //
+                    // Count snapshots
                     numSnapshots++;
 
                     // Reset counter
@@ -629,7 +813,7 @@ int main()
             // Otherwise, if we've reached end of route
             else if(gennIdle && trainPoint == route.size()) {
                 std::cout << "Training complete (" << numSnapshots << " snapshots)" << std::endl;
-
+                state = State::Idle;
                 // Go to testing state
                 /*state = State::Testing;
 
@@ -691,19 +875,16 @@ int main()
             }
         }
 
-        // Clear window
+        // Clear colour and depth buffer
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Render ant's eye view at top of the screen
-        glViewport(0, displayRenderWidth + 10,
-                   displayRenderWidth, displayRenderHeight);
         renderAntView(antX, antY, antHeading,
-                      worldPositionVBO, worldColourVBO,
-                      numVertices);
+                      worldPositionVBO, worldColourVBO, numVertices,
+                      renderMeshPositionVBO, renderMeshTextureCoordsVBO, numRenderMeshVertices,
+                      fbo, cubemap);
 
         // Render top-down view at bottom of the screen
-        glViewport(0, 0,
-                   displayRenderWidth, displayRenderWidth);
         renderTopDownView(worldPositionVBO, worldColourVBO, numVertices,
                           routeVBO, route.size());
 
