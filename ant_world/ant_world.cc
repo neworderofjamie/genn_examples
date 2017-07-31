@@ -220,10 +220,10 @@ std::vector<std::array<float, 3>> loadRoute(const std::string &filename)
     return route;
 }
 //----------------------------------------------------------------------------
-std::tuple<GLuint, GLuint, unsigned int> buildRenderMesh(float horizontalFOV, unsigned int numSegments)
+std::tuple<GLuint, GLuint, unsigned int> buildRenderMesh(float horizontalFOV, float verticalFOV, unsigned int numHorizontalSegments)
 {
     // We need a vertical for each segment and one extra
-    const unsigned int numVerticals = numSegments + 1;
+    const unsigned int numVerticals = numHorizontalSegments + 1;
 
     // Reserve 2 XY positions and 2 SRT texture coordinates for each vertical
     std::vector<GLfloat> positions;
@@ -232,36 +232,43 @@ std::tuple<GLuint, GLuint, unsigned int> buildRenderMesh(float horizontalFOV, un
     textureCoords.reserve(numVerticals * 3 * 2);
 
     // Loop through vertices
-    const float segmentWidth = 1.0f / (float)numSegments;
-    const float startAngle = -horizontalFOV / 2.0f;
-    const float angleStep = horizontalFOV / (float)numSegments;
+    const float segmentWidth = 1.0f / (float)numHorizontalSegments;
+    const float startLatitude = -horizontalFOV / 2.0f;
+    const float latitudeStep = horizontalFOV / (float)numHorizontalSegments;
+
+    const float bottomLongitude = -verticalFOV / 2.0f;
+    const float sinBottomLongitude = sin(bottomLongitude * degreesToRadians);
+    const float cosBottomLongitude = cos(bottomLongitude * degreesToRadians);
+    const float topLongitude = verticalFOV / 2.0f;
+    const float sinTopLongitude = sin(topLongitude * degreesToRadians);
+    const float cosTopLongitude = cos(topLongitude * degreesToRadians);
+
     for(unsigned int i = 0; i < numVerticals; i++) {
         // Calculate screenspace segment position
         const float x = segmentWidth * (float)i;
 
         // Calculate angle of vertical and hence S and T components of texture coordinate
-        const float angle = startAngle + ((float)i * angleStep);
-        const float s = sin(angle * degreesToRadians);
-        const float t = cos(angle * degreesToRadians);
+        const float latitude = startLatitude + ((float)i * latitudeStep);
+        const float sinLatitude = sin(latitude * degreesToRadians);
+        const float cosLatitude = cos(latitude * degreesToRadians);
 
-        std::cout << i << " - angle:" << angle << ", s:" << s << ", t:" << t << ", x:" << x << std::endl;
         // Add bottom vertex position
         positions.push_back(x);
         positions.push_back(1.0f);
 
         // Add bottom texture coordinate
-        textureCoords.push_back(s);
-        textureCoords.push_back(-1.0f);
-        textureCoords.push_back(t);
+        textureCoords.push_back(sinLatitude * cosBottomLongitude);
+        textureCoords.push_back(sinBottomLongitude);
+        textureCoords.push_back(cosLatitude * cosBottomLongitude);
 
         // Add top vertex position
         positions.push_back(x);
         positions.push_back(0.0f);
 
         // Add top texture coordinate
-        textureCoords.push_back(s);
-        textureCoords.push_back(1.0f);
-        textureCoords.push_back(t);
+        textureCoords.push_back(sinLatitude * cosTopLongitude);
+        textureCoords.push_back(sinTopLongitude);
+        textureCoords.push_back(cosLatitude * cosTopLongitude);
     }
 
      // Generate two vertex buffer objects, one for positions and one for texture coordinates
@@ -330,26 +337,6 @@ void renderAntView(float antX, float antY, float antHeading,
                    GLuint renderMeshPositionVBO, GLuint renderMeshTextureCoordsVBO, unsigned int numRenderMeshVertices,
                    GLuint cubemapFBO, GLuint cubemapTexture)
 {
-    // Headings to render cubemap from
-    const GLfloat renderHeading[] = {
-        antHeading - 90.0f,
-        antHeading,
-        antHeading + 90.0f,
-        antHeading + 180.0f,
-    };
-
-    // Corresponding cubemap faces to render these views to
-    const GLenum renderCubemapFaces[] = {
-        GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
-        GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
-        GL_TEXTURE_CUBE_MAP_POSITIVE_X,
-        GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
-    };
-
-    constexpr unsigned int numHeadings = sizeof(renderHeading) / sizeof(GLfloat);
-    static_assert(numHeadings == (sizeof(renderCubemapFaces) / sizeof(GLenum)),
-                  "Number of headings to render doesn't match number of cube map faces");
-
     // Configure viewport to cubemap-sized square
     glViewport(0, 0, 256, 256);
 
@@ -371,20 +358,61 @@ void renderAntView(float antX, float antY, float antHeading,
     glLoadIdentity();
     gluPerspective(90.0,
                    1.0,
-                   0.001, 10.0);
+                   0.001, 100.0);
 
     glMatrixMode(GL_MODELVIEW);
 
     // Loop through each heading we need to render
-    for(unsigned int f = 0; f < numHeadings; f++) {
+    for(GLenum f = GL_TEXTURE_CUBE_MAP_POSITIVE_X; f < GL_TEXTURE_CUBE_MAP_POSITIVE_X + 6; f++) {
         // Attach correct frame buffer face to frame buffer
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, renderCubemapFaces[f], cubemapTexture, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, f, cubemapTexture, 0);
 
         // Build ants-eye-view modelview matrix
         glLoadIdentity();
-        glRotatef(-90.0f, 1.0f, 0.0f, 0.0f);
-        glRotatef(renderHeading[f], 0.0f, 0.0f, 1.0f);
-        glTranslatef(-antX, -antY, -0.01f);
+        switch (f)
+        {
+            case GL_TEXTURE_CUBE_MAP_POSITIVE_X:
+                gluLookAt(0.0,  0.0,    0.0,
+                          1.0,  0.0,    0.0,
+                          0.0,  0.0,    1.0);
+                break;
+
+            case GL_TEXTURE_CUBE_MAP_NEGATIVE_X:
+                gluLookAt(0.0,  0.0,    0.0,
+                          -1.0, 0.0,    0.0,
+                          0.0,  0.0,    1.0);
+                break;
+
+            case GL_TEXTURE_CUBE_MAP_POSITIVE_Y:
+                gluLookAt(0.0,  0.0,    0.0,
+                          0.0,  0.0,    -1.0,
+                          0.0,  1.0,    0.0);
+                break;
+
+            case GL_TEXTURE_CUBE_MAP_NEGATIVE_Y:
+                gluLookAt(0.0,  0.0,    0.0,
+                          0.0,  0.0,    1.0,
+                          0.0,  -1.0,    0.0);
+                break;
+
+            case GL_TEXTURE_CUBE_MAP_POSITIVE_Z:
+                gluLookAt(0.0,  0.0,    0.0,
+                          0.0,  1.0,    0.0,
+                          0.0,  0.0,    1.0);
+                break;
+
+            case GL_TEXTURE_CUBE_MAP_NEGATIVE_Z:
+                gluLookAt(0.0,  0.0,    0.0,
+                          0.0,  -1.0,   0.0,
+                          0.0,  0.0,    1.0);
+                break;
+
+            default:
+                break;
+        };
+
+        glRotatef(antHeading, 0.0f, 0.0f, 1.0f);
+        glTranslatef(-antX, -antY, -0.1f);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -427,6 +455,7 @@ void renderAntView(float antX, float antY, float antHeading,
     // Draw render mesh quad strip
     glDrawArrays(GL_QUAD_STRIP, 0, numRenderMeshVertices);
 
+    // Disable texture coordinate array, cube map texture and cube map texturing!
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
     glDisable(GL_TEXTURE_CUBE_MAP);
@@ -661,7 +690,8 @@ int main()
     GLuint renderMeshPositionVBO;
     GLuint renderMeshTextureCoordsVBO;
     unsigned int numRenderMeshVertices;
-    std::tie(renderMeshPositionVBO, renderMeshTextureCoordsVBO, numRenderMeshVertices) = buildRenderMesh(296.0f, 4);
+    std::tie(renderMeshPositionVBO, renderMeshTextureCoordsVBO, numRenderMeshVertices) = buildRenderMesh(296.0f, 76.0f,
+                                                                                                         40);
 
     // Create FBO for rendering to cubemap and bind
     GLuint fbo;
