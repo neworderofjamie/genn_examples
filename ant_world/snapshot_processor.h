@@ -15,7 +15,8 @@ public:
     //------------------------------------------------------------------------
     // Public API
     //------------------------------------------------------------------------
-    // Process input sn
+    // Process input snapshot (probably at screen resolution)
+    // and return GPU data pointer and step
     std::tuple<uint8_t*, unsigned int> process(const cv::Mat &snapshot);
 
 private:

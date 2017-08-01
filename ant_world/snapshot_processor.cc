@@ -17,6 +17,10 @@ SnapshotProcessor::SnapshotProcessor(unsigned int intermediateWidth, unsigned in
 //----------------------------------------------------------------------------
 std::tuple<uint8_t*, unsigned int> SnapshotProcessor::process(const cv::Mat &snapshot)
 {
+    // **TODO** theoretically this processing could all be done on the GPU but
+    // a) we're currently starting from a snapshot in host memory
+    // b) CLAHE seems broken for GPU matrices
+
     // Downsample to intermediate size
     cv::resize(snapshot, m_IntermediateSnapshot,
                cv::Size(m_IntermediateWidth, m_IntermediateHeight));
