@@ -41,6 +41,7 @@
 #include "parameters.h"
 #include "render_mesh.h"
 #include "route.h"
+#include "snapshot_processor.h"
 #include "world.h"
 
 //----------------------------------------------------------------------------
@@ -55,7 +56,7 @@ constexpr GLfloat groundColour[] = {0.898f, 0.718f, 0.353f};
 constexpr GLfloat worldColour[] = {0.0f, 1.0f, 0.0f};
 
 // How fast does the ant move?
-constexpr float antTurnSpeed = 1.0f;
+constexpr float antTurnSpeed = 4.0f;
 constexpr float antMoveSpeed = 0.05f;
 
 // Constant to multiply degrees by to get radians
@@ -516,21 +517,9 @@ int main()
     // Host OpenCV array to hold pixels read from screen
     cv::Mat snapshot(displayRenderHeight, displayRenderWidth, CV_8UC3);
 
-    // Host OpenCV array to hold intermediate resolution colour snapshot
-    cv::Mat intermediateSnapshot(intermediateSnapshowHeight, intermediateSnapshotWidth, CV_8UC3);
-
-    // Host OpenCV array to hold intermediate resolution greyscale snapshot
-    cv::Mat intermediateSnapshotGreyscale(intermediateSnapshowHeight, intermediateSnapshotWidth, CV_8UC1);
-
-    // Host OpenCV array to hold final resolution greyscale snapshot
-    cv::Mat finalSnapshot(Parameters::inputHeight, Parameters::inputWidth, CV_8UC1);
-
-    // GPU OpenCV array to hold
-    cv::cuda::GpuMat finalSnapshotGPU(Parameters::inputHeight, Parameters::inputWidth, CV_8UC1);
-
-    // Create CLAHE algorithm for histogram normalization
-    // **NOTE** parameters to match Matlab defaults
-    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(0.01 * 255.0, cv::Size(8, 8));
+    // Create snapshot processor to perform image processing on snapshot
+    SnapshotProcessor snapshotProcessor(intermediateSnapshotWidth, intermediateSnapshowHeight,
+                                        Parameters::inputWidth, Parameters::inputHeight);
 
     // Loop until the user closes the window
     float antX = route[0][0];
@@ -706,35 +695,14 @@ int main()
             glReadPixels(0, displayRenderWidth + 10, displayRenderWidth, displayRenderHeight,
                          GL_BGR, GL_UNSIGNED_BYTE, snapshot.data);
 
-            // Downsample to intermediate size
-            cv::resize(snapshot, intermediateSnapshot,
-                       cv::Size(intermediateSnapshotWidth, intermediateSnapshowHeight));
-
-            // Convert to greyscale
-            cv::cvtColor(intermediateSnapshot, intermediateSnapshotGreyscale, CV_BGR2GRAY);
-
-            // Invert image
-            cv::subtract(255, intermediateSnapshotGreyscale, intermediateSnapshotGreyscale);
-
-            // Apply histogram normalization
-            clahe->apply(intermediateSnapshotGreyscale, intermediateSnapshotGreyscale);
-
-            // Finally resample down to final size
-            cv::resize(intermediateSnapshotGreyscale, finalSnapshot,
-                       cv::Size(Parameters::inputWidth, Parameters::inputHeight),
-                       0.0, 0.0, CV_INTER_CUBIC);
-
-            cv::imwrite("snapshot.png", finalSnapshot);
-
-            // Upload final snapshot to GPU
-            finalSnapshotGPU.upload(finalSnapshot);
-
-            // Extract device pointers and step
-            auto finalSnapshotPtrStep = (cv::cuda::PtrStep<uint8_t>)finalSnapshotGPU;
+            // Process snapshot
+            uint8_t *finalSnapshotData;
+            unsigned int finalSnapshotStep;
+            std::tie(finalSnapshotData, finalSnapshotStep) = snapshotProcessor.process(snapshot);
 
             // Start simulation, applying reward if we are training
             gennResult = std::async(std::launch::async, presentToMB,
-                                    finalSnapshotPtrStep.data, finalSnapshotPtrStep.step, trainSnapshot);
+                                    finalSnapshotData, finalSnapshotStep, trainSnapshot);
         }
 
         // Poll for and process events
