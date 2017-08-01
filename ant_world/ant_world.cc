@@ -269,7 +269,8 @@ void renderAntView(float antX, float antY, float antHeading,
 
 }
 //----------------------------------------------------------------------------
-void renderTopDownView(const World &world, const Route &route)
+void renderTopDownView(float antX, float antY, float antHeading,
+                       const World &world, const Route &route)
 {
     // Set viewport to square at bottom of screen
     glViewport(0, 0, displayRenderWidth, displayRenderWidth);
@@ -277,21 +278,19 @@ void renderTopDownView(const World &world, const Route &route)
     // Configure top-down orthographic projection matrix
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(-5.0, 5.0,
-            -5.0, 5.0,
-            -10, 1.0);
+    gluOrtho2D(0.0, 10.0,
+               0.0, 10.0);
 
     // Build modelview matrix to centre world
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(-5.0f, -5.0f, 0.0f);
-
+    
     // Render world
     world.render();
 
-    // Translate above the terrain and draw route
-    glTranslatef(0.0f, 0.0f, 1.0f);
-    route.render();
+    // Render route
+    route.render(antX, antY, antHeading);
+
 }
 //----------------------------------------------------------------------------
 unsigned int convertMsToTimesteps(double ms)
@@ -329,10 +328,9 @@ void initGeNN()
 //----------------------------------------------------------------------------
 unsigned int presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool reward)
 {
-    Timer<> timer("Simulation:");
+    Timer<> timer("\tSimulation:");
 
     // Convert simulation regime parameters to timesteps
-    const unsigned long long startTimestep = iT;
     const unsigned long long rewardTimestep = iT + convertMsToTimesteps(Parameters::rewardTimeMs);
     const unsigned int presentDuration = convertMsToTimesteps(Parameters::presentDurationMs);
     const unsigned int postStimuliDuration = convertMsToTimesteps(Parameters::postStimuliDurationMs);
@@ -340,11 +338,6 @@ unsigned int presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool re
     const unsigned int duration = presentDuration + postStimuliDuration;
     const unsigned long long endPresentTimestep = iT + presentDuration;
     const unsigned long long endTimestep = iT + duration;
-    std::cout << "Simulating from " << startTimestep << " to " << endTimestep << std::endl;
-    std::cout << "Presenting snapshot until " << endPresentTimestep << std::endl;
-    if(reward) {
-        std::cout << "Rewarding at " << rewardTimestep << std::endl;
-    }
 
     // Open CSV output files
 #ifdef RECORD_SPIKES
@@ -414,7 +407,6 @@ unsigned int presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool re
 #endif  // RECORD_SPIKES
     }
 
-    std::cout << numENSpikes << " EN spikes" << std::endl;
     return numENSpikes;
 }
 }   // anonymous namespace
@@ -459,7 +451,7 @@ int main()
     glfwSetKeyCallback(window, keyCallback);
 
     // Load route
-    Route route("ant1_route1.bin");
+    Route route(0.2f, "ant1_route1.bin");
 
     // Load world into OpenGL
     World world("world5000_gray.bin", worldColour, groundColour);
@@ -528,17 +520,17 @@ int main()
     // Loop until the user closes the window
     float antX = route[0][0];
     float antY = route[0][1];
-    float antHeading = route[0][2] - 90.0f;
+    float antHeading = route[0][2];
 
-    State state = State::Idle;
+    State state = State::Training;
 
     unsigned int numSnapshots = 0;
     float distanceSinceLastPoint = 0.0f;
-    unsigned int trainPoint = 1;
+    unsigned int trainPoint = 0;
 
     unsigned int testingScan = 0;
 
-    unsigned int bestTest = 0;
+    float bestHeading = 0.0f;
     unsigned int bestTestENSpikes = std::numeric_limits<unsigned int>::max();
 
     std::ofstream replay("test.csv");
@@ -578,85 +570,100 @@ int main()
             testSnapshot = true;
         }
 
+
         // If we're training
         if(state == State::Training) {
-            // If GeNN isn't training and we have more route points to train
-            if(gennIdle && trainPoint < route.size()) {
-                // Snap ant to next route point
-                antX = route[trainPoint][0];
-                antY = route[trainPoint][1];
-                antHeading = route[trainPoint][2] - 90.0f;
-
-                // Calculate distance from last point
-                const float deltaX = antX - route[trainPoint - 1][0];
-                const float deltaY = antY - route[trainPoint - 1][1];
-                const float distance = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));
-
-                // Add distance to total
-                distanceSinceLastPoint += distance;
-
-                // If we've gone further than 10cm
-                if(distanceSinceLastPoint > (10.0 / 100.0f)) {
-                    // Set flag to train this snapshot
-                    trainSnapshot = true;
-
-                    // Count snapshots
-                    numSnapshots++;
-
-                    // Reset counter
-                    distanceSinceLastPoint = 0.0f;
+            if(gennIdle) {
+                // If we have just trained a snapshot, show spike count (for tuning purposes)
+                if(gennResult.valid()) {
+                    std::cout << "\t" << gennResult.get() << " EN spikes" << std::endl;
                 }
 
-                // Go onto next training point
-                trainPoint++;
-            }
-            // Otherwise, if we've reached end of route
-            else if(gennIdle && trainPoint == route.size()) {
-                std::cout << "Training complete (" << numSnapshots << " snapshots)" << std::endl;
-                state = State::Idle;
-                // Go to testing state
-                /*state = State::Testing;
+                // If GeNN isn't training and we have more route points to train
+                if(trainPoint < route.size()) {
+                    // Snap ant to next route point
+                    antX = route[trainPoint][0];
+                    antY = route[trainPoint][1];
+                    antHeading = route[trainPoint][2];
 
-                // Snap ant back to start of route, facing in starting scan direction
-                antX = route[0][0];
-                antY = route[0][1];
-                antHeading = route[0][2] - 60.0f;
+                    // If this isn't the first point
+                    if(trainPoint > 0) {
+                        // Calculate distance from last point
+                        const float deltaX = antX - route[trainPoint - 1][0];
+                        const float deltaY = antY - route[trainPoint - 1][1];
+                        const float distance = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));
 
-                // Reset scan
-                testingScan = 0;
-                bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+                        // Add to total
+                        distanceSinceLastPoint += distance;
+                    }
 
-                // Take snapshot
-                testSnapshot = true;*/
+                    // If this is the first point or we've gone further than 10cm
+                    if(trainPoint == 0 || distanceSinceLastPoint > (10.0 / 100.0f)) {
+                        // Set flag to train this snapshot
+                        trainSnapshot = true;
+
+                        // Count snapshots
+                        numSnapshots++;
+
+                        // Reset counter
+                        distanceSinceLastPoint = 0.0f;
+                    }
+
+                    // Go onto next training point
+                    trainPoint++;
+                }
+                // Otherwise, if we've reached end of route
+                else {
+                    std::cout << "Training complete (" << numSnapshots << " snapshots)" << std::endl;
+                    //state = State::Idle;
+                    // Go to testing state
+                    state = State::Testing;
+
+                    // Snap ant back to start of route, facing in starting scan direction
+                    antX = route[0][0];
+                    antY = route[0][1];
+                    antHeading = route[0][2] - 60.0f;
+
+                    // Reset scan
+                    testingScan = 0;
+                    bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+
+                    // Take snapshot
+                    testSnapshot = true;
+                }
             }
         }
         else if(state == State::Testing) {
             if(gennIdle) {
                 // If the last snapshot was more familiar than the current best update
                 const unsigned int numSpikes = gennResult.get();
+                std::cout << "\t" << numSpikes << " EN spikes" << std::endl;
+
+                // If this is an improvement on previous best spike count
                 if(numSpikes < bestTestENSpikes) {
-                    bestTest = testingScan;
+                    bestHeading = antHeading;
                     bestTestENSpikes = numSpikes;
 
-                    std::cout << "Updated result: " << bestTest << " is most familiar direction with " << bestTestENSpikes << " spikes" << std::endl;
+                    std::cout << "\tUpdated result: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
                 }
 
                 // Go onto next scan
                 testingScan++;
 
                 // If scan isn't complete
-                if(testingScan < 12) {
+                if(testingScan < 120) {
                     // Scan right
-                    antHeading += 10.0f;
+                    antHeading += 1.0f;
 
                     // Take test snapshot
                     testSnapshot = true;
                 }
                 else {
-                    std::cout << "Scan complete: " << bestTest << " is most familiar direction with " << bestTestENSpikes << " spikes" << std::endl;
+                    std::cout << "Scan complete: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
+                    std::cout << "(" << route[0][2] << " is correct)" << std::endl;
 
-                    // Return ant to it's best heading
-                    antHeading -= 10.0f * (float)(12 - bestTest);
+                    // Snap ant to it's best heading
+                    antHeading = bestHeading;
 
                     // Move ant forward by 10cm
                     antX += 0.01f * sin(antHeading * degreesToRadians);
@@ -684,7 +691,8 @@ int main()
                       fbo, cubemap, cubeFaceLookAtMatrices);
 
         // Render top-down view at bottom of the screen
-        renderTopDownView(world, route);
+        renderTopDownView(antX, antY, antHeading,
+                          world, route);
 
 
         // Swap front and back buffers
@@ -692,7 +700,9 @@ int main()
 
         // If we should take a snapshot
         if(trainSnapshot || testSnapshot) {
-            Timer<> timer("Snapshot generation:");
+            Timer<> timer("\tSnapshot generation:");
+
+            std::cout << "Snapshot at (" << antX << "," << antY << "," << antHeading << ")" << std::endl;
 
             // Read pixels from framebuffer
             // **TODO** it should be theoretically possible to go directly from frame buffer to GpuMat
