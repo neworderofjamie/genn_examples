@@ -92,7 +92,7 @@ bool World::load(const std::string &filename, const GLfloat (&worldColour)[3],
         glBindBuffer(GL_ARRAY_BUFFER, m_PositionVBO);
 
         // Upload positions
-        glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(GLfloat), positions.data(), GL_STATIC_READ);
+        glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(GLfloat), positions.data(), GL_STATIC_DRAW);
 
         // Set vertex pointer and enable client state in VAO
         glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
@@ -130,7 +130,7 @@ bool World::load(const std::string &filename, const GLfloat (&worldColour)[3],
         glBindBuffer(GL_ARRAY_BUFFER, m_ColourVBO);
 
         // Upload colours
-        glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(GLfloat), colours.data(), GL_STATIC_READ);
+        glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(GLfloat), colours.data(), GL_STATIC_DRAW);
 
         // Set colour pointer and enable client state in VAO
         glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));

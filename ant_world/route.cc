@@ -74,7 +74,7 @@ bool Route::load(const std::string &filename)
     // Bind and upload positions buffer
     // **NOTE** we're not actually going to be rendering the 3rd component as it's an angle not a z-coordinate
     glBindBuffer(GL_ARRAY_BUFFER, m_PositionVBO);
-    glBufferData(GL_ARRAY_BUFFER, m_Route.size() * sizeof(GLfloat) * 3, m_Route.data(), GL_STATIC_READ);
+    glBufferData(GL_ARRAY_BUFFER, m_Route.size() * sizeof(GLfloat) * 3, m_Route.data(), GL_STATIC_DRAW);
 
     // Set vertex pointer to stride over angles and enable client state in VAO
     glVertexPointer(2, GL_FLOAT, 3 * sizeof(float), BUFFER_OFFSET(0));
