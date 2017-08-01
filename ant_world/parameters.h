@@ -21,20 +21,22 @@ namespace Parameters
 
     // Scale applied to convert image data to input currents for PNs
     // **NOTE** manually tuned to get approximately 50% PN activation
-    constexpr double inputCurrentScale = 0.0013137255;
+    constexpr double inputCurrentScale = 0.0115;
 
     // Weight of static synapses between PN and KC populations
     // **NOTE** manually tuend to get approximately 200/20000 KC firing sparsity
-    constexpr double pnToKCWeight = 0.09;
+    constexpr double pnToKCWeight = 0.075;
 
     // Initial/maximum weight of plastic synapses between KC and EN populations
-    constexpr double kcToENWeight = 0.015;
+    // **NOTE** note manually tuned to get about 14 spikes for a novel image
+    constexpr double kcToENWeight = 0.2;
 
     // Time constant of dopamine
     constexpr double tauD = 20.0;
 
     // Scale of each dopamine 'spike'
-    constexpr double dopamineStrength = 0.001;
+    // **NOTE** manually tuned for one-shot learning
+    constexpr double dopamineStrength = 0.005;
 
     // How many PN neurons are connected to each KC
     constexpr unsigned int numPNSynapsesPerKC = 10;
