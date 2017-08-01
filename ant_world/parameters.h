@@ -12,6 +12,11 @@ namespace Parameters
     constexpr double presentDurationMs = 40.0;
     constexpr double postStimuliDurationMs = 200.0;
 
+    // Testing parameters
+    constexpr double scanAngle = 120.0;
+    constexpr double scanStep = 1.0;
+    constexpr double snapshotDistance = 10.0 / 100.0;
+
     // Network dimensions
     constexpr unsigned int inputWidth = 36;
     constexpr unsigned int inputHeight = 10;

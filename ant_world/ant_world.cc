@@ -533,6 +533,9 @@ int main()
     float bestHeading = 0.0f;
     unsigned int bestTestENSpikes = std::numeric_limits<unsigned int>::max();
 
+    constexpr double halfScanAngle = Parameters::scanAngle;
+    constexpr unsigned int numScanSteps = (unsigned int)round(Parameters::scanAngle / Parameters::scanStep);
+
     std::ofstream replay("test.csv");
 
     std::future<unsigned int> gennResult;
@@ -570,7 +573,6 @@ int main()
             testSnapshot = true;
         }
 
-
         // If we're training
         if(state == State::Training) {
             if(gennIdle) {
@@ -597,8 +599,8 @@ int main()
                         distanceSinceLastPoint += distance;
                     }
 
-                    // If this is the first point or we've gone further than 10cm
-                    if(trainPoint == 0 || distanceSinceLastPoint > (10.0 / 100.0f)) {
+                    // If this is the first point or we've gone further than snapshot distance
+                    if(trainPoint == 0 || distanceSinceLastPoint > Parameters::snapshotDistance) {
                         // Set flag to train this snapshot
                         trainSnapshot = true;
 
@@ -615,14 +617,14 @@ int main()
                 // Otherwise, if we've reached end of route
                 else {
                     std::cout << "Training complete (" << numSnapshots << " snapshots)" << std::endl;
-                    //state = State::Idle;
+
                     // Go to testing state
                     state = State::Testing;
 
                     // Snap ant back to start of route, facing in starting scan direction
                     antX = route[0][0];
                     antY = route[0][1];
-                    antHeading = route[0][2] - 60.0f;
+                    antHeading = route[0][2] - halfScanAngle;
 
                     // Reset scan
                     testingScan = 0;
@@ -651,28 +653,27 @@ int main()
                 testingScan++;
 
                 // If scan isn't complete
-                if(testingScan < 120) {
+                if(testingScan < numScanSteps) {
                     // Scan right
-                    antHeading += 1.0f;
+                    antHeading += Parameters::scanStep;
 
                     // Take test snapshot
                     testSnapshot = true;
                 }
                 else {
                     std::cout << "Scan complete: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
-                    std::cout << "(" << route[0][2] << " is correct)" << std::endl;
 
                     // Snap ant to it's best heading
                     antHeading = bestHeading;
 
-                    // Move ant forward by 10cm
-                    antX += 0.01f * sin(antHeading * degreesToRadians);
-                    antY += 0.01f * cos(antHeading * degreesToRadians);
+                    // Move ant forward by snapshot distance
+                    antX += Parameters::snapshotDistance * sin(antHeading * degreesToRadians);
+                    antY += Parameters::snapshotDistance * cos(antHeading * degreesToRadians);
 
                     replay << antX << "," << antY << std::endl;
 
                     // Reset scan
-                    antHeading -= 60.0f;
+                    antHeading -= halfScanAngle;
                     testingScan = 0;
                     bestTestENSpikes = std::numeric_limits<unsigned int>::max();
 
