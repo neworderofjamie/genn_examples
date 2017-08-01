@@ -26,6 +26,7 @@ private:
     GLuint m_VAO;
     GLuint m_PositionVBO;
     GLuint m_TextureCoordsVBO;
-    unsigned int m_NumVertices;
+    GLuint m_IBO;
+    unsigned int m_NumIndices;
 
 };
