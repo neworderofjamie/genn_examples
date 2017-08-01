@@ -11,7 +11,8 @@ class RenderMesh
 {
 public:
     RenderMesh();
-    RenderMesh(float horizontalFOV, float verticalFOV, unsigned int numHorizontalSegments, unsigned int numVerticalSegments);
+    RenderMesh(float horizontalFOV, float verticalFOV, float startLongitude,
+               unsigned int numHorizontalSegments, unsigned int numVerticalSegments);
     ~RenderMesh();
 
     //------------------------------------------------------------------------

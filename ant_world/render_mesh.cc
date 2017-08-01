@@ -16,7 +16,7 @@ RenderMesh::RenderMesh() : m_VAO(0), m_PositionVBO(0), m_TextureCoordsVBO(0), m_
 {
 }
 //----------------------------------------------------------------------------
-RenderMesh::RenderMesh(float horizontalFOV, float verticalFOV,
+RenderMesh::RenderMesh(float horizontalFOV, float verticalFOV, float startLongitude,
                        unsigned int numHorizontalSegments, unsigned int numVerticalSegments)
 {
     // We need a vertical for each segment and one extra
@@ -44,7 +44,6 @@ RenderMesh::RenderMesh(float horizontalFOV, float verticalFOV,
         const float latitudeStep = horizontalFOV / (float)numHorizontalSegments;
 
         const float segmentHeight = 1.0f / (float)numVerticalSegments;
-        const float startLongitude = verticalFOV / 2.0f;
         const float longitudeStep = -verticalFOV / (float)numVerticalSegments;
 
         // Loop through vertices

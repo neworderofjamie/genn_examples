@@ -211,7 +211,7 @@ void renderAntView(float antX, float antY, float antHeading,
     glLoadIdentity();
     gluPerspective(90.0,
                    1.0,
-                   0.001, 100.0);
+                   0.001, 14.0);
 
     glMatrixMode(GL_MODELVIEW);
 
@@ -465,7 +465,11 @@ int main()
     World world("world5000_gray.bin", worldColour, groundColour);
 
     // Build mesh to render cubemap to screen
-    RenderMesh renderMesh(296.0f, 76.0f, 40, 10);
+    // **NOTE** this matches the matlab:
+    // hfov = hfov/180/2*pi;
+    // axis([0 14 -hfov hfov -pi/12 pi/3]);
+    RenderMesh renderMesh(296.0f, 75.0f, 15.0f,
+                          40, 10);
 
     // Create FBO for rendering to cubemap and bind
     GLuint fbo;
