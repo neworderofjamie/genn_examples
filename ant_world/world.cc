@@ -59,7 +59,7 @@ bool World::load(const std::string &filename, const GLfloat (&worldColour)[3],
     glBindVertexArray(m_VAO);
 
     {
-        // ReserouteVBOrve 3 XYZ positions for each triangle and 6 for the ground
+        // Reserve 3 XYZ positions for each triangle and 6 for the ground
         std::vector<GLfloat> positions((6 + (numTriangles * 3)) * 3);
 
         // Add first ground triangle vertex positions
