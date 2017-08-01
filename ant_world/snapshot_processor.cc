@@ -39,7 +39,12 @@ std::tuple<uint8_t*, unsigned int> SnapshotProcessor::process(const cv::Mat &sna
                 cv::Size(m_OutputWidth, m_OutputHeight),
                 0.0, 0.0, CV_INTER_CUBIC);
 
-    //cv::imwrite("snapshot.png", m_FinalSnapshot);
+    // Normalise snapshot using L2 norm
+    // **NOTE** we divide by 255 because this is essentially a fixed-point division
+    const double norm = cv::norm(m_FinalSnapshot) / 255.0;
+    m_FinalSnapshot /= norm;
+
+    cv::imwrite("snapshot.png", m_FinalSnapshot);
 
     // Upload final snapshot to GPU
     m_FinalSnapshotGPU.upload(m_FinalSnapshot);
