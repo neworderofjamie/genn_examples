@@ -93,8 +93,12 @@ enum Key
 typedef std::bitset<KeyMax> KeyBitset;
 
 // Loads world file from matlab format into position and colour vertex buffer objects
-std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
+std::tuple<GLuint, GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
 {
+    // Create a vertex array object to bind everything together
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+
     // Generate two vertex buffer objects, one for positions and one for colours
     GLuint vbo[2];
     glGenBuffers(2, vbo);
@@ -110,11 +114,15 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
     const std::streampos numTriangles = input.tellg() / (sizeof(double) * 12);
     input.seekg(0);
     std::cout << "World has " << numTriangles << " triangles" << std::endl;
+
+    // Bind vertex array
+    glBindVertexArray(vao);
+
     {
         // Bind positions buffer
         glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 
-        // Reserve 3 XYZ positions for each triangle and 6 for the ground
+        // ReserouteVBOrve 3 XYZ positions for each triangle and 6 for the ground
         std::vector<GLfloat> positions((6 + (numTriangles * 3)) * 3);
 
         // Add first ground triangle vertex positions
@@ -145,6 +153,10 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
 
         // Upload positions
         glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(GLfloat), positions.data(), GL_STATIC_READ);
+
+        // Set vertex pointer and enable client state in VAO
+        glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+        glEnableClientState(GL_VERTEX_ARRAY);
     }
 
     {
@@ -179,13 +191,17 @@ std::tuple<GLuint, GLuint, unsigned int> loadWorld(const std::string &filename)
 
         // Upload colours
         glBufferData(GL_ARRAY_BUFFER, colours.size() * sizeof(GLfloat), colours.data(), GL_STATIC_READ);
+
+        // Set colour pointer and enable client state in VAO
+        glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+        glEnableClientState(GL_COLOR_ARRAY);
     }
 
     // Return VBO handles and index count
-    return std::make_tuple(vbo[0], vbo[1], numTriangles * 3);
+    return std::make_tuple(vao, vbo[0], vbo[1], numTriangles * 3);
 }
 //----------------------------------------------------------------------------
-std::vector<std::array<float, 3>> loadRoute(const std::string &filename)
+std::tuple<std::vector<std::array<float, 3>>, GLuint, GLuint, unsigned int> loadRoute(const std::string &filename)
 {
     // Open file for binary IO
     std::ifstream input(filename, std::ios::binary);
@@ -217,10 +233,33 @@ std::vector<std::array<float, 3>> loadRoute(const std::string &filename)
             route[i][c] = (float)pointPosition * scale;
         }
     }
-    return route;
+
+    // Create a vertex array object to bind everything together
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+
+    // Generate vertex buffer objects for positions
+    GLuint vbo;
+    glGenBuffers(1, &vbo);
+
+    // Bind vertex array
+    glBindVertexArray(vao);
+
+    // Bind and upload positions buffer
+    // **NOTE** we're not actually going to be rendering the 3rd component as it's an angle not a z-coordinate
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, route.size() * sizeof(GLfloat) * 3, route.data(), GL_STATIC_READ);
+
+    // Set vertex pointer to stride over angles and enable client state in VAO
+    glVertexPointer(2, GL_FLOAT, 3 * sizeof(float), BUFFER_OFFSET(0));
+    glEnableClientState(GL_VERTEX_ARRAY);
+
+    // Return route data, vao, vbo and route size
+    return std::make_tuple(route, vao, vbo, route.size());
 }
 //----------------------------------------------------------------------------
-std::tuple<GLuint, GLuint, unsigned int> buildRenderMesh(float horizontalFOV, float verticalFOV, unsigned int numHorizontalSegments)
+std::tuple<GLuint, GLuint, GLuint, unsigned int> buildRenderMesh(float horizontalFOV, float verticalFOV,
+                                                                 unsigned int numHorizontalSegments, unsigned int numVerticalSegments)
 {
     // We need a vertical for each segment and one extra
     const unsigned int numVerticals = numHorizontalSegments + 1;
@@ -271,20 +310,35 @@ std::tuple<GLuint, GLuint, unsigned int> buildRenderMesh(float horizontalFOV, fl
         textureCoords.push_back(cosLatitude * cosTopLongitude);
     }
 
-     // Generate two vertex buffer objects, one for positions and one for texture coordinates
+    // Create a vertex array object to bind everything together
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+
+    // Generate two vertex buffer objects, one for positions and one for texture coordinates
     GLuint vbo[2];
     glGenBuffers(2, vbo);
+
+    // Bind vertex array
+    glBindVertexArray(vao);
 
     // Bind and upload positions buffer
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
     glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(GLfloat), positions.data(), GL_STATIC_READ);
 
+    // Set vertex pointer and enable client state in VAO
+    glVertexPointer(2, GL_FLOAT, 0, BUFFER_OFFSET(0));
+    glEnableClientState(GL_VERTEX_ARRAY);
+
     // Bind and upload texture coordinates buffer
     glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
     glBufferData(GL_ARRAY_BUFFER, textureCoords.size() * sizeof(GLfloat), textureCoords.data(), GL_STATIC_READ);
 
+    // Set texture coordinate pointer and enable client state in VAO
+    glTexCoordPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+
     // Return VBO handles and vertex count
-    return std::make_tuple(vbo[0], vbo[1], numVerticals * 2);
+    return std::make_tuple(vao, vbo[0], vbo[1], numVerticals * 2);
 }
 //----------------------------------------------------------------------------
 void keyCallback(GLFWwindow *window, int key, int, int action, int)
@@ -391,22 +445,15 @@ void generateCubeFaceLookAtMatrices(GLfloat (&matrices)[6][16])
 }
 //----------------------------------------------------------------------------
 void renderAntView(float antX, float antY, float antHeading,
-                   GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices,
-                   GLuint renderMeshPositionVBO, GLuint renderMeshTextureCoordsVBO, unsigned int numRenderMeshVertices,
+                   GLuint worldVAO, unsigned int numWorldVertices,
+                   GLuint renderMeshVAO, unsigned int numRenderMeshVertices,
                    GLuint cubemapFBO, GLuint cubemapTexture, const GLfloat (&cubeFaceLookAtMatrices)[6][16])
 {
     // Configure viewport to cubemap-sized square
     glViewport(0, 0, 256, 256);
 
-    // Bind world position VBO
-    glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
-
-    // Bind world colour VBO
-    glBindBuffer(GL_ARRAY_BUFFER, worldColourVBO);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+    // Bind world VAO
+    glBindVertexArray(worldVAO);
 
     // Bind the cubemap FBO for offscreen rendering
     glBindFramebuffer(GL_FRAMEBUFFER, cubemapFBO);
@@ -464,44 +511,26 @@ void renderAntView(float antX, float antY, float antHeading,
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    // Bind render mesh position VBO
-    glBindBuffer(GL_ARRAY_BUFFER, renderMeshPositionVBO);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(2, GL_FLOAT, 0, BUFFER_OFFSET(0));
-
-    // Bind render mesh texture coordinate VBO
-    glBindBuffer(GL_ARRAY_BUFFER, renderMeshTextureCoordsVBO);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glTexCoordPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
-
-    // Disable colours
-    glDisableClientState(GL_COLOR_ARRAY);
+    // Bind render mesh VAO
+    glBindVertexArray(renderMeshVAO);
 
     // Draw render mesh quad strip
     glDrawArrays(GL_QUAD_STRIP, 0, numRenderMeshVertices);
 
     // Disable texture coordinate array, cube map texture and cube map texturing!
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
     glDisable(GL_TEXTURE_CUBE_MAP);
 
 }
 //----------------------------------------------------------------------------
-void renderTopDownView(GLuint worldPositionVBO, GLuint worldColourVBO, unsigned int numWorldVertices,
-                       GLuint routeVBO, unsigned int numRouteVertices)
+void renderTopDownView(GLuint worldVAO, unsigned int numWorldVertices,
+                       GLuint routeVAO, unsigned int numRouteVertices)
 {
     // Set viewport to square at bottom of screen
     glViewport(0, 0, displayRenderWidth, displayRenderWidth);
 
-    // Bind world position VBO
-    glBindBuffer(GL_ARRAY_BUFFER, worldPositionVBO);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
-
-    // Bind world colour VBO
-    glBindBuffer(GL_ARRAY_BUFFER, worldColourVBO);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
+    // Bind world VAO
+    glBindVertexArray(worldVAO);
 
     // Configure top-down orthographic projection matrix
     glMatrixMode(GL_PROJECTION);
@@ -518,13 +547,8 @@ void renderTopDownView(GLuint worldPositionVBO, GLuint worldColourVBO, unsigned 
     // Draw world
     glDrawArrays(GL_TRIANGLES, 0, numWorldVertices);
 
-    // Bind route VBO
-    // **NOTE** we're only using X and Y components of route and striding over the angle
-    glBindBuffer(GL_ARRAY_BUFFER, routeVBO);
-    glVertexPointer(2, GL_FLOAT, 3 * sizeof(float), BUFFER_OFFSET(0));
-
-    // Disable colours
-    glDisableClientState(GL_COLOR_ARRAY);
+    // Bind route VAO
+    glBindVertexArray(routeVAO);
 
     // Translate above the terrain and draw route
     glTranslatef(0.0f, 0.0f, 1.0f);
@@ -696,7 +720,11 @@ int main()
     glfwSetKeyCallback(window, keyCallback);
 
     // Load route
-    auto route = loadRoute("ant1_route1.bin");
+    std::vector<std::array<float, 3>> route;
+    GLuint routeVAO;
+    GLuint routePositionVBO;
+    unsigned int numRouteVertices;
+    std::tie(route, routeVAO, routePositionVBO, numRouteVertices) = loadRoute("ant1_route1.bin");
 
     // Create VBO from route
     // **NOTE** we're not actually going to be rendering the 3rd component as it's an angle not a z-coordinate
@@ -706,17 +734,18 @@ int main()
     glBufferData(GL_ARRAY_BUFFER, route.size() * sizeof(GLfloat) * 3, route.data(), GL_STATIC_READ);
 
     // Load world into OpenGL
+    GLuint worldVAO;
     GLuint worldPositionVBO;
     GLuint worldColourVBO;
-    unsigned int numVertices;
-    std::tie(worldPositionVBO, worldColourVBO, numVertices) = loadWorld("world5000_gray.bin");
+    unsigned int numWorldVertices;
+    std::tie(worldVAO, worldPositionVBO, worldColourVBO, numWorldVertices) = loadWorld("world5000_gray.bin");
 
     // Build mesh to render cubemap to screen
+    GLuint renderMeshVAO;
     GLuint renderMeshPositionVBO;
     GLuint renderMeshTextureCoordsVBO;
     unsigned int numRenderMeshVertices;
-    std::tie(renderMeshPositionVBO, renderMeshTextureCoordsVBO, numRenderMeshVertices) = buildRenderMesh(296.0f, 76.0f,
-                                                                                                         40);
+    std::tie(renderMeshVAO, renderMeshPositionVBO, renderMeshTextureCoordsVBO, numRenderMeshVertices) = buildRenderMesh(296.0f, 76.0f, 40, 10);
 
     // Create FBO for rendering to cubemap and bind
     GLuint fbo;
@@ -939,13 +968,13 @@ int main()
 
         // Render ant's eye view at top of the screen
         renderAntView(antX, antY, antHeading,
-                      worldPositionVBO, worldColourVBO, numVertices,
-                      renderMeshPositionVBO, renderMeshTextureCoordsVBO, numRenderMeshVertices,
+                      worldVAO, numWorldVertices,
+                      renderMeshVAO, numRenderMeshVertices,
                       fbo, cubemap, cubeFaceLookAtMatrices);
 
         // Render top-down view at bottom of the screen
-        renderTopDownView(worldPositionVBO, worldColourVBO, numVertices,
-                          routeVBO, route.size());
+        renderTopDownView(worldVAO, numWorldVertices,
+                          routeVAO, numRouteVertices);
 
 
         // Swap front and back buffers
@@ -995,9 +1024,16 @@ int main()
         glfwPollEvents();
     }
 
-    // Delete vertex buffer objects
+    // Delete world objects
     glDeleteBuffers(1, &worldPositionVBO);
     glDeleteBuffers(1, &worldColourVBO);
+    glDeleteVertexArrays(1, &worldVAO);
+
+
+    // Delete render mesh objects
+    glDeleteBuffers(1, &renderMeshPositionVBO);
+    glDeleteBuffers(1, &renderMeshTextureCoordsVBO);
+    glDeleteVertexArrays(1, &renderMeshVAO);
 
     glfwTerminate();
     return 0;
