@@ -70,6 +70,7 @@ enum class State
 {
     Training,
     Testing,
+    RandomWalk,
     Idle,
 };
 
@@ -298,10 +299,8 @@ unsigned int convertMsToTimesteps(double ms)
     return (unsigned int)std::round(ms / Parameters::timestepMs);
 }
 //----------------------------------------------------------------------------
-void initGeNN()
+void initGeNN(std::mt19937 &gen)
 {
-    std::mt19937 gen;
-
     {
         Timer<> timer("Allocation:");
         allocateMem();
@@ -414,6 +413,8 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
 //----------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+    std::mt19937 gen;
+
     // Initialize the library
     if(!glfwInit()) {
         return -1;
@@ -512,7 +513,7 @@ int main(int argc, char *argv[])
     generateCubeFaceLookAtMatrices(cubeFaceLookAtMatrices);
 
     // Initialize GeNN
-    initGeNN();
+    initGeNN(gen);
 
     // Host OpenCV array to hold pixels read from screen
     cv::Mat snapshot(displayRenderHeight, displayRenderWidth, CV_8UC3);
@@ -533,6 +534,7 @@ int main(int argc, char *argv[])
 
     // If a route is loaded, start in training mode, otherwise idle
     State state = (route.size() > 0) ? State::Training : State::Idle;
+    //State state = State::RandomWalk;
 
     unsigned int numSnapshots = 0;
     float distanceSinceLastPoint = 0.0f;
@@ -548,6 +550,9 @@ int main(int argc, char *argv[])
     // Calculate scan parameters
     constexpr double halfScanAngle = Parameters::scanAngle / 2.0;
     constexpr unsigned int numScanSteps = (unsigned int)round(Parameters::scanAngle / Parameters::scanStep);
+
+    // When random walking, distribution of angles to turn by
+    std::uniform_real_distribution<float> randomAngleOffset(-halfScanAngle, halfScanAngle);
 
     std::ofstream replay("test.csv");
 
@@ -720,6 +725,39 @@ int main(int argc, char *argv[])
                         // Take snapshot
                         testSnapshot = true;
                     }
+                }
+            }
+        }
+        else if(state == State::RandomWalk) {
+            // Pick random heading
+            antHeading += randomAngleOffset(gen);
+
+            // Move ant forward by snapshot distance
+            antX += Parameters::snapshotDistance * sin(antHeading * degreesToRadians);
+            antY += Parameters::snapshotDistance * cos(antHeading * degreesToRadians);
+
+            //replay << antX << "," << antY << std::endl;
+
+            // If we've reached destination, reset state to idle
+            if(route.atDestination(antX, antY, Parameters::errorDistance)) {
+                std::cout << "Destination reached with " << numErrors << " errors" << std::endl;
+                state = State::Idle;
+            }
+            // Otherwise
+            else {
+                // Calculate distance to route
+                float distanceToRoute;
+                size_t nearestRouteSegment;
+                std::tie(distanceToRoute, nearestRouteSegment) = route.getDistanceToRoute(antX, antY);
+
+                // If we are further away than error threshold
+                if(distanceToRoute > Parameters::errorDistance) {
+                    // Snap ant to next snapshot position
+                    // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
+                    std::tie(antX, antY, antHeading) = route.getNextSnapshotPosition(nearestRouteSegment);
+
+                    // Increment error counter
+                    numErrors++;
                 }
             }
         }
