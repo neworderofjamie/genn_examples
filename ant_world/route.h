@@ -2,6 +2,7 @@
 
 // Standard C++ includes
 #include <array>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -24,7 +25,12 @@ public:
     //------------------------------------------------------------------------
     bool load(const std::string &filename);
     void render(float antX, float antY, float antHeading) const;
-    std::tuple<float, float, float, float> distanceToRoute(float x, float y) const;
+
+    bool atDestination(float x, float y, float threshold) const;
+    std::tuple<float, size_t> getDistanceToRoute(float x, float y) const;
+    std::tuple<float, float, float> getNextSnapshotPosition(size_t segment) const;
+
+    void markTrainedSnapshot(size_t index){ m_TrainedSnapshots.insert(index); }
     size_t size() const{ return m_Route.size(); }
 
     //------------------------------------------------------------------------
@@ -39,6 +45,7 @@ private:
     GLuint m_RouteVAO;
     GLuint m_RoutePositionVBO;
     std::vector<std::array<float, 3>> m_Route;
+    std::set<size_t> m_TrainedSnapshots;
 
     GLuint m_OverlayVAO;
     GLuint m_OverlayPositionVBO;

@@ -14,8 +14,9 @@ namespace Parameters
 
     // Testing parameters
     constexpr double scanAngle = 120.0;
-    constexpr double scanStep = 1.0;
+    constexpr double scanStep = 4.0;
     constexpr double snapshotDistance = 10.0 / 100.0;
+    constexpr double errorDistance = 20.0 / 100.0;
 
     // Network dimensions
     constexpr unsigned int inputWidth = 36;
@@ -33,15 +34,15 @@ namespace Parameters
     constexpr double pnToKCWeight = 0.0705;
 
     // Initial/maximum weight of plastic synapses between KC and EN populations
-    // **NOTE** note manually tuned to get about 14 spikes for a novel image
-    constexpr double kcToENWeight = 0.2;
+    // **NOTE** note manually tuned to get 15-20 spikes for a novel image
+    constexpr double kcToENWeight = 0.4;
 
     // Time constant of dopamine
     constexpr double tauD = 20.0;
 
     // Scale of each dopamine 'spike'
     // **NOTE** manually tuned for one-shot learning
-    constexpr double dopamineStrength = 0.005;
+    constexpr double dopamineStrength = 0.03;
 
     // How many PN neurons are connected to each KC
     constexpr unsigned int numPNSynapsesPerKC = 10;

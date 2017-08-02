@@ -614,6 +614,9 @@ int main(int argc, char *argv[])
 
                     // If this is the first point or we've gone further than snapshot distance
                     if(trainPoint == 0 || distanceSinceLastPoint > Parameters::snapshotDistance) {
+                        // Record where snapshot was taken in route
+                        route.markTrainedSnapshot(trainPoint);
+
                         // Set flag to train this snapshot
                         trainSnapshot = true;
 
@@ -686,26 +689,37 @@ int main(int argc, char *argv[])
 
                     replay << antX << "," << antY << std::endl;
 
-                    auto distanceToRoute = route.distanceToRoute(antX, antY);
-                    std::cout << "\tDistance to route: " << std::get<0>(distanceToRoute) * 100.0f << "cm" << std::endl;
-                    if(std::get<0>(distanceToRoute) > (20.0f / 100.0f)) {
-                        antX = std::get<1>(distanceToRoute);
-                        antY = std::get<2>(distanceToRoute);
-                        antHeading = std::get<3>(distanceToRoute);
-
-                        // Increment error counter
-                        numErrors++;
-
-                        std::cout << "\t\tERROR (" << numErrors << ")" << std::endl;
+                    // If we've reached destination, reset state to idle
+                    if(route.atDestination(antX, antY, Parameters::errorDistance)) {
+                        std::cout << "Destination reached with " << numErrors << " errors" << std::endl;
+                        state = State::Idle;
                     }
+                    // Otherwise
+                    else {
+                        // Calculate distance to route
+                        float distanceToRoute;
+                        size_t nearestRouteSegment;
+                        std::tie(distanceToRoute, nearestRouteSegment) = route.getDistanceToRoute(antX, antY);
+                        std::cout << "\tDistance to route: " << distanceToRoute * 100.0f << "cm" << std::endl;
 
-                    // Reset scan
-                    antHeading -= halfScanAngle;
-                    testingScan = 0;
-                    bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+                        // If we are further away than error threshold
+                        if(distanceToRoute > Parameters::errorDistance) {
+                            // Snap ant to next snapshot position
+                            // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
+                            std::tie(antX, antY, antHeading) = route.getNextSnapshotPosition(nearestRouteSegment);
 
-                    // Take snapshot
-                    testSnapshot = true;
+                            // Increment error counter
+                            numErrors++;
+                        }
+
+                        // Reset scan
+                        antHeading -= halfScanAngle;
+                        testingScan = 0;
+                        bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+
+                        // Take snapshot
+                        testSnapshot = true;
+                    }
                 }
             }
         }
