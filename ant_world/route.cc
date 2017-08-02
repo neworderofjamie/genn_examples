@@ -3,10 +3,27 @@
 // Standard C++ includes
 #include <fstream>
 #include <iostream>
+#include <limits>
+#include <tuple>
+
+// Standard C++ includes
+#include <cmath>
 
 // Antworld includes
 #include "common.h"
 
+namespace
+{
+float sqr(float x)
+{
+    return (x * x);
+}
+//----------------------------------------------------------------------------
+float distanceSquared(float x1, float y1, float x2, float y2)
+{
+    return sqr(x2 - x1) + sqr(y2 - y1);
+}
+}
 //----------------------------------------------------------------------------
 // Route
 //----------------------------------------------------------------------------
@@ -141,4 +158,59 @@ void Route::render(float antX, float antY, float antHeading) const
     glRotatef(-antHeading, 0.0f, 0.0f, 1.0f);
     glDrawArrays(GL_LINES, 0, 2);
     glPopMatrix();
+}
+//----------------------------------------------------------------------------
+std::tuple<float, float, float, float> Route::distanceToRoute(float x, float y) const
+{
+    // Loop through segments
+    float minimumDistanceSquared = std::numeric_limits<float>::max();
+    float snapX = 0.0f;
+    float snapY = 0.0f;
+    float snapHeading = 0.0f;
+    for(unsigned int s = 0; s < (m_Route.size() - 1); s++)
+    {
+        // Get positions of start and end of segment
+        const float startX = m_Route[s][0];
+        const float startY = m_Route[s][1];
+        const float endX = m_Route[s + 1][0];
+        const float endY = m_Route[s + 1][1];
+
+        const float segmentLengthSquared = distanceSquared(startX, startY, endX, endY);
+
+        // If segment has no length
+        if(segmentLengthSquared == 0) {
+            // Calculate distance from point to segment start (arbitrary)
+            const float distanceToStartSquared = distanceSquared(startX, startY, x, y);
+
+            // If this is closer than current minimum, update minimum
+            if(distanceToStartSquared < minimumDistanceSquared) {
+                minimumDistanceSquared = distanceToStartSquared;
+                snapX = startX;
+                snapY = startY;
+                snapHeading = m_Route[s][2];
+            }
+        }
+        else {
+            // Calculate dot product of vector from start of segment and vector along segment and clamp
+            float t = ((x - startX) * (endX - startY) + (y - startY) * (endY - startY)) / segmentLengthSquared;
+            t = std::max(0.0f, std::min(1.0f, t));
+
+            // Use this to project point onto segment
+            const float projX = startX + (t * (endX - startX));
+            const float projY = startY + (t * (endY - startY));
+
+            // Calculate distance from this point to point
+            const float distanceToSegmentSquared = distanceSquared(x, y, projX, projY);
+
+            // If this is closer than current minimum, update minimum
+            if(distanceToSegmentSquared < minimumDistanceSquared) {
+                minimumDistanceSquared = distanceToSegmentSquared;
+                snapX = projX;
+                snapY = projY;
+                snapHeading = m_Route[s][2];
+            }
+        }
+    }
+
+    return std::make_tuple(sqrt(minimumDistanceSquared), snapX, snapY, snapHeading);
 }

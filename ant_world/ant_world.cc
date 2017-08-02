@@ -540,6 +540,8 @@ int main(int argc, char *argv[])
 
     unsigned int testingScan = 0;
 
+    unsigned int numErrors = 0;
+
     float bestHeading = 0.0f;
     unsigned int bestTestENSpikes = std::numeric_limits<unsigned int>::max();
 
@@ -683,6 +685,19 @@ int main(int argc, char *argv[])
                     antY += Parameters::snapshotDistance * cos(antHeading * degreesToRadians);
 
                     replay << antX << "," << antY << std::endl;
+
+                    auto distanceToRoute = route.distanceToRoute(antX, antY);
+                    std::cout << "\tDistance to route: " << std::get<0>(distanceToRoute) * 100.0f << "cm" << std::endl;
+                    if(std::get<0>(distanceToRoute) > (20.0f / 100.0f)) {
+                        antX = std::get<1>(distanceToRoute);
+                        antY = std::get<2>(distanceToRoute);
+                        antHeading = std::get<3>(distanceToRoute);
+
+                        // Increment error counter
+                        numErrors++;
+
+                        std::cout << "\t\tERROR (" << numErrors << ")" << std::endl;
+                    }
 
                     // Reset scan
                     antHeading -= halfScanAngle;

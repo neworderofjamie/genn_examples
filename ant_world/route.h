@@ -24,6 +24,7 @@ public:
     //------------------------------------------------------------------------
     bool load(const std::string &filename);
     void render(float antX, float antY, float antHeading) const;
+    std::tuple<float, float, float, float> distanceToRoute(float x, float y) const;
     size_t size() const{ return m_Route.size(); }
 
     //------------------------------------------------------------------------
