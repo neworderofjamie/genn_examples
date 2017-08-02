@@ -26,11 +26,11 @@ namespace Parameters
 
     // Scale applied to convert image data to input currents for PNs
     // **NOTE** manually tuned to get approximately 50% PN activation
-    constexpr double inputCurrentScale = 0.0115;
+    constexpr double inputCurrentScale = 2.9325;
 
     // Weight of static synapses between PN and KC populations
     // **NOTE** manually tuend to get approximately 200/20000 KC firing sparsity
-    constexpr double pnToKCWeight = 0.075;
+    constexpr double pnToKCWeight = 0.0705;
 
     // Initial/maximum weight of plastic synapses between KC and EN populations
     // **NOTE** note manually tuned to get about 14 spikes for a novel image

@@ -27,7 +27,7 @@ public:
         "       unsigned int x = $(id) % (unsigned int)($(Width));\n"
         "       unsigned int y = $(id) / (unsigned int)($(Width));\n"
         "       const unsigned int index = (y * $(IextStep)) + x;\n"
-        "       Iext = $(IextScale) * (scalar)$(Iext)[index];\n"
+        "       Iext = $(IextScale) * $(Iext)[index];\n"
         "   }\n"
         "   scalar alpha = (($(Isyn) + $(Ioffset) + Iext) * $(Rmembrane)) + $(Vrest);\n"
         "   $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
@@ -62,7 +62,7 @@ public:
 
     SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 
-    SET_EXTRA_GLOBAL_PARAMS({{"Iext", "uint8_t *"}, {"IextStep", "unsigned int"}});
+    SET_EXTRA_GLOBAL_PARAMS({{"Iext", "float*"}, {"IextStep", "unsigned int"}});
 };
 IMPLEMENT_MODEL(LIFExtCurrent);
 

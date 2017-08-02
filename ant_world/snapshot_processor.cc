@@ -10,12 +10,13 @@ SnapshotProcessor::SnapshotProcessor(unsigned int intermediateWidth, unsigned in
     m_IntermediateSnapshot(intermediateWidth, intermediateHeight, CV_8UC3),
     m_IntermediateSnapshotGreyscale(intermediateWidth, intermediateHeight, CV_8UC1),
     m_FinalSnapshot(outputWidth, outputHeight, CV_8UC1),
-    m_FinalSnapshotGPU(outputWidth, outputHeight, CV_8UC1),
+    m_FinalSnapshotFloat(outputWidth, outputHeight, CV_32FC1),
+    m_FinalSnapshotFloatGPU(outputWidth, outputHeight, CV_32FC1),
     m_Clahe(cv::createCLAHE(0.01 * 255.0, cv::Size(8, 8)))
 {
 }
 //----------------------------------------------------------------------------
-std::tuple<uint8_t*, unsigned int> SnapshotProcessor::process(const cv::Mat &snapshot)
+std::tuple<float*, unsigned int> SnapshotProcessor::process(const cv::Mat &snapshot)
 {
     // **TODO** theoretically this processing could all be done on the GPU but
     // a) we're currently starting from a snapshot in host memory
@@ -38,18 +39,17 @@ std::tuple<uint8_t*, unsigned int> SnapshotProcessor::process(const cv::Mat &sna
     cv::resize(m_IntermediateSnapshotGreyscale, m_FinalSnapshot,
                 cv::Size(m_OutputWidth, m_OutputHeight),
                 0.0, 0.0, CV_INTER_CUBIC);
-
-    // Normalise snapshot using L2 norm
-    // **NOTE** we divide by 255 because this is essentially a fixed-point division
-    const double norm = cv::norm(m_FinalSnapshot) / 255.0;
-    m_FinalSnapshot /= norm;
+    m_FinalSnapshot.convertTo(m_FinalSnapshotFloat, CV_32FC1, 1.0 / 255.0);
 
     cv::imwrite("snapshot.png", m_FinalSnapshot);
 
+    // Normalise snapshot using L2 norm
+    cv::normalize(m_FinalSnapshotFloat, m_FinalSnapshotFloat);
+
     // Upload final snapshot to GPU
-    m_FinalSnapshotGPU.upload(m_FinalSnapshot);
+    m_FinalSnapshotFloatGPU.upload(m_FinalSnapshotFloat);
 
     // Extract device pointers and step; and return
-    auto finalSnapshotPtrStep = (cv::cuda::PtrStep<uint8_t>)m_FinalSnapshotGPU;
-    return std::make_tuple(finalSnapshotPtrStep.data, finalSnapshotPtrStep.step);
+    auto finalSnapshotPtrStep = (cv::cuda::PtrStep<float>)m_FinalSnapshotFloatGPU;
+    return std::make_tuple(finalSnapshotPtrStep.data, finalSnapshotPtrStep.step / sizeof(float));
 }

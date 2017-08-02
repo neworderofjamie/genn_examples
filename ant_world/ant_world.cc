@@ -326,7 +326,7 @@ void initGeNN()
     }
 }
 //----------------------------------------------------------------------------
-unsigned int presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool reward)
+unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool reward)
 {
     Timer<> timer("\tSimulation:");
 
@@ -341,6 +341,7 @@ unsigned int presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool re
 
     // Open CSV output files
 #ifdef RECORD_SPIKES
+    const unsigned long long startTimestep = iT;
     SpikeCSVRecorder pnSpikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
     SpikeCSVRecorder kcSpikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
     SpikeCSVRecorder enSpikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
@@ -411,7 +412,7 @@ unsigned int presentToMB(uint8_t *inputData, unsigned int inputDataStep, bool re
 }
 }   // anonymous namespace
 //----------------------------------------------------------------------------
-int main()
+int main(int argc, char *argv[])
 {
     // Initialize the library
     if(!glfwInit()) {
@@ -439,7 +440,7 @@ int main()
     glfwSwapInterval(2);
 
     // Set clear colour to match matlab and enable depth test
-    glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glLineWidth(4.0f);
 
@@ -450,8 +451,11 @@ int main()
     // Set key callback
     glfwSetKeyCallback(window, keyCallback);
 
-    // Load route
-    Route route(0.2f, "ant1_route1.bin");
+    // Create route object and load route file specified by command line
+    Route route(0.2f);
+    if(argc > 1) {
+        route.load(argv[1]);
+    }
 
     // Load world into OpenGL
     World world("world5000_gray.bin", worldColour, groundColour);
@@ -517,12 +521,18 @@ int main()
     SnapshotProcessor snapshotProcessor(intermediateSnapshotWidth, intermediateSnapshowHeight,
                                         Parameters::inputWidth, Parameters::inputHeight);
 
-    // Loop until the user closes the window
-    float antX = route[0][0];
-    float antY = route[0][1];
-    float antHeading = route[0][2];
+    // Initialize ant position
+    float antX = 5.0f;
+    float antY = 5.0f;
+    float antHeading = 270.0f;
+    if(route.size() > 0) {
+        antX = route[0][0];
+        antY = route[0][1];
+        antHeading = route[0][2];
+    }
 
-    State state = State::Training;
+    // If a route is loaded, start in training mode, otherwise idle
+    State state = (route.size() > 0) ? State::Training : State::Idle;
 
     unsigned int numSnapshots = 0;
     float distanceSinceLastPoint = 0.0f;
@@ -533,7 +543,8 @@ int main()
     float bestHeading = 0.0f;
     unsigned int bestTestENSpikes = std::numeric_limits<unsigned int>::max();
 
-    constexpr double halfScanAngle = Parameters::scanAngle;
+    // Calculate scan parameters
+    constexpr double halfScanAngle = Parameters::scanAngle / 2.0;
     constexpr unsigned int numScanSteps = (unsigned int)round(Parameters::scanAngle / Parameters::scanStep);
 
     std::ofstream replay("test.csv");
@@ -635,6 +646,7 @@ int main()
                 }
             }
         }
+        // Otherwise, if we're testing
         else if(state == State::Testing) {
             if(gennIdle) {
                 // If the last snapshot was more familiar than the current best update
@@ -682,6 +694,10 @@ int main()
                 }
             }
         }
+        // Otherwise just show EN spike count for debugging purposes
+        else if(gennIdle && gennResult.valid()) {
+            std::cout << "\t" << gennResult.get() << " EN spikes" << std::endl;
+        }
 
         // Clear colour and depth buffer
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -711,7 +727,7 @@ int main()
                          GL_BGR, GL_UNSIGNED_BYTE, snapshot.data);
 
             // Process snapshot
-            uint8_t *finalSnapshotData;
+            float *finalSnapshotData;
             unsigned int finalSnapshotStep;
             std::tie(finalSnapshotData, finalSnapshotStep) = snapshotProcessor.process(snapshot);
 

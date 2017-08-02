@@ -17,7 +17,7 @@ public:
     //------------------------------------------------------------------------
     // Process input snapshot (probably at screen resolution)
     // and return GPU data pointer and step
-    std::tuple<uint8_t*, unsigned int> process(const cv::Mat &snapshot);
+    std::tuple<float*, unsigned int> process(const cv::Mat &snapshot);
 
 private:
     //------------------------------------------------------------------------
@@ -40,8 +40,10 @@ private:
     // Host OpenCV array to hold final resolution greyscale snapshot
     cv::Mat m_FinalSnapshot;
 
+    cv::Mat m_FinalSnapshotFloat;
+
     // GPU OpenCV array to hold
-    cv::cuda::GpuMat m_FinalSnapshotGPU;
+    cv::cuda::GpuMat m_FinalSnapshotFloatGPU;
 
     // CLAHE algorithm for histogram normalization
     cv::Ptr<cv::CLAHE> m_Clahe;
