@@ -46,4 +46,9 @@ namespace Parameters
 
     // How many PN neurons are connected to each KC
     constexpr unsigned int numPNSynapsesPerKC = 10;
+
+    // Standard deviation of input noise current applied to all neurons
+    constexpr double pnNoiseCurrentScale = 0.0;
+    constexpr double kcNoiseCurrentScale = 0.0;
+    constexpr double enNoiseCurrentScale = 0.0;
 }

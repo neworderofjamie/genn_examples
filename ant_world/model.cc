@@ -29,7 +29,8 @@ public:
         "       const unsigned int index = (y * $(IextStep)) + x;\n"
         "       Iext = $(IextScale) * $(Iext)[index];\n"
         "   }\n"
-        "   scalar alpha = (($(Isyn) + $(Ioffset) + Iext) * $(Rmembrane)) + $(Vrest);\n"
+        "   scalar Inoise = $(InoiseScale) * $(Inoise)[$(id)];\n"
+        "   scalar alpha = (($(Isyn) + Inoise + Iext) * $(Rmembrane)) + $(Vrest);\n"
         "   $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
         "}\n"
         "else\n"
@@ -50,8 +51,8 @@ public:
         "Vrest",        // 2 - Resting membrane potential [mV]
         "Vreset",       // 3 - Reset voltage [mV]
         "Vthresh",      // 4 - Spiking threshold [mV]
-        "Ioffset",      // 5 - Offset current
-        "TauRefrac",    // 6 - Refractory time [ms]
+        "TauRefrac",    // 5 - Refractory time [ms]
+        "InoiseScale",  // 6 - Scaling factor to apply to noise current
         "IextScale",    // 7 - Scaling factor to apply to external current
         "Width",        // 8 - Width of population (pixels)
     });
@@ -62,7 +63,7 @@ public:
 
     SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 
-    SET_EXTRA_GLOBAL_PARAMS({{"Iext", "float*"}, {"IextStep", "unsigned int"}});
+    SET_EXTRA_GLOBAL_PARAMS({{"Inoise", "float*"}, {"Iext", "float*"}, {"IextStep", "unsigned int"}});
 };
 IMPLEMENT_MODEL(LIFExtCurrent);
 
@@ -76,30 +77,41 @@ void modelDefinition(NNmodel &model)
     // Neuron model parameters
     //---------------------------------------------------------------------------
     // LIF model parameters
-    LIF::ParamValues lifParams(
-        0.2,    // 0 - C
-        20.0,   // 1 - TauM
-        -60.0,  // 2 - Vrest
-        -60.0,  // 3 - Vreset
-        -50.0,  // 4 - Vthresh
-        0.0,    // 5 - Ioffset
-        2.0);   // 6 - TauRefrac
+    LIFExtCurrent::ParamValues pnParams(
+        0.2,                                // 0 - C
+        20.0,                               // 1 - TauM
+        -60.0,                              // 2 - Vrest
+        -60.0,                              // 3 - Vreset
+        -50.0,                              // 4 - Vthresh
+        2.0,                                // 5 - TauRefrac
+        Parameters::pnNoiseCurrentScale,    // 6 - Scaling factor to apply to external noise
+        Parameters::inputCurrentScale,      // 7 - Scaling factor to apply to external current
+        Parameters::inputWidth);            // 8 - Input width
 
-    // LIF model parameters
-    LIFExtCurrent::ParamValues lifExtCurrParams(
-        0.2,                            // 0 - C
-        20.0,                           // 1 - TauM
-        -60.0,                          // 2 - Vrest
-        -60.0,                          // 3 - Vreset
-        -50.0,                          // 4 - Vthresh
-        0.0,                            // 5 - Ioffset
-        2.0,                            // 6 - TauRefrac
-        Parameters::inputCurrentScale,  // 7 - Scaling factor to apply to external current
-        Parameters::inputWidth);        // 8 - Input width
+    LIFExtCurrent::ParamValues kcParams(
+        0.2,                                // 0 - C
+        20.0,                               // 1 - TauM
+        -60.0,                              // 2 - Vrest
+        -60.0,                              // 3 - Vreset
+        -50.0,                              // 4 - Vthresh
+        2.0,                                // 5 - TauRefrac
+        Parameters::kcNoiseCurrentScale,    // 6 - Scaling factor to apply to external noise
+        Parameters::inputCurrentScale,      // 7 - Scaling factor to apply to external current
+        Parameters::inputWidth);            // 8 - Input width
 
+    LIFExtCurrent::ParamValues enParams(
+        0.2,                                // 0 - C
+        20.0,                               // 1 - TauM
+        -60.0,                              // 2 - Vrest
+        -60.0,                              // 3 - Vreset
+        -50.0,                              // 4 - Vthresh
+        2.0,                                // 5 - TauRefrac
+        Parameters::enNoiseCurrentScale,    // 6 - Scaling factor to apply to external noise
+        Parameters::inputCurrentScale,      // 7 - Scaling factor to apply to external current
+        Parameters::inputWidth);            // 8 - Input width
 
     // LIF initial conditions
-    LIF::VarValues lifInit(
+    LIFExtCurrent::VarValues lifInit(
         -60.0,  // 0 - V
         0.0);   // 1 - RefracTime
 
@@ -133,9 +145,9 @@ void modelDefinition(NNmodel &model)
         0.0);                       // Time of last synaptic tag update
 
     // Create neuron populations
-    model.addNeuronPopulation<LIFExtCurrent>("PN", Parameters::numPN, lifExtCurrParams, lifInit);
-    model.addNeuronPopulation<LIF>("KC", Parameters::numKC, lifParams, lifInit);
-    model.addNeuronPopulation<LIF>("EN", Parameters::numEN, lifParams, lifInit);
+    model.addNeuronPopulation<LIFExtCurrent>("PN", Parameters::numPN, pnParams, lifInit);
+    model.addNeuronPopulation<LIFExtCurrent>("KC", Parameters::numKC, kcParams, lifInit);
+    model.addNeuronPopulation<LIFExtCurrent>("EN", Parameters::numEN, enParams, lifInit);
 
     auto pnToKC = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "pnToKC", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,

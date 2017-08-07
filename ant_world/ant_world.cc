@@ -28,6 +28,9 @@
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 
+// GeNN includes
+#include "GeNNHelperKrnls.h"
+
 // Common includes
 #include "../common/connectors.h"
 #include "../common/spike_csv_recorder.h"
@@ -65,6 +68,11 @@ constexpr int displayRenderHeight = 178;
 
 constexpr int intermediateSnapshotWidth = 74;
 constexpr int intermediateSnapshowHeight = 19;
+
+constexpr unsigned int numNoiseSources = Parameters::numPN + Parameters::numKC + Parameters::numEN;
+
+curandState *d_RNGState = nullptr;
+scalar *d_Noise = nullptr;
 
 enum class State
 {
@@ -309,6 +317,28 @@ void initGeNN(std::mt19937 &gen)
     {
         Timer<> timer("Initialization:");
         initialize();
+
+        // Null unused external input pointers
+        IextKC = nullptr;
+        IextEN = nullptr;
+    }
+
+    {
+        Timer<> timer("Configuring on-device RNG:");
+
+        // Allocate device array to hold RNG state
+        CHECK_CUDA_ERRORS(cudaMalloc(&d_RNGState, numNoiseSources * sizeof(curandState)));
+
+        // Initialize RNG state
+        xorwow_setup(d_RNGState, numNoiseSources, 123);
+
+        // Allocate device array to hold input noise
+        CHECK_CUDA_ERRORS(cudaMalloc(&d_Noise, numNoiseSources * sizeof(scalar)));
+
+        // Point extra neuron variables at correct parts of noise array
+        InoisePN = &d_Noise[0];
+        InoiseKC = &d_Noise[Parameters::numPN];
+        InoiseEN = &d_Noise[Parameters::numPN + Parameters::numKC];
     }
 
     {
@@ -349,10 +379,20 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
     // Update input data step
     IextStepPN = inputDataStep;
 
+    // Configure threads and grids
+    // **YUCK** I have no idea why this isn't in GeNNHelperKrnls
+    int sampleBlkNo = ceilf(float(numNoiseSources / float(BlkSz)));
+    dim3 sThreads(BlkSz, 1);
+    dim3 sGrid(sampleBlkNo, 1);
+
     // Loop through timesteps
     unsigned int numENSpikes = 0;
     while(iT < endTimestep)
     {
+        // Generate normally distributed noise on GPU
+        generate_random_gpuInput_xorwow<scalar>(d_RNGState, d_Noise, Parameters::numPN + Parameters::numKC + Parameters::numEN,
+                                                1.0f, 0.0f,
+                                                sGrid, sThreads);
         // If we should be presenting an image
         if(iT < endPresentTimestep) {
             IextPN = inputData;
@@ -409,16 +449,27 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
 
     return numENSpikes;
 }
+//----------------------------------------------------------------------------
+void handleGLFWError(int errorNumber, const char *message)
+{
+    std::cerr << "GLFW error number:" << errorNumber << ", message:" << message << std::endl;
+}
 }   // anonymous namespace
 //----------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
     std::mt19937 gen;
 
+    // Set GLFW error callback
+    glfwSetErrorCallback(handleGLFWError);
+
     // Initialize the library
     if(!glfwInit()) {
-        return -1;
+        throw std::runtime_error("Failed to initialize GLFW");
     }
+
+    // Prevent window being resized
+    glfwWindowHint(GLFW_RESIZABLE, false);
 
     // Create a windowed mode window and its OpenGL context
     GLFWwindow *window = glfwCreateWindow(displayRenderWidth, displayRenderHeight + displayRenderWidth + 10,
@@ -426,7 +477,7 @@ int main(int argc, char *argv[])
     if(!window)
     {
         glfwTerminate();
-        return -1;
+        throw std::runtime_error("Failed to create window");
     }
 
     // Make the window's context current
