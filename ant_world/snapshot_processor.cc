@@ -12,7 +12,7 @@ SnapshotProcessor::SnapshotProcessor(unsigned int intermediateWidth, unsigned in
     m_FinalSnapshot(outputWidth, outputHeight, CV_8UC1),
     m_FinalSnapshotFloat(outputWidth, outputHeight, CV_32FC1),
     m_FinalSnapshotFloatGPU(outputWidth, outputHeight, CV_32FC1),
-    m_Clahe(cv::createCLAHE(0.01 * 255.0, cv::Size(8, 8)))
+    m_Clahe(cv::createCLAHE(40.0, cv::Size(8, 8)))
 {
 }
 //----------------------------------------------------------------------------
@@ -33,6 +33,7 @@ std::tuple<float*, unsigned int> SnapshotProcessor::process(const cv::Mat &snaps
     cv::subtract(255, m_IntermediateSnapshotGreyscale, m_IntermediateSnapshotGreyscale);
 
     // Apply histogram normalization
+    // http://answers.opencv.org/question/15442/difference-of-clahe-between-opencv-and-matlab/
     m_Clahe->apply(m_IntermediateSnapshotGreyscale, m_IntermediateSnapshotGreyscale);
 
     // Finally resample down to final size

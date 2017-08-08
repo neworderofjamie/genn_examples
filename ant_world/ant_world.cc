@@ -79,6 +79,8 @@ enum class State
     Training,
     Testing,
     RandomWalk,
+    SpinningTrain,
+    SpinningTest,
     Idle,
 };
 
@@ -91,6 +93,7 @@ enum Key
     KeyDown,
     KeyTrainSnapshot,
     KeyTestSnapshot,
+    KeySpin,
     KeyReset,
     KeyMax
 };
@@ -140,6 +143,10 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
 
         case GLFW_KEY_R:
             keybits->set(KeyReset, newKeyState);
+            break;
+
+        case GLFW_KEY_S:
+            keybits->set(KeySpin, newKeyState);
             break;
     }
 }
@@ -355,7 +362,7 @@ void initGeNN(std::mt19937 &gen)
     }
 }
 //----------------------------------------------------------------------------
-unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool reward)
+std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputData, unsigned int inputDataStep, bool reward)
 {
     Timer<> timer("\tSimulation:");
 
@@ -386,6 +393,8 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
     dim3 sGrid(sampleBlkNo, 1);
 
     // Loop through timesteps
+    unsigned int numPNSpikes = 0;
+    unsigned int numKCSpikes = 0;
     unsigned int numENSpikes = 0;
     while(iT < endTimestep)
     {
@@ -417,6 +426,8 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
         pullKCCurrentSpikesFromDevice();
         pullENCurrentSpikesFromDevice();
 #else
+        CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCntPN, d_glbSpkCntPN, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+        CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCntKC, d_glbSpkCntKC, sizeof(unsigned int), cudaMemcpyDeviceToHost));
         CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCntEN, d_glbSpkCntEN, sizeof(unsigned int), cudaMemcpyDeviceToHost));
 #endif
 #else
@@ -438,6 +449,8 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
             injectDopaminekcToEN = false;
         }
 
+        numPNSpikes += spikeCount_PN;
+        numKCSpikes += spikeCount_KC;
         numENSpikes += spikeCount_EN;
 #ifdef RECORD_SPIKES
         // Record spikes
@@ -447,7 +460,7 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
 #endif  // RECORD_SPIKES
     }
 
-    return numENSpikes;
+    return std::make_tuple(numPNSpikes, numKCSpikes, numENSpikes);
 }
 //----------------------------------------------------------------------------
 void handleGLFWError(int errorNumber, const char *message)
@@ -601,19 +614,38 @@ int main(int argc, char *argv[])
     // Calculate scan parameters
     constexpr double halfScanAngle = Parameters::scanAngle / 2.0;
     constexpr unsigned int numScanSteps = (unsigned int)round(Parameters::scanAngle / Parameters::scanStep);
+    constexpr unsigned int numSpinSteps = (unsigned int)round(Parameters::scanAngle / Parameters::spinStep);
 
     // When random walking, distribution of angles to turn by
     std::uniform_real_distribution<float> randomAngleOffset(-halfScanAngle, halfScanAngle);
 
     std::ofstream replay("test.csv");
 
-    std::future<unsigned int> gennResult;
+    std::ofstream spin;
+
+    std::future<std::tuple<unsigned int, unsigned int, unsigned int>> gennResult;
     while (!glfwWindowShouldClose(window)) {
-        bool trainSnapshot = false;
-        bool testSnapshot = false;
-        const bool gennIdle = !gennResult.valid() || (gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready);
+        // If there is no valid result (GeNN process has never run), we are ready to take a snapshot
+        bool readyForNextSnapshot = false;
+        bool resultsAvailable = false;
+        unsigned int numPNSpikes;
+        unsigned int numKCSpikes;
+        unsigned int numENSpikes;
+        if(!gennResult.valid()) {
+            readyForNextSnapshot = true;
+        }
+        // Otherwise if GeNN has run and the result is ready for us, s
+        else if(gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready) {
+            std::tie(numPNSpikes, numKCSpikes, numENSpikes) = gennResult.get();
+            std::cout << "\t" << numPNSpikes << " PN spikes, " << numKCSpikes << " KC spikes, " << numENSpikes << " EN spikes" << std::endl;
+
+            readyForNextSnapshot = true;
+            resultsAvailable = true;
+        }
 
         // Update heading and ant position based on keys
+        bool trainSnapshot = false;
+        bool testSnapshot = false;
         if(keybits.test(KeyLeft)) {
             antHeading -= antTurnSpeed;
         }
@@ -633,23 +665,22 @@ int main(int argc, char *argv[])
             antX = route[0][0];
             antY = route[0][1];
         }
+        if(keybits.test(KeySpin) && state == State::Idle) {
+            trainSnapshot = true;
+            state = State::SpinningTrain;
+        }
 
-        // If GeNN is idle, trigger snapshots if keys are pressed
-        if(gennIdle && keybits.test(KeyTrainSnapshot)) {
+        // If GeNN is ready to handle next snapshot, trigger snapshots if keys are pressed
+        if(readyForNextSnapshot && keybits.test(KeyTrainSnapshot)) {
             trainSnapshot = true;
         }
-        if(gennIdle && keybits.test(KeyTestSnapshot)) {
+        if(readyForNextSnapshot && keybits.test(KeyTestSnapshot)) {
             testSnapshot = true;
         }
 
         // If we're training
         if(state == State::Training) {
-            if(gennIdle) {
-                // If we have just trained a snapshot, show spike count (for tuning purposes)
-                if(gennResult.valid()) {
-                    std::cout << "\t" << gennResult.get() << " EN spikes" << std::endl;
-                }
-
+            if(readyForNextSnapshot) {
                 // If GeNN isn't training and we have more route points to train
                 if(trainPoint < route.size()) {
                     // Snap ant to next route point
@@ -709,15 +740,11 @@ int main(int argc, char *argv[])
         }
         // Otherwise, if we're testing
         else if(state == State::Testing) {
-            if(gennIdle) {
-                // If the last snapshot was more familiar than the current best update
-                const unsigned int numSpikes = gennResult.get();
-                std::cout << "\t" << numSpikes << " EN spikes" << std::endl;
-
+            if(resultsAvailable) {
                 // If this is an improvement on previous best spike count
-                if(numSpikes < bestTestENSpikes) {
+                if(numENSpikes < bestTestENSpikes) {
                     bestHeading = antHeading;
-                    bestTestENSpikes = numSpikes;
+                    bestTestENSpikes = numENSpikes;
 
                     std::cout << "\tUpdated result: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
                 }
@@ -812,9 +839,39 @@ int main(int argc, char *argv[])
                 }
             }
         }
-        // Otherwise just show EN spike count for debugging purposes
-        else if(gennIdle && gennResult.valid()) {
-            std::cout << "\t" << gennResult.get() << " EN spikes" << std::endl;
+        if(state == State::SpinningTrain) {
+            if(resultsAvailable) {
+                spin.open("spin.csv");
+
+                // Start testing scan
+                state = State::SpinningTest;
+                antHeading -= halfScanAngle;
+                testingScan = 0;
+                testSnapshot = true;
+            }
+        }
+        else if(state == State::SpinningTest) {
+            if(resultsAvailable) {
+                   // Write heading and number of spikes to file
+                spin << antHeading << "," << numENSpikes << std::endl;
+
+                // Go onto next scan
+                testingScan++;
+
+                // If scan isn't complete
+                if(testingScan < numSpinSteps) {
+                    // Scan right
+                    antHeading += Parameters::spinStep;
+
+                    // Take test snapshot
+                    testSnapshot = true;
+                }
+                else {
+                    spin.close();
+
+                    state = State::Idle;
+                }
+            }
         }
 
         // Clear colour and depth buffer
