@@ -2,6 +2,8 @@
 
 // Standard C++ includes
 #include <algorithm>
+#include <numeric>
+#include <random>
 #include <stdexcept>
 #include <vector>
 
