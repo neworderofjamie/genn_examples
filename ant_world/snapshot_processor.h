@@ -18,6 +18,9 @@ public:
     // Process input snapshot (probably at screen resolution)
     // and return GPU data pointer and step
     std::tuple<float*, unsigned int> process(const cv::Mat &snapshot);
+    
+    // Host OpenCV array to hold final resolution greyscale snapshot
+    cv::Mat m_FinalSnapshot;
 
 private:
     //------------------------------------------------------------------------
@@ -36,9 +39,6 @@ private:
 
     // Host OpenCV array to hold intermediate resolution greyscale snapshot
     cv::Mat m_IntermediateSnapshotGreyscale;
-
-    // Host OpenCV array to hold final resolution greyscale snapshot
-    cv::Mat m_FinalSnapshot;
 
     cv::Mat m_FinalSnapshotFloat;
 

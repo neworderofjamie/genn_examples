@@ -45,6 +45,7 @@
 #include "render_mesh.h"
 #include "route.h"
 #include "snapshot_processor.h"
+#include "perfect_memory.h"
 #include "world.h"
 
 //----------------------------------------------------------------------------
@@ -93,6 +94,13 @@ enum Key
     KeyTestSnapshot,
     KeyReset,
     KeyMax
+};
+
+// Enumeration of models
+enum Model
+{
+    ModelMB, // mushroom body
+    ModelPM  // perfect memory
 };
 
 // Bitset used for passing which keys have been pressed between key callback and render loop
@@ -503,10 +511,17 @@ int main(int argc, char *argv[])
     // Set key callback
     glfwSetKeyCallback(window, keyCallback);
 
-    // Create route object and load route file specified by command line
+    // Create route object
     Route route(0.2f);
-    if(argc > 1) {
-        route.load(argv[1]);
+    Model model = ModelMB;
+    for (int i = 1; i < argc; i++) {
+        // flag to run the program with the perfect memory model
+        if (strcmp(argv[i],"--pm") == 0) {
+            model = ModelPM;  
+        } else {
+            // otherwise load route file specified by command line
+            route.load(argv[i]);
+        }
     }
 
     // Load world into OpenGL
@@ -598,6 +613,11 @@ int main(int argc, char *argv[])
     float bestHeading = 0.0f;
     unsigned int bestTestENSpikes = std::numeric_limits<unsigned int>::max();
 
+    // Create PerfectMemory object to handle training/testing with snapshot inputs
+    PerfectMemory pm(Parameters::inputWidth, Parameters::inputHeight);
+    // Stores result of PerfectMemory::getHeading(), includes heading and other info
+    PerfectMemoryResult res;
+
     // Calculate scan parameters
     constexpr double halfScanAngle = Parameters::scanAngle / 2.0;
     constexpr unsigned int numScanSteps = (unsigned int)round(Parameters::scanAngle / Parameters::scanStep);
@@ -605,12 +625,15 @@ int main(int argc, char *argv[])
     // When random walking, distribution of angles to turn by
     std::uniform_real_distribution<float> randomAngleOffset(-halfScanAngle, halfScanAngle);
 
+    // Log of ant's movements
     std::ofstream replay("test.csv");
 
     std::future<unsigned int> gennResult;
     while (!glfwWindowShouldClose(window)) {
         bool trainSnapshot = false;
         bool testSnapshot = false;
+        
+        // gennIdle defaults to true if using PM model so can be ignored
         const bool gennIdle = !gennResult.valid() || (gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready);
 
         // Update heading and ant position based on keys
@@ -707,43 +730,58 @@ int main(int argc, char *argv[])
                 }
             }
         }
-        // Otherwise, if we're testing
         else if(state == State::Testing) {
-            if(gennIdle) {
-                // If the last snapshot was more familiar than the current best update
-                const unsigned int numSpikes = gennResult.get();
-                std::cout << "\t" << numSpikes << " EN spikes" << std::endl;
+            if (gennIdle) {
+                // Flag which indicates that the ant's position should be updated.
+                // This is a bad hack until we can find a better way of merging the two models!
+                bool antMove = false;
+                
+                // mushroom body
+                if (model == ModelMB) {
+                                    // If the last snapshot was more familiar than the current best update
+                    const unsigned int numSpikes = gennResult.get();
+                    std::cout << "\t" << numSpikes << " EN spikes" << std::endl;
 
-                // If this is an improvement on previous best spike count
-                if(numSpikes < bestTestENSpikes) {
-                    bestHeading = antHeading;
-                    bestTestENSpikes = numSpikes;
+                    // If this is an improvement on previous best spike count
+                    if(numSpikes < bestTestENSpikes) {
+                        bestHeading = antHeading;
+                        bestTestENSpikes = numSpikes;
 
-                    std::cout << "\tUpdated result: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
+                        std::cout << "\tUpdated result: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
+                    }
+
+                    // Go onto next scan
+                    testingScan++;
+
+                    // If scan isn't complete
+                    if(testingScan < numScanSteps) {
+                        // Scan right
+                        antHeading += Parameters::scanStep;
+
+                        // Take test snapshot
+                        testSnapshot = true;
+                    }
+                    else {
+                        std::cout << "Scan complete: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
+
+                        // Snap ant to it's best heading
+                        antHeading = bestHeading;
+                        antMove = true;
+                    }
                 }
-
-                // Go onto next scan
-                testingScan++;
-
-                // If scan isn't complete
-                if(testingScan < numScanSteps) {
-                    // Scan right
-                    antHeading += Parameters::scanStep;
-
-                    // Take test snapshot
-                    testSnapshot = true;
-                }
+                // perfect memory
                 else {
-                    std::cout << "Scan complete: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
-
-                    // Snap ant to it's best heading
-                    antHeading = bestHeading;
-
+                    // Note that we are adding to the heading, not replacing it, as the heading angle is relative to the current view
+                    antHeading += res.heading;
+                }
+                
+                // If we need to move forward - always true for PM model, only true after scan for MB
+                if (model == ModelPM || antMove) {
                     // Move ant forward by snapshot distance
                     antX += Parameters::snapshotDistance * sin(antHeading * degreesToRadians);
                     antY += Parameters::snapshotDistance * cos(antHeading * degreesToRadians);
 
-                    replay << antX << "," << antY << std::endl;
+                    replay << antX << "," << antY << "," << antHeading << std::endl;
 
                     // If we've reached destination, reset state to idle
                     if(route.atDestination(antX, antY, Parameters::errorDistance)) {
@@ -760,6 +798,8 @@ int main(int argc, char *argv[])
 
                         // If we are further away than error threshold
                         if(distanceToRoute > Parameters::errorDistance) {
+                            cout << "\tRESETTING ANT'S POSITION" << endl;
+
                             // Snap ant to next snapshot position
                             // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
                             std::tie(antX, antY, antHeading) = route.getNextSnapshotPosition(nearestRouteSegment);
@@ -767,11 +807,14 @@ int main(int argc, char *argv[])
                             // Increment error counter
                             numErrors++;
                         }
-
-                        // Reset scan
-                        antHeading -= halfScanAngle;
-                        testingScan = 0;
-                        bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+                        
+                        // This only needs to be done for MB model
+                        if (model == ModelMB) {
+                            // Reset scan
+                            antHeading -= halfScanAngle;
+                            testingScan = 0;
+                            bestTestENSpikes = std::numeric_limits<unsigned int>::max();
+                        }
 
                         // Take snapshot
                         testSnapshot = true;
@@ -812,8 +855,8 @@ int main(int argc, char *argv[])
                 }
             }
         }
-        // Otherwise just show EN spike count for debugging purposes
-        else if(gennIdle && gennResult.valid()) {
+        // Otherwise just show EN spike count for debugging purposes 
+        else if(model == ModelMB && gennIdle && gennResult.valid()) {
             std::cout << "\t" << gennResult.get() << " EN spikes" << std::endl;
         }
 
@@ -849,9 +892,19 @@ int main(int argc, char *argv[])
             unsigned int finalSnapshotStep;
             std::tie(finalSnapshotData, finalSnapshotStep) = snapshotProcessor.process(snapshot);
 
-            // Start simulation, applying reward if we are training
-            gennResult = std::async(std::launch::async, presentToMB,
-                                    finalSnapshotData, finalSnapshotStep, trainSnapshot);
+            // using perfect memory model
+            if (model == ModelPM) {
+                if (trainSnapshot)
+                    pm.addSnapshot(snapshotProcessor.m_FinalSnapshot);
+                else
+                    pm.getHeading(snapshotProcessor.m_FinalSnapshot, res);
+            }
+            // using mushroom body model
+            else {
+                // Start simulation, applying reward if we are training
+                gennResult = std::async(std::launch::async, presentToMB,
+                                        finalSnapshotData, finalSnapshotStep, trainSnapshot);
+            }
         }
 
         // Poll for and process events

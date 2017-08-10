@@ -1,5 +1,5 @@
 EXECUTABLE      := ant_world
-SOURCES         := ant_world.cc render_mesh.cc route.cc snapshot_processor.cc world.cc $(GENN_PATH)/userproject/include/GeNNHelperKrnls.cu
+SOURCES         := ant_world.cc render_mesh.cc route.cc snapshot_processor.cc perfect_memory.cc world.cc $(GENN_PATH)/userproject/include/GeNNHelperKrnls.cu
 LINK_FLAGS      := -lglfw -lGL -lGLU -lGLEW  -lopencv_core -lopencv_imgcodecs -lopencv_imgproc
 CXXFLAGS        := -pthread -Wall -Wpedantic -Wextra
 
