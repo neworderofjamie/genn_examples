@@ -516,7 +516,7 @@ int main(int argc, char *argv[])
     // **NOTE** this matches the matlab:
     // hfov = hfov/180/2*pi;
     // axis([0 14 -hfov hfov -pi/12 pi/3]);
-    RenderMesh renderMesh(296.0f, 75.0f, 15.0f,
+    RenderMesh renderMesh(360.0f, 75.0f, 15.0f,
                           40, 10);
 
     // Create FBO for rendering to cubemap and bind
