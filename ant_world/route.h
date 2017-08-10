@@ -16,8 +16,8 @@
 class Route
 {
 public:
-    Route(float arrowLength);
-    Route(float arrowLength, const std::string &filename, double waypointDistance);
+    Route(float arrowLength, unsigned int maxRouteEntries);
+    Route(float arrowLength, unsigned int maxRouteEntries, const std::string &filename, double waypointDistance);
     ~Route();
 
     //------------------------------------------------------------------------
@@ -29,6 +29,7 @@ public:
     bool atDestination(float x, float y, float threshold) const;
     std::tuple<float, size_t> getDistanceToRoute(float x, float y) const;
     void setWaypointFamiliarity(size_t pos, double familiarity);
+    void addPoint(float x, float y, bool error);
 
     size_t size() const{ return m_Waypoints.size(); }
 
@@ -44,6 +45,12 @@ private:
     GLuint m_WaypointsVAO;
     GLuint m_WaypointsPositionVBO;
     GLuint m_WaypointsColourVBO;
+
+    GLuint m_RouteVAO;
+    GLuint m_RoutePositionVBO;
+    GLuint m_RouteColourVBO;
+    unsigned int m_RouteNumPoints;
+    const unsigned int m_RouteMaxPoints;
 
     std::vector<std::array<float, 2>> m_Waypoints;
     std::set<size_t> m_TrainedSnapshots;

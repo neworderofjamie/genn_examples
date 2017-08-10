@@ -31,7 +31,9 @@ float distanceSquared(float x1, float y1, float x2, float y2)
 //----------------------------------------------------------------------------
 // Route
 //----------------------------------------------------------------------------
-Route::Route(float arrowLength) : m_WaypointsVAO(0), m_WaypointsPositionVBO(0), m_WaypointsColourVBO(0),
+Route::Route(float arrowLength, unsigned int maxRouteEntries)
+    : m_WaypointsVAO(0), m_WaypointsPositionVBO(0), m_WaypointsColourVBO(0),
+    m_RouteVAO(0), m_RoutePositionVBO(0), m_RouteColourVBO(0), m_RouteNumPoints(0), m_RouteMaxPoints(maxRouteEntries),
     m_OverlayVAO(0), m_OverlayPositionVBO(0), m_OverlayColoursVBO(0)
 {
     const GLfloat arrowPositions[] = {
@@ -69,9 +71,37 @@ Route::Route(float arrowLength) : m_WaypointsVAO(0), m_WaypointsPositionVBO(0), 
     // Set colour pointer and enable client state in VAO
     glColorPointer(3, GL_FLOAT, 0, BUFFER_OFFSET(0));
     glEnableClientState(GL_COLOR_ARRAY);
+
+
+    // Create a vertex array object to bind everything together
+    glGenVertexArrays(1, &m_RouteVAO);
+
+    // Generate vertex buffer objects for positions and colours
+    glGenBuffers(1, &m_RoutePositionVBO);
+    glGenBuffers(1, &m_RouteColourVBO);
+
+    // Bind vertex array
+    glBindVertexArray(m_RouteVAO);
+
+    // Bind and upload positions buffer
+    glBindBuffer(GL_ARRAY_BUFFER, m_RoutePositionVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 2 * maxRouteEntries, nullptr, GL_DYNAMIC_DRAW);
+
+    // Set vertex pointer to stride over angles and enable client state in VAO
+    glVertexPointer(2, GL_FLOAT, 0, BUFFER_OFFSET(0));
+    glEnableClientState(GL_VERTEX_ARRAY);
+
+     // Bind and upload colours buffer
+    glBindBuffer(GL_ARRAY_BUFFER, m_RouteColourVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(uint8_t) * 2 * maxRouteEntries, nullptr, GL_DYNAMIC_DRAW);
+
+    // Set colour pointer and enable client state in VAO
+    glColorPointer(3, GL_UNSIGNED_BYTE, 0, BUFFER_OFFSET(0));
+    glEnableClientState(GL_COLOR_ARRAY);
 }
 //----------------------------------------------------------------------------
-Route::Route(float arrowLength, const std::string &filename, double waypointDistance) : Route(arrowLength)
+Route::Route(float arrowLength, unsigned int maxRouteEntries, const std::string &filename, double waypointDistance)
+    : Route(arrowLength, maxRouteEntries)
 {
     if(!load(filename, waypointDistance)) {
         throw std::runtime_error("Cannot load route");
@@ -80,10 +110,15 @@ Route::Route(float arrowLength, const std::string &filename, double waypointDist
 //----------------------------------------------------------------------------
 Route::~Route()
 {
-    // Delete route objects
+    // Delete waypoint objects
     glDeleteBuffers(1, &m_WaypointsPositionVBO);
     glDeleteVertexArrays(1, &m_WaypointsColourVBO);
     glDeleteVertexArrays(1, &m_WaypointsVAO);
+
+    // Delete route objects
+    glDeleteBuffers(1, &m_RoutePositionVBO);
+    glDeleteVertexArrays(1, &m_RouteColourVBO);
+    glDeleteVertexArrays(1, &m_RouteVAO);
 
     // Delete overlay objects
     glDeleteBuffers(1, &m_OverlayPositionVBO);
@@ -179,7 +214,7 @@ bool Route::load(const std::string &filename, double waypointDistance)
         // Bind and upload zeros to colour buffer
         std::vector<uint8_t> colours(m_Waypoints.size() * 3, 0);
         glBindBuffer(GL_ARRAY_BUFFER, m_WaypointsColourVBO);
-        glBufferData(GL_ARRAY_BUFFER, m_Waypoints.size() * sizeof(uint8_t) * 3, colours.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, m_Waypoints.size() * sizeof(uint8_t) * 3, colours.data(), GL_DYNAMIC_DRAW);
 
         // Set colour pointer and enable client state in VAO
         glColorPointer(3, GL_UNSIGNED_BYTE, 0, BUFFER_OFFSET(0));
@@ -197,12 +232,20 @@ void Route::render(float antX, float antY, float antHeading) const
     glTranslatef(0.0f, 0.0f, 0.1f);
     glDrawArrays(GL_POINTS, 0, m_Waypoints.size());
 
+    // If there are any route points, bind
+    if(m_RouteNumPoints > 0) {
+        glBindVertexArray(m_RouteVAO);
+
+        glDrawArrays(GL_LINE_STRIP, 0, m_RouteNumPoints);
+    }
+
     glBindVertexArray(m_OverlayVAO);
 
     glTranslatef(antX, antY, 0.1f);
     glRotatef(-antHeading, 0.0f, 0.0f, 1.0f);
     glDrawArrays(GL_LINES, 0, 2);
     glPopMatrix();
+
 }
 //----------------------------------------------------------------------------
 bool Route::atDestination(float x, float y, float threshold) const
@@ -277,6 +320,26 @@ void Route::setWaypointFamiliarity(size_t pos, double familiarity)
     glBindBuffer(GL_ARRAY_BUFFER, m_WaypointsColourVBO);
     glBufferSubData(GL_ARRAY_BUFFER, pos * sizeof(uint8_t) * 3, sizeof(uint8_t) * 3, colour);
 
+}
+//----------------------------------------------------------------------------
+void Route::addPoint(float x, float y, bool error)
+{
+    const static uint8_t errorColour[3] = {0xFF, 0, 0};
+    const static uint8_t correctColour[3] = {0, 0xFF, 0};
+
+    const float position[2] = {x, y};
+
+    // Update this positions colour in colour buffer
+    glBindBuffer(GL_ARRAY_BUFFER, m_RouteColourVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, m_RouteNumPoints * sizeof(uint8_t) * 3,
+                    sizeof(uint8_t) * 3, error ? errorColour : correctColour);
+
+    // Update this positions colour in colour buffer
+    glBindBuffer(GL_ARRAY_BUFFER, m_RoutePositionVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, m_RouteNumPoints * sizeof(float) * 2,
+                    sizeof(float) * 2, position);
+
+    m_RouteNumPoints++;
 }
 //----------------------------------------------------------------------------
 std::tuple<float, float, float> Route::operator[](size_t pos) const

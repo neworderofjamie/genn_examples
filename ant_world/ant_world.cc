@@ -539,7 +539,7 @@ int main(int argc, char *argv[])
     glfwSetKeyCallback(window, keyCallback);
 
     // Create route object and load route file specified by command line
-    Route route(0.2f);
+    Route route(0.2f, 800);
     if(argc > 1) {
         route.load(argv[1], Parameters::snapshotDistance);
     }
@@ -636,8 +636,6 @@ int main(int argc, char *argv[])
 
     // When random walking, distribution of angles to turn by
     std::uniform_real_distribution<float> randomAngleOffset(-halfScanAngle, halfScanAngle);
-
-    std::ofstream replay("test.csv");
 
     std::ofstream spin;
 
@@ -737,6 +735,9 @@ int main(int argc, char *argv[])
                     std::tie(antX, antY, antHeading) = route[0];
                     antHeading -= halfScanAngle;
 
+                    // Add initial replay point to route
+                    route.addPoint(antX, antY, false);
+
                     // Reset scan
                     testingScan = 0;
                     bestTestENSpikes = std::numeric_limits<unsigned int>::max();
@@ -782,12 +783,15 @@ int main(int argc, char *argv[])
                     antX += Parameters::snapshotDistance * sin(antHeading * degreesToRadians);
                     antY += Parameters::snapshotDistance * cos(antHeading * degreesToRadians);
 
-                    replay << antX << "," << antY << std::endl;
-
-                    // If we've reached destination, reset state to idle
+                    // If we've reached destination
                     if(route.atDestination(antX, antY, Parameters::errorDistance)) {
                         std::cout << "Destination reached with " << numErrors << " errors" << std::endl;
+
+                        // Reset state to idle
                         state = State::Idle;
+
+                        // Add final point to route
+                        route.addPoint(antX, antY, false);
                     }
                     // Otherwise
                     else {
@@ -803,8 +807,15 @@ int main(int argc, char *argv[])
                             // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
                             std::tie(antX, antY, antHeading) = route[nearestRouteSegment + 1];
 
+                            // Add error point to route
+                            route.addPoint(antX, antY, true);
+
                             // Increment error counter
                             numErrors++;
+                        }
+                        // Otherwise add 'correct' point to route
+                        else {
+                            route.addPoint(antX, antY, false);
                         }
 
                         // Reset scan
@@ -826,12 +837,15 @@ int main(int argc, char *argv[])
             antX += Parameters::snapshotDistance * sin(antHeading * degreesToRadians);
             antY += Parameters::snapshotDistance * cos(antHeading * degreesToRadians);
 
-            //replay << antX << "," << antY << std::endl;
-
-            // If we've reached destination, reset state to idle
+            // If we've reached destination
             if(route.atDestination(antX, antY, Parameters::errorDistance)) {
                 std::cout << "Destination reached with " << numErrors << " errors" << std::endl;
+
+                // Reset state to idle
                 state = State::Idle;
+
+                // Add final point to route
+                route.addPoint(antX, antY, false);
             }
             // Otherwise
             else {
@@ -846,8 +860,15 @@ int main(int argc, char *argv[])
                     // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
                     std::tie(antX, antY, antHeading) = route[nearestRouteSegment + 1];
 
+                    // Add error point to route
+                    route.addPoint(antX, antY, true);
+
                     // Increment error counter
                     numErrors++;
+                }
+                // Otherwise add 'correct' point to route
+                else {
+                    route.addPoint(antX, antY, false);
                 }
             }
         }
