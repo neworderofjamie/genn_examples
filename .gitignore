@@ -1,3 +1,6 @@
+# Ignore temporary files
+*~
+
 # Ignore object files
 **/*.o
 **/*.obj
