@@ -30,7 +30,7 @@ public:
     std::tuple<float, size_t> getDistanceToRoute(float x, float y) const;
     void setWaypointFamiliarity(size_t pos, double familiarity);
 
-    size_t size() const{ return m_Route.size(); }
+    size_t size() const{ return m_Waypoints.size(); }
 
     //------------------------------------------------------------------------
     // Operators
@@ -41,11 +41,11 @@ private:
     //------------------------------------------------------------------------
     // Members
     //------------------------------------------------------------------------
-    GLuint m_RouteVAO;
-    GLuint m_RoutePositionVBO;
-    GLuint m_RouteColoursVBO;
+    GLuint m_WaypointsVAO;
+    GLuint m_WaypointsPositionVBO;
+    GLuint m_WaypointsColourVBO;
 
-    std::vector<std::array<float, 2>> m_Route;
+    std::vector<std::array<float, 2>> m_Waypoints;
     std::set<size_t> m_TrainedSnapshots;
 
     GLuint m_OverlayVAO;
