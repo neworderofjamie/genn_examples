@@ -377,7 +377,7 @@ std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputDat
 
     // Open CSV output files
 #ifdef RECORD_SPIKES
-    const unsigned long long startTimestep = iT;
+    const float startTimeMs = t;
     SpikeCSVRecorder pnSpikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
     SpikeCSVRecorder kcSpikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
     SpikeCSVRecorder enSpikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
@@ -454,10 +454,31 @@ std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputDat
         numENSpikes += spikeCount_EN;
 #ifdef RECORD_SPIKES
         // Record spikes
-        pnSpikes.record(iT - startTimestep);
-        kcSpikes.record(iT - startTimestep);
-        enSpikes.record(iT - startTimestep);
+        pnSpikes.record(t - startTimeMs);
+        kcSpikes.record(t - startTimeMs);
+        enSpikes.record(t - startTimeMs);
 #endif  // RECORD_SPIKES
+    }
+
+#ifdef RECORD_TERMINAL_SYNAPSE_STATE
+    // Download synaptic state
+    pullkcToENStateFromDevice();
+
+    std::ofstream terminalStream("terminal_synaptic_state.csv");
+    terminalStream << "Weight, Eligibility" << std::endl;
+    for(unsigned int s = 0; s < Parameters::numKC * Parameters::numEN; s++) {
+        terminalStream << gkcToEN[s] << "," << ckcToEN[s] * std::exp(-(t - tCkcToEN[s]) / 40.0) << std::endl;
+    }
+    std::cout << "Final dopamine level:" << dkcToEN * std::exp(-(t - tDkcToEN) / Parameters::tauD) << std::endl;
+#endif  // RECORD_TERMINAL_SYNAPSE_STATE
+
+    if(reward) {
+        constexpr unsigned int numWeights = Parameters::numKC * Parameters::numEN;
+
+        CHECK_CUDA_ERRORS(cudaMemcpy(gkcToEN, d_gkcToEN, numWeights * sizeof(scalar), cudaMemcpyDeviceToHost));
+
+        unsigned int numUsedWeights = std::count(&gkcToEN[0], &gkcToEN[numWeights], 0.0f);
+        std::cout << "\t" << numWeights - numUsedWeights << " unused weights" << std::endl;
     }
 
     return std::make_tuple(numPNSpikes, numKCSpikes, numENSpikes);
@@ -507,7 +528,8 @@ int main(int argc, char *argv[])
     // Set clear colour to match matlab and enable depth test
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
-    glLineWidth(4.0f);
+    glLineWidth(4.0);
+    glPointSize(4.0);
 
     // Create key bitset and setc it as window user pointer
     KeyBitset keybits;
@@ -519,7 +541,7 @@ int main(int argc, char *argv[])
     // Create route object and load route file specified by command line
     Route route(0.2f);
     if(argc > 1) {
-        route.load(argv[1]);
+        route.load(argv[1], Parameters::snapshotDistance);
     }
 
     // Load world into OpenGL
@@ -591,17 +613,13 @@ int main(int argc, char *argv[])
     float antY = 5.0f;
     float antHeading = 270.0f;
     if(route.size() > 0) {
-        antX = route[0][0];
-        antY = route[0][1];
-        antHeading = route[0][2];
+        std::tie(antX, antY, antHeading) = route[0];
     }
 
     // If a route is loaded, start in training mode, otherwise idle
     State state = (route.size() > 0) ? State::Training : State::Idle;
     //State state = State::RandomWalk;
 
-    unsigned int numSnapshots = 0;
-    float distanceSinceLastPoint = 0.0f;
     unsigned int trainPoint = 0;
 
     unsigned int testingScan = 0;
@@ -661,9 +679,14 @@ int main(int argc, char *argv[])
             antY -= antMoveSpeed * cos(antHeading * degreesToRadians);
         }
         if(keybits.test(KeyReset)) {
-            antHeading = route[0][2];
-            antX = route[0][0];
-            antY = route[0][1];
+            if(route.size() > 0) {
+                std::tie(antX, antY, antHeading) = route[0];
+            }
+            else {
+                antX = 5.0f;
+                antY = 5.0f;
+                antHeading = 270.0f;
+            }
         }
         if(keybits.test(KeySpin) && state == State::Idle) {
             trainSnapshot = true;
@@ -680,54 +703,39 @@ int main(int argc, char *argv[])
 
         // If we're training
         if(state == State::Training) {
+            // If results from previous training snapshot are available, mark them on route
+            if(resultsAvailable) {
+                route.setWaypointFamiliarity(trainPoint - 1,
+                                             (double)numENSpikes / 20.0);
+            }
+
+            // If GeNN is free to process next snapshot
             if(readyForNextSnapshot) {
                 // If GeNN isn't training and we have more route points to train
                 if(trainPoint < route.size()) {
-                    // Snap ant to next route point
-                    antX = route[trainPoint][0];
-                    antY = route[trainPoint][1];
-                    antHeading = route[trainPoint][2];
+                    // Snap ant to next snapshot point
+                    std::tie(antX, antY, antHeading) = route[trainPoint];
 
-                    // If this isn't the first point
-                    if(trainPoint > 0) {
-                        // Calculate distance from last point
-                        const float deltaX = antX - route[trainPoint - 1][0];
-                        const float deltaY = antY - route[trainPoint - 1][1];
-                        const float distance = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));
+                    // Update window title
+                    std::string windowTitle = "Ant World - Training snaphot " + std::to_string(trainPoint) + "/" + std::to_string(route.size());
+                    glfwSetWindowTitle(window, windowTitle.c_str());
 
-                        // Add to total
-                        distanceSinceLastPoint += distance;
-                    }
-
-                    // If this is the first point or we've gone further than snapshot distance
-                    if(trainPoint == 0 || distanceSinceLastPoint > Parameters::snapshotDistance) {
-                        // Record where snapshot was taken in route
-                        route.markTrainedSnapshot(trainPoint);
-
-                        // Set flag to train this snapshot
-                        trainSnapshot = true;
-
-                        // Count snapshots
-                        numSnapshots++;
-
-                        // Reset counter
-                        distanceSinceLastPoint = 0.0f;
-                    }
+                    // Set flag to train this snapshot
+                    trainSnapshot = true;
 
                     // Go onto next training point
                     trainPoint++;
                 }
                 // Otherwise, if we've reached end of route
                 else {
-                    std::cout << "Training complete (" << numSnapshots << " snapshots)" << std::endl;
+                    std::cout << "Training complete (" << route.size() << " snapshots)" << std::endl;
 
                     // Go to testing state
                     state = State::Testing;
 
                     // Snap ant back to start of route, facing in starting scan direction
-                    antX = route[0][0];
-                    antY = route[0][1];
-                    antHeading = route[0][2] - halfScanAngle;
+                    std::tie(antX, antY, antHeading) = route[0];
+                    antHeading -= halfScanAngle;
 
                     // Reset scan
                     testingScan = 0;
@@ -748,6 +756,10 @@ int main(int argc, char *argv[])
 
                     std::cout << "\tUpdated result: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
                 }
+
+                // Update window title
+                std::string windowTitle = "Ant World - Testing with " + std::to_string(numErrors) + " errors";
+                glfwSetWindowTitle(window, windowTitle.c_str());
 
                 // Go onto next scan
                 testingScan++;
@@ -789,7 +801,7 @@ int main(int argc, char *argv[])
                         if(distanceToRoute > Parameters::errorDistance) {
                             // Snap ant to next snapshot position
                             // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
-                            std::tie(antX, antY, antHeading) = route.getNextSnapshotPosition(nearestRouteSegment);
+                            std::tie(antX, antY, antHeading) = route[nearestRouteSegment + 1];
 
                             // Increment error counter
                             numErrors++;
@@ -832,7 +844,7 @@ int main(int argc, char *argv[])
                 if(distanceToRoute > Parameters::errorDistance) {
                     // Snap ant to next snapshot position
                     // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
-                    std::tie(antX, antY, antHeading) = route.getNextSnapshotPosition(nearestRouteSegment);
+                    std::tie(antX, antY, antHeading) = route[nearestRouteSegment + 1];
 
                     // Increment error counter
                     numErrors++;

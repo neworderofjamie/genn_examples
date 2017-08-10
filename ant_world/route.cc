@@ -12,7 +12,7 @@
 // Antworld includes
 #include "common.h"
 
-//----------------------------------------------------------------------------
+// //----------------------------------------------------------------------------
 // Anonymous namespace
 //----------------------------------------------------------------------------
 namespace
@@ -31,7 +31,7 @@ float distanceSquared(float x1, float y1, float x2, float y2)
 //----------------------------------------------------------------------------
 // Route
 //----------------------------------------------------------------------------
-Route::Route(float arrowLength) : m_RouteVAO(0), m_RoutePositionVBO(0),
+Route::Route(float arrowLength) : m_RouteVAO(0), m_RoutePositionVBO(0), m_RouteColoursVBO(0),
     m_OverlayVAO(0), m_OverlayPositionVBO(0), m_OverlayColoursVBO(0)
 {
     const GLfloat arrowPositions[] = {
@@ -71,9 +71,9 @@ Route::Route(float arrowLength) : m_RouteVAO(0), m_RoutePositionVBO(0),
     glEnableClientState(GL_COLOR_ARRAY);
 }
 //----------------------------------------------------------------------------
-Route::Route(float arrowLength, const std::string &filename) : Route(arrowLength)
+Route::Route(float arrowLength, const std::string &filename, double waypointDistance) : Route(arrowLength)
 {
-    if(!load(filename)) {
+    if(!load(filename, waypointDistance)) {
         throw std::runtime_error("Cannot load route");
     }
 }
@@ -82,6 +82,7 @@ Route::~Route()
 {
     // Delete route objects
     glDeleteBuffers(1, &m_RoutePositionVBO);
+    glDeleteVertexArrays(1, &m_RouteColoursVBO);
     glDeleteVertexArrays(1, &m_RouteVAO);
 
     // Delete overlay objects
@@ -90,7 +91,7 @@ Route::~Route()
     glDeleteVertexArrays(1, &m_OverlayVAO);
 }
 //----------------------------------------------------------------------------
-bool Route::load(const std::string &filename)
+bool Route::load(const std::string &filename, double waypointDistance)
 {
     // Open file for binary IO
     std::ifstream input(filename, std::ios::binary);
@@ -105,23 +106,53 @@ bool Route::load(const std::string &filename)
     input.seekg(0);
     std::cout << "Route has " << numPoints << " points" << std::endl;
 
-    // Resize route
-    m_Route.resize(numPoints);
+    {
+        // Loop through components(X and Y, ignoring heading)
+        std::vector<std::array<float, 2>> fullRoute(numPoints);
+        for(unsigned int c = 0; c < 2; c++) {
+            // Loop through points on path
+            for(unsigned int i = 0; i < numPoints; i++) {
+                // Read point component
+                double pointPosition;
+                input.read(reinterpret_cast<char*>(&pointPosition), sizeof(double));
 
-    // Loop through components(X, Y and heading)
-    for(unsigned int c = 0; c < 3; c++) {
-        // Loop through points on path
-        for(unsigned int i = 0; i < numPoints; i++) {
-            // Read point component
-            double pointPosition;
-            input.read(reinterpret_cast<char*>(&pointPosition), sizeof(double));
-
-            // Convert to float, scale and insert into route
-            if(c == 2) {
-                m_Route[i][c] = 90.0f - (float)pointPosition;
+                // Convert to float, scale to metres and insert into route
+                fullRoute[i][c] = (float)pointPosition * (1.0f / 100.0f);
             }
-            else {
-                m_Route[i][c] = (float)pointPosition * (1.0f / 100.0f);
+        }
+
+        // Reservve approximately correctly sized vector for waypoints
+        m_Route.reserve(numPoints / 10);
+
+        // Loop through points in full pat
+        float lastX;
+        float lastY;
+        float distanceSinceLastPoint = 0.0f;
+        for(unsigned int i = 0; i < numPoints; i++)
+        {
+            // If this isn't the first point
+            const auto &p = fullRoute[i];
+            if(i > 0) {
+                // Calcualte distance to last point
+                const float deltaX = p[0] - lastX;
+                const float deltaY = p[1] - lastY;
+                const float distance = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));
+
+                // Add to total
+                distanceSinceLastPoint += distance;
+            }
+
+            // Update last point
+            lastX = p[0];
+            lastY = p[1];
+
+            // If this is either the first point or we've gone over the waypoint distance
+            if(i == 0 || distanceSinceLastPoint > waypointDistance) {
+                // Add point to route
+                m_Route.push_back(p);
+
+                // Reset counter
+                distanceSinceLastPoint = 0.0f;
             }
         }
     }
@@ -129,21 +160,31 @@ bool Route::load(const std::string &filename)
     // Create a vertex array object to bind everything together
     glGenVertexArrays(1, &m_RouteVAO);
 
-    // Generate vertex buffer objects for positions
+    // Generate vertex buffer objects for positions and colours
     glGenBuffers(1, &m_RoutePositionVBO);
+    glGenBuffers(1, &m_RouteColoursVBO);
 
     // Bind vertex array
     glBindVertexArray(m_RouteVAO);
 
     // Bind and upload positions buffer
-    // **NOTE** we're not actually going to be rendering the 3rd component as it's an angle not a z-coordinate
     glBindBuffer(GL_ARRAY_BUFFER, m_RoutePositionVBO);
-    glBufferData(GL_ARRAY_BUFFER, m_Route.size() * sizeof(GLfloat) * 3, m_Route.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, m_Route.size() * sizeof(GLfloat) * 2, m_Route.data(), GL_STATIC_DRAW);
 
-    // Set vertex pointer to stride over angles and enable client state in VAO
-    glVertexPointer(2, GL_FLOAT, 3 * sizeof(float), BUFFER_OFFSET(0));
+    // Set vertex pointer and enable client state in VAO
+    glVertexPointer(2, GL_FLOAT, 0, BUFFER_OFFSET(0));
     glEnableClientState(GL_VERTEX_ARRAY);
 
+    {
+        // Bind and upload zeros to colour buffer
+        std::vector<uint8_t> colours(m_Route.size() * 3, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, m_RouteColoursVBO);
+        glBufferData(GL_ARRAY_BUFFER, m_Route.size() * sizeof(uint8_t) * 3, colours.data(), GL_STATIC_DRAW);
+
+        // Set colour pointer and enable client state in VAO
+        glColorPointer(3, GL_UNSIGNED_BYTE, 0, BUFFER_OFFSET(0));
+        glEnableClientState(GL_COLOR_ARRAY);
+    }
     return true;
 }
 //----------------------------------------------------------------------------
@@ -154,7 +195,7 @@ void Route::render(float antX, float antY, float antHeading) const
 
     glPushMatrix();
     glTranslatef(0.0f, 0.0f, 0.1f);
-    glDrawArrays(GL_LINE_STRIP, 0, m_Route.size());
+    glDrawArrays(GL_POINTS, 0, m_Route.size());
 
     glBindVertexArray(m_OverlayVAO);
 
@@ -226,12 +267,33 @@ std::tuple<float, size_t> Route::getDistanceToRoute(float x, float y) const
     return std::make_tuple(sqrt(minimumDistanceSquared), nearestSegment);
 }
 //----------------------------------------------------------------------------
-std::tuple<float, float, float> Route::getNextSnapshotPosition(size_t segment) const
+void Route::setWaypointFamiliarity(size_t pos, double familiarity)
 {
-    // Search for next snapshot after segment
-    auto nextSnapshot = m_TrainedSnapshots.upper_bound(segment);
+    // Convert familiarity to a grayscale colour
+    const uint8_t intensity = (uint8_t)std::min(255.0, std::max(0.0, std::round(255.0 * familiarity)));
+    const uint8_t colour[3] = {intensity, intensity, intensity};
 
-    // If there are none, use the end of the segment otherwise use the position of the next snapshot
-    const auto &waypoint = (nextSnapshot == m_TrainedSnapshots.end()) ? m_Route[segment + 1] :  m_Route[*nextSnapshot];
-    return std::make_tuple(waypoint[0], waypoint[1], waypoint[2]);
+    // Update this positions colour in colour buffer
+    glBindBuffer(GL_ARRAY_BUFFER, m_RouteColoursVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, pos * sizeof(uint8_t) * 3, sizeof(uint8_t) * 3, colour);
+
+}
+//----------------------------------------------------------------------------
+std::tuple<float, float, float> Route::operator[](size_t pos) const
+{
+    const float x = m_Route[pos][0];
+    const float y = m_Route[pos][1];
+
+    if(pos < (m_Route.size() - 1)) {
+        const float nextX = m_Route[pos + 1][0];
+        const float nextY = m_Route[pos + 1][1];
+
+        const float deltaX = nextX - x;
+        const float deltaY = nextY - y;
+
+        return std::make_tuple(x, y, 90.0 + (radiansToDegrees * atan2(-deltaY, deltaX)));
+    }
+    else {
+        return std::make_tuple(x, y, 0.0f);
+    }
 }
