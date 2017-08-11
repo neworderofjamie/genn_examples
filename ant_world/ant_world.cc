@@ -80,6 +80,8 @@ enum class State
     Training,
     Testing,
     RandomWalk,
+    SpinningTrain,
+    SpinningTest,
     Idle,
 };
 
@@ -92,6 +94,7 @@ enum Key
     KeyDown,
     KeyTrainSnapshot,
     KeyTestSnapshot,
+    KeySpin,
     KeyReset,
     KeyMax
 };
@@ -148,6 +151,10 @@ void keyCallback(GLFWwindow *window, int key, int, int action, int)
 
         case GLFW_KEY_R:
             keybits->set(KeyReset, newKeyState);
+            break;
+
+        case GLFW_KEY_S:
+            keybits->set(KeySpin, newKeyState);
             break;
     }
 }
@@ -363,7 +370,7 @@ void initGeNN(std::mt19937 &gen)
     }
 }
 //----------------------------------------------------------------------------
-unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool reward)
+std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputData, unsigned int inputDataStep, bool reward)
 {
     Timer<> timer("\tSimulation:");
 
@@ -378,7 +385,7 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
 
     // Open CSV output files
 #ifdef RECORD_SPIKES
-    const unsigned long long startTimestep = iT;
+    const float startTimeMs = t;
     SpikeCSVRecorder pnSpikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
     SpikeCSVRecorder kcSpikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
     SpikeCSVRecorder enSpikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
@@ -394,6 +401,8 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
     dim3 sGrid(sampleBlkNo, 1);
 
     // Loop through timesteps
+    unsigned int numPNSpikes = 0;
+    unsigned int numKCSpikes = 0;
     unsigned int numENSpikes = 0;
     while(iT < endTimestep)
     {
@@ -425,6 +434,8 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
         pullKCCurrentSpikesFromDevice();
         pullENCurrentSpikesFromDevice();
 #else
+        CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCntPN, d_glbSpkCntPN, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+        CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCntKC, d_glbSpkCntKC, sizeof(unsigned int), cudaMemcpyDeviceToHost));
         CHECK_CUDA_ERRORS(cudaMemcpy(glbSpkCntEN, d_glbSpkCntEN, sizeof(unsigned int), cudaMemcpyDeviceToHost));
 #endif
 #else
@@ -446,16 +457,39 @@ unsigned int presentToMB(float *inputData, unsigned int inputDataStep, bool rewa
             injectDopaminekcToEN = false;
         }
 
+        numPNSpikes += spikeCount_PN;
+        numKCSpikes += spikeCount_KC;
         numENSpikes += spikeCount_EN;
 #ifdef RECORD_SPIKES
         // Record spikes
-        pnSpikes.record(iT - startTimestep);
-        kcSpikes.record(iT - startTimestep);
-        enSpikes.record(iT - startTimestep);
+        pnSpikes.record(t - startTimeMs);
+        kcSpikes.record(t - startTimeMs);
+        enSpikes.record(t - startTimeMs);
 #endif  // RECORD_SPIKES
     }
 
-    return numENSpikes;
+#ifdef RECORD_TERMINAL_SYNAPSE_STATE
+    // Download synaptic state
+    pullkcToENStateFromDevice();
+
+    std::ofstream terminalStream("terminal_synaptic_state.csv");
+    terminalStream << "Weight, Eligibility" << std::endl;
+    for(unsigned int s = 0; s < Parameters::numKC * Parameters::numEN; s++) {
+        terminalStream << gkcToEN[s] << "," << ckcToEN[s] * std::exp(-(t - tCkcToEN[s]) / 40.0) << std::endl;
+    }
+    std::cout << "Final dopamine level:" << dkcToEN * std::exp(-(t - tDkcToEN) / Parameters::tauD) << std::endl;
+#endif  // RECORD_TERMINAL_SYNAPSE_STATE
+
+    if(reward) {
+        constexpr unsigned int numWeights = Parameters::numKC * Parameters::numEN;
+
+        CHECK_CUDA_ERRORS(cudaMemcpy(gkcToEN, d_gkcToEN, numWeights * sizeof(scalar), cudaMemcpyDeviceToHost));
+
+        unsigned int numUsedWeights = std::count(&gkcToEN[0], &gkcToEN[numWeights], 0.0f);
+        std::cout << "\t" << numWeights - numUsedWeights << " unused weights" << std::endl;
+    }
+
+    return std::make_tuple(numPNSpikes, numKCSpikes, numENSpikes);
 }
 //----------------------------------------------------------------------------
 void handleGLFWError(int errorNumber, const char *message)
@@ -502,7 +536,8 @@ int main(int argc, char *argv[])
     // Set clear colour to match matlab and enable depth test
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
-    glLineWidth(4.0f);
+    glLineWidth(4.0);
+    glPointSize(4.0);
 
     // Create key bitset and setc it as window user pointer
     KeyBitset keybits;
@@ -514,13 +549,15 @@ int main(int argc, char *argv[])
     // Create route object
     Route route(0.2f);
     Model model = ModelMB;
+    // If the program is run with the --pm argument we're using the PM model.
+    // Any other params are assumed to be the route file name.
     for (int i = 1; i < argc; i++) {
         // flag to run the program with the perfect memory model
         if (strcmp(argv[i],"--pm") == 0) {
             model = ModelPM;  
         } else {
             // otherwise load route file specified by command line
-            route.load(argv[i]);
+            route.load(argv[i], Parameters::snapshotDistance);
         }
     }
 
@@ -531,6 +568,7 @@ int main(int argc, char *argv[])
     // **NOTE** this matches the matlab:
     // hfov = hfov/180/2*pi;
     // axis([0 14 -hfov hfov -pi/12 pi/3]);
+    // Render full 360 deg views
     RenderMesh renderMesh(360.0f, 75.0f, 15.0f,
                           40, 10);
 
@@ -593,17 +631,13 @@ int main(int argc, char *argv[])
     float antY = 5.0f;
     float antHeading = 270.0f;
     if(route.size() > 0) {
-        antX = route[0][0];
-        antY = route[0][1];
-        antHeading = route[0][2];
+        std::tie(antX, antY, antHeading) = route[0];
     }
 
     // If a route is loaded, start in training mode, otherwise idle
     State state = (route.size() > 0) ? State::Training : State::Idle;
     //State state = State::RandomWalk;
 
-    unsigned int numSnapshots = 0;
-    float distanceSinceLastPoint = 0.0f;
     unsigned int trainPoint = 0;
 
     unsigned int testingScan = 0;
@@ -621,6 +655,7 @@ int main(int argc, char *argv[])
     // Calculate scan parameters
     constexpr double halfScanAngle = Parameters::scanAngle / 2.0;
     constexpr unsigned int numScanSteps = (unsigned int)round(Parameters::scanAngle / Parameters::scanStep);
+    constexpr unsigned int numSpinSteps = (unsigned int)round(Parameters::scanAngle / Parameters::spinStep);
 
     // When random walking, distribution of angles to turn by
     std::uniform_real_distribution<float> randomAngleOffset(-halfScanAngle, halfScanAngle);
@@ -628,15 +663,33 @@ int main(int argc, char *argv[])
     // Log of ant's movements
     std::ofstream replay("test.csv");
 
-    std::future<unsigned int> gennResult;
+    std::ofstream spin;
+
+    std::future<std::tuple<unsigned int, unsigned int, unsigned int>> gennResult;
     while (!glfwWindowShouldClose(window)) {
-        bool trainSnapshot = false;
-        bool testSnapshot = false;
-        
-        // gennIdle defaults to true if using PM model so can be ignored
-        const bool gennIdle = !gennResult.valid() || (gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready);
+        // If there is no valid result (GeNN process has never run), we are ready to take a snapshot
+        // Note: readyForNextSnapshot is always true for PM, so I changed some of the code around here but the logic is still the same - Alex
+        bool readyForNextSnapshot = true;
+        bool resultsAvailable = false;
+        unsigned int numPNSpikes;
+        unsigned int numKCSpikes;
+        unsigned int numENSpikes;
+        if(model == ModelMB && gennResult.valid()) {
+            // GeNN has run and the result is ready for us, s
+            if(gennResult.wait_for(std::chrono::seconds(0)) == future_status::ready) {
+                std::tie(numPNSpikes, numKCSpikes, numENSpikes) = gennResult.get();
+                std::cout << "\t" << numPNSpikes << " PN spikes, " << numKCSpikes << " KC spikes, " << numENSpikes << " EN spikes" << std::endl;
+
+                resultsAvailable = true;
+            }
+            else {
+                readyForNextSnapshot = false;
+            }
+        }
 
         // Update heading and ant position based on keys
+        bool trainSnapshot = false;
+        bool testSnapshot = false;
         if(keybits.test(KeyLeft)) {
             antHeading -= antTurnSpeed;
         }
@@ -652,74 +705,63 @@ int main(int argc, char *argv[])
             antY -= antMoveSpeed * cos(antHeading * degreesToRadians);
         }
         if(keybits.test(KeyReset)) {
-            antHeading = route[0][2];
-            antX = route[0][0];
-            antY = route[0][1];
+            if(route.size() > 0) {
+                std::tie(antX, antY, antHeading) = route[0];
+            }
+            else {
+                antX = 5.0f;
+                antY = 5.0f;
+                antHeading = 270.0f;
+            }
+        }
+        if(keybits.test(KeySpin) && state == State::Idle) {
+            trainSnapshot = true;
+            state = State::SpinningTrain;
         }
 
-        // If GeNN is idle, trigger snapshots if keys are pressed
-        if(gennIdle && keybits.test(KeyTrainSnapshot)) {
+        // If GeNN is ready to handle next snapshot, trigger snapshots if keys are pressed
+        if(readyForNextSnapshot && keybits.test(KeyTrainSnapshot)) {
             trainSnapshot = true;
         }
-        if(gennIdle && keybits.test(KeyTestSnapshot)) {
+        if(readyForNextSnapshot && keybits.test(KeyTestSnapshot)) {
             testSnapshot = true;
         }
 
         // If we're training
         if(state == State::Training) {
-            if(gennIdle) {
-                // If we have just trained a snapshot, show spike count (for tuning purposes)
-                if(gennResult.valid()) {
-                    std::cout << "\t" << gennResult.get() << " EN spikes" << std::endl;
-                }
+            // If results from previous training snapshot are available, mark them on route
+            if(resultsAvailable) {
+                route.setWaypointFamiliarity(trainPoint - 1,
+                                             (double)numENSpikes / 20.0);
+            }
 
+            // If GeNN is free to process next snapshot
+            if(readyForNextSnapshot) {
                 // If GeNN isn't training and we have more route points to train
                 if(trainPoint < route.size()) {
-                    // Snap ant to next route point
-                    antX = route[trainPoint][0];
-                    antY = route[trainPoint][1];
-                    antHeading = route[trainPoint][2];
+                    // Snap ant to next snapshot point
+                    std::tie(antX, antY, antHeading) = route[trainPoint];
 
-                    // If this isn't the first point
-                    if(trainPoint > 0) {
-                        // Calculate distance from last point
-                        const float deltaX = antX - route[trainPoint - 1][0];
-                        const float deltaY = antY - route[trainPoint - 1][1];
-                        const float distance = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));
+                    // Update window title
+                    std::string windowTitle = "Ant World - Training snaphot " + std::to_string(trainPoint) + "/" + std::to_string(route.size());
+                    glfwSetWindowTitle(window, windowTitle.c_str());
 
-                        // Add to total
-                        distanceSinceLastPoint += distance;
-                    }
-
-                    // If this is the first point or we've gone further than snapshot distance
-                    if(trainPoint == 0 || distanceSinceLastPoint > Parameters::snapshotDistance) {
-                        // Record where snapshot was taken in route
-                        route.markTrainedSnapshot(trainPoint);
-
-                        // Set flag to train this snapshot
-                        trainSnapshot = true;
-
-                        // Count snapshots
-                        numSnapshots++;
-
-                        // Reset counter
-                        distanceSinceLastPoint = 0.0f;
-                    }
+                    // Set flag to train this snapshot
+                    trainSnapshot = true;
 
                     // Go onto next training point
                     trainPoint++;
                 }
                 // Otherwise, if we've reached end of route
                 else {
-                    std::cout << "Training complete (" << numSnapshots << " snapshots)" << std::endl;
+                    std::cout << "Training complete (" << route.size() << " snapshots)" << std::endl;
 
                     // Go to testing state
                     state = State::Testing;
 
                     // Snap ant back to start of route, facing in starting scan direction
-                    antX = route[0][0];
-                    antY = route[0][1];
-                    antHeading = route[0][2] - halfScanAngle;
+                    std::tie(antX, antY, antHeading) = route[0];
+                    antHeading -= halfScanAngle;
 
                     // Reset scan
                     testingScan = 0;
@@ -730,26 +772,27 @@ int main(int argc, char *argv[])
                 }
             }
         }
+        // Otherwise, if we're testing
         else if(state == State::Testing) {
-            if (gennIdle) {
+            if (model == ModelPM || resultsAvailable) {
                 // Flag which indicates that the ant's position should be updated.
                 // This is a bad hack until we can find a better way of merging the two models!
                 bool antMove = false;
                 
                 // mushroom body
                 if (model == ModelMB) {
-                                    // If the last snapshot was more familiar than the current best update
-                    const unsigned int numSpikes = gennResult.get();
-                    std::cout << "\t" << numSpikes << " EN spikes" << std::endl;
-
                     // If this is an improvement on previous best spike count
-                    if(numSpikes < bestTestENSpikes) {
+                    if(numENSpikes < bestTestENSpikes) {
                         bestHeading = antHeading;
-                        bestTestENSpikes = numSpikes;
+                        bestTestENSpikes = numENSpikes;
 
                         std::cout << "\tUpdated result: " << bestHeading << " is most familiar heading with " << bestTestENSpikes << " spikes" << std::endl;
                     }
 
+                    // Update window title
+                    std::string windowTitle = "Ant World - Testing with " + std::to_string(numErrors) + " errors";
+                    glfwSetWindowTitle(window, windowTitle.c_str());
+                
                     // Go onto next scan
                     testingScan++;
 
@@ -802,7 +845,7 @@ int main(int argc, char *argv[])
 
                             // Snap ant to next snapshot position
                             // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
-                            std::tie(antX, antY, antHeading) = route.getNextSnapshotPosition(nearestRouteSegment);
+                            std::tie(antX, antY, antHeading) = route[nearestRouteSegment + 1];
 
                             // Increment error counter
                             numErrors++;
@@ -848,16 +891,46 @@ int main(int argc, char *argv[])
                 if(distanceToRoute > Parameters::errorDistance) {
                     // Snap ant to next snapshot position
                     // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
-                    std::tie(antX, antY, antHeading) = route.getNextSnapshotPosition(nearestRouteSegment);
+                    std::tie(antX, antY, antHeading) = route[nearestRouteSegment + 1];
 
                     // Increment error counter
                     numErrors++;
                 }
             }
         }
-        // Otherwise just show EN spike count for debugging purposes 
-        else if(model == ModelMB && gennIdle && gennResult.valid()) {
-            std::cout << "\t" << gennResult.get() << " EN spikes" << std::endl;
+        if(state == State::SpinningTrain) {
+            if(resultsAvailable) {
+                spin.open("spin.csv");
+
+                // Start testing scan
+                state = State::SpinningTest;
+                antHeading -= halfScanAngle;
+                testingScan = 0;
+                testSnapshot = true;
+            }
+        }
+        else if(state == State::SpinningTest) {
+            if(resultsAvailable) {
+                   // Write heading and number of spikes to file
+                spin << antHeading << "," << numENSpikes << std::endl;
+
+                // Go onto next scan
+                testingScan++;
+
+                // If scan isn't complete
+                if(testingScan < numSpinSteps) {
+                    // Scan right
+                    antHeading += Parameters::spinStep;
+
+                    // Take test snapshot
+                    testSnapshot = true;
+                }
+                else {
+                    spin.close();
+
+                    state = State::Idle;
+                }
+            }
         }
 
         // Clear colour and depth buffer
@@ -871,7 +944,6 @@ int main(int argc, char *argv[])
         // Render top-down view at bottom of the screen
         renderTopDownView(antX, antY, antHeading,
                           world, route);
-
 
         // Swap front and back buffers
         glfwSwapBuffers(window);

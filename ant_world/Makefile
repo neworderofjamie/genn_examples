@@ -7,4 +7,8 @@ ifdef RECORD_SPIKES
     CXXFLAGS += -DRECORD_SPIKES
 endif
 
+ifdef RECORD_TERMINAL_SYNAPSE_STATE
+    CXXFLAGS += -DRECORD_TERMINAL_SYNAPSE_STATE
+endif
+
 include $(GENN_PATH)/userproject/include/makefile_common_gnu.mk
