@@ -381,6 +381,9 @@ std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputDat
     SpikeCSVRecorder pnSpikes("pn_spikes.csv", glbSpkCntPN, glbSpkPN);
     SpikeCSVRecorder kcSpikes("kc_spikes.csv", glbSpkCntKC, glbSpkKC);
     SpikeCSVRecorder enSpikes("en_spikes.csv", glbSpkCntEN, glbSpkEN);
+
+    std::bitset<Parameters::numPN> pnSpikeBitset;
+    std::bitset<Parameters::numKC> kcSpikeBitset;
 #endif  // RECORD_SPIKES
 
     // Update input data step
@@ -453,6 +456,13 @@ std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputDat
         numKCSpikes += spikeCount_KC;
         numENSpikes += spikeCount_EN;
 #ifdef RECORD_SPIKES
+        for(unsigned int i = 0; i < spikeCount_PN; i++) {
+            pnSpikeBitset.set(spike_PN[i]);
+        }
+
+        for(unsigned int i = 0; i < spikeCount_KC; i++) {
+            kcSpikeBitset.set(spike_KC[i]);
+        }
         // Record spikes
         pnSpikes.record(t - startTimeMs);
         kcSpikes.record(t - startTimeMs);
@@ -472,6 +482,10 @@ std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputDat
     std::cout << "Final dopamine level:" << dkcToEN * std::exp(-(t - tDkcToEN) / Parameters::tauD) << std::endl;
 #endif  // RECORD_TERMINAL_SYNAPSE_STATE
 
+#ifdef RECORD_SPIKES
+    std::ofstream activeNeuronStream("active_neurons.csv", std::ios_base::app);
+    activeNeuronStream << pnSpikeBitset.count() << "," << kcSpikeBitset.count() << std::endl;
+#endif  // RECORD_SPIKES
     if(reward) {
         constexpr unsigned int numWeights = Parameters::numKC * Parameters::numEN;
 
