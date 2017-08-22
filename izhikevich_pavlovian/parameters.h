@@ -16,7 +16,7 @@ namespace Parameters
     constexpr double recordEndMs = 40.0 * 1000.0;
 
     // How often should outgoing weights from each synapse be recorded
-    constexpr double weightRecordIntervalMs = 10.0 * 1000.0;
+    constexpr double weightRecordIntervalMs = durationMs;//10.0 * 1000.0;
 
     // STDP params
     constexpr double tauD = 200.0;
@@ -24,6 +24,7 @@ namespace Parameters
     // number of cells
     constexpr unsigned int numExcitatory = 800;
     constexpr unsigned int numInhibitory = 200;
+    constexpr unsigned int numCells = numExcitatory + numInhibitory;
 
     // connection probability
     constexpr double probabilityConnection = 0.1;

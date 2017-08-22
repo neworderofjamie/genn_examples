@@ -14,10 +14,17 @@ class Izhikevich : public NeuronModels::Base
 public:
     DECLARE_MODEL(Izhikevich, 4, 3);
 
+#ifndef CPU_ONLY
+    SET_SIM_CODE(
+        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext)+$(Inoise)[$(id)])*DT; //at two times for numerical stability\n"
+        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext)+$(Inoise)[$(id)])*DT;\n"
+        "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n");
+#else
     SET_SIM_CODE(
         "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT; //at two times for numerical stability\n"
         "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT;\n"
         "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n");
+#endif
 
     SET_THRESHOLD_CONDITION_CODE("$(V) >= 30.0");
     SET_RESET_CODE(
@@ -26,6 +33,9 @@ public:
 
     SET_PARAM_NAMES({"a", "b", "c", "d"});
     SET_VARS({{"V","scalar"}, {"U", "scalar"}, {"Iext", "scalar"}});
+#ifndef CPU_ONLY
+    SET_EXTRA_GLOBAL_PARAMS({{"Inoise", "float*"}});
+#endif
 };
 IMPLEMENT_MODEL(Izhikevich);
 
