@@ -484,7 +484,7 @@ std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputDat
 
 #ifdef RECORD_SPIKES
     std::ofstream activeNeuronStream("active_neurons.csv", std::ios_base::app);
-    activeNeuronStream << pnSpikeBitset.count() << "," << kcSpikeBitset.count() << std::endl;
+    activeNeuronStream << pnSpikeBitset.count() << "," << kcSpikeBitset.count() << "," << numENSpikes << std::endl;
 #endif  // RECORD_SPIKES
     if(reward) {
         constexpr unsigned int numWeights = Parameters::numKC * Parameters::numEN;
@@ -540,7 +540,7 @@ int main(int argc, char *argv[])
     glfwSwapInterval(2);
 
     // Set clear colour to match matlab and enable depth test
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glLineWidth(4.0);
     glPointSize(4.0);
