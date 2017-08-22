@@ -26,8 +26,8 @@ std::tuple<float*, unsigned int> SnapshotProcessor::process(const cv::Mat &snaps
     cv::resize(snapshot, m_IntermediateSnapshot,
                cv::Size(m_IntermediateWidth, m_IntermediateHeight));
 
-    // Convert to greyscale
-    cv::cvtColor(m_IntermediateSnapshot, m_IntermediateSnapshotGreyscale, CV_BGR2GRAY);
+    // Extract green channel
+    cv::extractChannel(m_IntermediateSnapshot, m_IntermediateSnapshotGreyscale, 1);
 
     // Invert image
     cv::subtract(255, m_IntermediateSnapshotGreyscale, m_IntermediateSnapshotGreyscale);
