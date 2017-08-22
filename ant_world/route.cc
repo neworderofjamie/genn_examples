@@ -7,6 +7,7 @@
 #include <tuple>
 
 // Standard C++ includes
+#include <cassert>
 #include <cmath>
 
 // Antworld includes
@@ -100,10 +101,10 @@ Route::Route(float arrowLength, unsigned int maxRouteEntries)
     glEnableClientState(GL_COLOR_ARRAY);
 }
 //----------------------------------------------------------------------------
-Route::Route(float arrowLength, unsigned int maxRouteEntries, const std::string &filename, double waypointDistance)
+Route::Route(float arrowLength, unsigned int maxRouteEntries, const std::string &filename)
     : Route(arrowLength, maxRouteEntries)
 {
-    if(!load(filename, waypointDistance)) {
+    if(!load(filename)) {
         throw std::runtime_error("Cannot load route");
     }
 }
@@ -126,7 +127,7 @@ Route::~Route()
     glDeleteVertexArrays(1, &m_OverlayVAO);
 }
 //----------------------------------------------------------------------------
-bool Route::load(const std::string &filename, double waypointDistance)
+bool Route::load(const std::string &filename)
 {
     // Open file for binary IO
     std::ifstream input(filename, std::ios::binary);
@@ -156,40 +157,47 @@ bool Route::load(const std::string &filename, double waypointDistance)
             }
         }
 
-        // Reservve approximately correctly sized vector for waypoints
-        m_Waypoints.reserve(numPoints / 10);
+        // Reserve correctly sized vector for waypoints
+        m_Waypoints.reserve((numPoints / 10) + 1);
 
-        // Loop through points in full pat
-        float lastX;
-        float lastY;
-        float distanceSinceLastPoint = 0.0f;
-        for(unsigned int i = 0; i < numPoints; i++)
+        // Loop through every 10 path points and add waypoint
+        for(unsigned int i = 0; i < numPoints; i += 10)
         {
-            // If this isn't the first point
-            const auto &p = fullRoute[i];
-            if(i > 0) {
-                // Calcualte distance to last point
-                const float deltaX = p[0] - lastX;
-                const float deltaY = p[1] - lastY;
-                const float distance = std::sqrt((deltaX * deltaX) + (deltaY * deltaY));
-
-                // Add to total
-                distanceSinceLastPoint += distance;
-            }
-
-            // Update last point
-            lastX = p[0];
-            lastY = p[1];
-
-            // If this is either the first point or we've gone over the waypoint distance
-            if(i == 0 || distanceSinceLastPoint > waypointDistance) {
-                // Add point to route
-                m_Waypoints.push_back(p);
-
-                // Reset counter
-                distanceSinceLastPoint = 0.0f;
-            }
+            m_Waypoints.push_back(fullRoute[i]);
         }
+    }
+
+    // Reserve headings
+    const unsigned int numSegments = m_Waypoints.size() - 1;
+    m_HeadingDegrees.reserve(numSegments);
+
+    // Loop through route segments
+    for(unsigned int i = 0; i < numSegments; i++) {
+        // Get waypoints at start and end of segment
+        const auto &segmentStart = m_Waypoints[i];
+        const auto &segmentEnd = m_Waypoints[i + 1];
+
+        // Calculate segment heading
+        const float headingDegrees = radiansToDegrees * atan2(segmentStart[1] - segmentEnd[1],
+                                                              segmentEnd[0] - segmentStart[0]);
+
+        // Round to nearest whole number and add to headings array
+        m_HeadingDegrees.push_back(round(headingDegrees * 0.5f) * 2.0f);
+    }
+
+    // Loop through waypoints other than first
+    for(unsigned int i = 1; i < m_Waypoints.size(); i++)
+    {
+        // Get previous and current waypoiny
+        const auto &prevWaypoint = m_Waypoints[i - 1];
+        auto &waypoint = m_Waypoints[i];
+
+        // Convert the segment heading back to radians
+        const float headingRadians = degreesToRadians * m_HeadingDegrees[i - 1];
+
+        // Realign segment to this angle
+        waypoint[0] = prevWaypoint[0] + (0.1f * cos(headingRadians));
+        waypoint[1] = prevWaypoint[1] - (0.1f * sin(headingRadians));
     }
 
     // Create a vertex array object to bind everything together
@@ -264,50 +272,20 @@ std::tuple<float, size_t> Route::getDistanceToRoute(float x, float y) const
 {
     // Loop through segments
     float minimumDistanceSquared = std::numeric_limits<float>::max();
-    size_t nearestSegment;
-    for(unsigned int s = 0; s < (m_Waypoints.size() - 1); s++)
+    size_t nearestWaypoint;
+    for(unsigned int s = 0; s < m_Waypoints.size(); s++)
     {
-        // Get positions of start and end of segment
-        const float startX = m_Waypoints[s][0];
-        const float startY = m_Waypoints[s][1];
-        const float endX = m_Waypoints[s + 1][0];
-        const float endY = m_Waypoints[s + 1][1];
+        const float distanceToWaypointSquared = distanceSquared(x, y, m_Waypoints[s][0], m_Waypoints[s][1]);
 
-        const float segmentLengthSquared = distanceSquared(startX, startY, endX, endY);
-
-        // If segment has no length
-        if(segmentLengthSquared == 0) {
-            // Calculate distance from point to segment start (arbitrary)
-            const float distanceToStartSquared = distanceSquared(startX, startY, x, y);
-
-            // If this is closer than current minimum, update minimum and nearest segment
-            if(distanceToStartSquared < minimumDistanceSquared) {
-                minimumDistanceSquared = distanceToStartSquared;
-                nearestSegment = s;
-            }
-        }
-        else {
-            // Calculate dot product of vector from start of segment and vector along segment and clamp
-            float t = ((x - startX) * (endX - startY) + (y - startY) * (endY - startY)) / segmentLengthSquared;
-            t = std::max(0.0f, std::min(1.0f, t));
-
-            // Use this to project point onto segment
-            const float projX = startX + (t * (endX - startX));
-            const float projY = startY + (t * (endY - startY));
-
-            // Calculate distance from this point to point
-            const float distanceToSegmentSquared = distanceSquared(x, y, projX, projY);
-
-            // If this is closer than current minimum, update minimum and nearest segment
-            if(distanceToSegmentSquared < minimumDistanceSquared) {
-                minimumDistanceSquared = distanceToSegmentSquared;
-                nearestSegment = s;
-            }
+        // If this is closer than current minimum, update minimum and nearest waypoint
+        if(distanceToWaypointSquared < minimumDistanceSquared) {
+            minimumDistanceSquared = distanceToWaypointSquared;
+            nearestWaypoint = s;
         }
     }
 
     // Return the minimum distance to the path and the segment in which this occured
-    return std::make_tuple(sqrt(minimumDistanceSquared), nearestSegment);
+    return std::make_tuple(sqrt(minimumDistanceSquared), nearestWaypoint);
 }
 //----------------------------------------------------------------------------
 void Route::setWaypointFamiliarity(size_t pos, double familiarity)
@@ -342,19 +320,14 @@ void Route::addPoint(float x, float y, bool error)
     m_RouteNumPoints++;
 }
 //----------------------------------------------------------------------------
-std::tuple<float, float, float> Route::operator[](size_t pos) const
+std::tuple<float, float, float> Route::operator[](size_t waypoint) const
 {
-    const float x = m_Waypoints[pos][0];
-    const float y = m_Waypoints[pos][1];
+    const float x = m_Waypoints[waypoint][0];
+    const float y = m_Waypoints[waypoint][1];
 
-    if(pos < (m_Waypoints.size() - 1)) {
-        const float nextX = m_Waypoints[pos + 1][0];
-        const float nextY = m_Waypoints[pos + 1][1];
-
-        const float deltaX = nextX - x;
-        const float deltaY = nextY - y;
-
-        return std::make_tuple(x, y, 90.0 + (radiansToDegrees * atan2(-deltaY, deltaX)));
+    // If this isn't the last waypoint, return the heading of the segment from this waypoint
+    if(waypoint < m_HeadingDegrees.size()) {
+        return std::make_tuple(x, y, 90.0f + m_HeadingDegrees[waypoint]);
     }
     else {
         return std::make_tuple(x, y, 0.0f);

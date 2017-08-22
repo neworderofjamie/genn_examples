@@ -555,7 +555,7 @@ int main(int argc, char *argv[])
     // Create route object and load route file specified by command line
     Route route(0.2f, 800);
     if(argc > 1) {
-        route.load(argv[1], Parameters::snapshotDistance);
+        route.load(argv[1]);
     }
 
     // Load world into OpenGL
@@ -811,15 +811,15 @@ int main(int argc, char *argv[])
                     else {
                         // Calculate distance to route
                         float distanceToRoute;
-                        size_t nearestRouteSegment;
-                        std::tie(distanceToRoute, nearestRouteSegment) = route.getDistanceToRoute(antX, antY);
+                        size_t nearestRouteWaypoint;
+                        std::tie(distanceToRoute, nearestRouteWaypoint) = route.getDistanceToRoute(antX, antY);
                         std::cout << "\tDistance to route: " << distanceToRoute * 100.0f << "cm" << std::endl;
 
                         // If we are further away than error threshold
                         if(distanceToRoute > Parameters::errorDistance) {
                             // Snap ant to next snapshot position
                             // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
-                            std::tie(antX, antY, antHeading) = route[nearestRouteSegment + 1];
+                            std::tie(antX, antY, antHeading) = route[nearestRouteWaypoint + 1];
 
                             // Add error point to route
                             route.addPoint(antX, antY, true);
@@ -865,14 +865,14 @@ int main(int argc, char *argv[])
             else {
                 // Calculate distance to route
                 float distanceToRoute;
-                size_t nearestRouteSegment;
-                std::tie(distanceToRoute, nearestRouteSegment) = route.getDistanceToRoute(antX, antY);
+                size_t nearestRouteWaypoint;
+                std::tie(distanceToRoute, nearestRouteWaypoint) = route.getDistanceToRoute(antX, antY);
 
                 // If we are further away than error threshold
                 if(distanceToRoute > Parameters::errorDistance) {
                     // Snap ant to next snapshot position
                     // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
-                    std::tie(antX, antY, antHeading) = route[nearestRouteSegment + 1];
+                    std::tie(antX, antY, antHeading) = route[nearestRouteWaypoint + 1];
 
                     // Add error point to route
                     route.addPoint(antX, antY, true);

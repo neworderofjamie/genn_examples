@@ -17,13 +17,13 @@ class Route
 {
 public:
     Route(float arrowLength, unsigned int maxRouteEntries);
-    Route(float arrowLength, unsigned int maxRouteEntries, const std::string &filename, double waypointDistance);
+    Route(float arrowLength, unsigned int maxRouteEntries, const std::string &filename);
     ~Route();
 
     //------------------------------------------------------------------------
     // Public API
     //------------------------------------------------------------------------
-    bool load(const std::string &filename, double waypointDistance);
+    bool load(const std::string &filename);
     void render(float antX, float antY, float antHeading) const;
 
     bool atDestination(float x, float y, float threshold) const;
@@ -36,7 +36,7 @@ public:
     //------------------------------------------------------------------------
     // Operators
     //------------------------------------------------------------------------
-    std::tuple<float, float, float> operator[](size_t pos) const;
+    std::tuple<float, float, float> operator[](size_t waypoint) const;
 
 private:
     //------------------------------------------------------------------------
@@ -53,6 +53,7 @@ private:
     const unsigned int m_RouteMaxPoints;
 
     std::vector<std::array<float, 2>> m_Waypoints;
+    std::vector<float> m_HeadingDegrees;
     std::set<size_t> m_TrainedSnapshots;
 
     GLuint m_OverlayVAO;
