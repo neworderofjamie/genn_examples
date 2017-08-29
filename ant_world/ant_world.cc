@@ -28,9 +28,6 @@
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 
-// GeNN includes
-#include "GeNNHelperKrnls.h"
-
 // Common includes
 #include "../common/connectors.h"
 #include "../common/spike_csv_recorder.h"
@@ -68,11 +65,6 @@ constexpr int displayRenderHeight = 76;
 
 constexpr int intermediateSnapshotWidth = 74;
 constexpr int intermediateSnapshowHeight = 19;
-
-constexpr unsigned int numNoiseSources = Parameters::numPN + Parameters::numKC + Parameters::numEN;
-
-curandState *d_RNGState = nullptr;
-scalar *d_Noise = nullptr;
 
 enum class State
 {
@@ -331,24 +323,6 @@ void initGeNN(std::mt19937 &gen)
     }
 
     {
-        Timer<> timer("Configuring on-device RNG:");
-
-        // Allocate device array to hold RNG state
-        CHECK_CUDA_ERRORS(cudaMalloc(&d_RNGState, numNoiseSources * sizeof(curandState)));
-
-        // Initialize RNG state
-        xorwow_setup(d_RNGState, numNoiseSources, 123);
-
-        // Allocate device array to hold input noise
-        CHECK_CUDA_ERRORS(cudaMalloc(&d_Noise, numNoiseSources * sizeof(scalar)));
-
-        // Point extra neuron variables at correct parts of noise array
-        InoisePN = &d_Noise[0];
-        InoiseKC = &d_Noise[Parameters::numPN];
-        InoiseEN = &d_Noise[Parameters::numPN + Parameters::numKC];
-    }
-
-    {
         Timer<> timer("Building connectivity:");
 
         buildFixedNumberPreConnector(Parameters::numPN, Parameters::numKC,
@@ -389,22 +363,12 @@ std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputDat
     // Update input data step
     IextStepPN = inputDataStep;
 
-    // Configure threads and grids
-    // **YUCK** I have no idea why this isn't in GeNNHelperKrnls
-    int sampleBlkNo = ceilf(float(numNoiseSources / float(BlkSz)));
-    dim3 sThreads(BlkSz, 1);
-    dim3 sGrid(sampleBlkNo, 1);
-
     // Loop through timesteps
     unsigned int numPNSpikes = 0;
     unsigned int numKCSpikes = 0;
     unsigned int numENSpikes = 0;
     while(iT < endTimestep)
     {
-        // Generate normally distributed noise on GPU
-        generate_random_gpuInput_xorwow<scalar>(d_RNGState, d_Noise, numNoiseSources,
-                                                1.0f, 0.0f,
-                                                sGrid, sThreads);
         // If we should be presenting an image
         if(iT < endPresentTimestep) {
             IextPN = inputData;

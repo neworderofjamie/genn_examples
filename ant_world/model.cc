@@ -17,7 +17,7 @@
 class LIFExtCurrent : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(LIFExtCurrent, 9, 2);
+    DECLARE_MODEL(LIFExtCurrent, 8, 2);
 
     SET_SIM_CODE(
         "if ($(RefracTime) <= 0.0)\n"
@@ -29,8 +29,7 @@ public:
         "       const unsigned int index = (y * $(IextStep)) + x;\n"
         "       Iext = $(IextScale) * $(Iext)[index];\n"
         "   }\n"
-        "   scalar Inoise = $(InoiseScale) * $(Inoise)[$(id)];\n"
-        "   scalar alpha = (($(Isyn) + Inoise + Iext) * $(Rmembrane)) + $(Vrest);\n"
+        "   scalar alpha = (($(Isyn) + Iext) * $(Rmembrane)) + $(Vrest);\n"
         "   $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
         "}\n"
         "else\n"
@@ -52,7 +51,6 @@ public:
         "Vreset",       // 3 - Reset voltage [mV]
         "Vthresh",      // 4 - Spiking threshold [mV]
         "TauRefrac",    // 5 - Refractory time [ms]
-        "InoiseScale",  // 6 - Scaling factor to apply to noise current
         "IextScale",    // 7 - Scaling factor to apply to external current
         "Width",        // 8 - Width of population (pixels)
     });
@@ -63,7 +61,7 @@ public:
 
     SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 
-    SET_EXTRA_GLOBAL_PARAMS({{"Inoise", "float*"}, {"Iext", "float*"}, {"IextStep", "unsigned int"}});
+    SET_EXTRA_GLOBAL_PARAMS({{"Iext", "float*"}, {"IextStep", "unsigned int"}});
 };
 IMPLEMENT_MODEL(LIFExtCurrent);
 
@@ -84,9 +82,8 @@ void modelDefinition(NNmodel &model)
         -60.0,                              // 3 - Vreset
         -50.0,                              // 4 - Vthresh
         2.0,                                // 5 - TauRefrac
-        Parameters::pnNoiseCurrentScale,    // 6 - Scaling factor to apply to external noise
-        Parameters::inputCurrentScale,      // 7 - Scaling factor to apply to external current
-        Parameters::inputWidth);            // 8 - Input width
+        Parameters::inputCurrentScale,      // 6 - Scaling factor to apply to external current
+        Parameters::inputWidth);            // 7 - Input width
 
     LIFExtCurrent::ParamValues kcParams(
         0.2,                                // 0 - C
@@ -95,9 +92,8 @@ void modelDefinition(NNmodel &model)
         -60.0,                              // 3 - Vreset
         -50.0,                              // 4 - Vthresh
         2.0,                                // 5 - TauRefrac
-        Parameters::kcNoiseCurrentScale,    // 6 - Scaling factor to apply to external noise
-        Parameters::inputCurrentScale,      // 7 - Scaling factor to apply to external current
-        Parameters::inputWidth);            // 8 - Input width
+        Parameters::inputCurrentScale,      // 6 - Scaling factor to apply to external current
+        Parameters::inputWidth);            // 7 - Input width
 
     LIFExtCurrent::ParamValues enParams(
         0.2,                                // 0 - C
@@ -106,9 +102,8 @@ void modelDefinition(NNmodel &model)
         -60.0,                              // 3 - Vreset
         -50.0,                              // 4 - Vthresh
         2.0,                                // 5 - TauRefrac
-        Parameters::enNoiseCurrentScale,    // 6 - Scaling factor to apply to external noise
-        Parameters::inputCurrentScale,      // 7 - Scaling factor to apply to external current
-        Parameters::inputWidth);            // 8 - Input width
+        Parameters::inputCurrentScale,      // 6 - Scaling factor to apply to external current
+        Parameters::inputWidth);            // 7 - Input width
 
     // LIF initial conditions
     LIFExtCurrent::VarValues lifInit(
