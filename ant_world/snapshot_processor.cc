@@ -22,8 +22,6 @@ std::tuple<float*, unsigned int> SnapshotProcessor::process(const cv::Mat &snaps
     // b) CLAHE seems broken for GPU matrices
     assert((unsigned int)snapshot.rows == m_IntermediateHeight * 4);
     assert((unsigned int)snapshot.cols == m_IntermediateWidth * 4);
-    std::cout << snapshot.cols << "," << snapshot.rows << "," << snapshot.depth() << std::endl;
-    std::cout << m_IntermediateSnapshotGreyscale.cols << "," << m_IntermediateSnapshotGreyscale.rows << "," << m_IntermediateSnapshotGreyscale.depth() << std::endl;
 
     // Perform weird averaging used in Matlab code
     for(unsigned int y = 0; y < m_IntermediateHeight; y++) {
@@ -33,7 +31,6 @@ std::tuple<float*, unsigned int> SnapshotProcessor::process(const cv::Mat &snaps
             const unsigned int c = snapshot.at<cv::Vec3b>((y * 4) + 2, (x * 4) + 2)[1];
             const unsigned int d = snapshot.at<cv::Vec3b>((y * 4) + 1, (x * 4) + 2)[1];
 
-            //std::cout << a << "," << b << "," << c << "," << d << "," << (a + b + c + d) / 4 << std::endl;
             m_IntermediateSnapshotGreyscale.at<uint8_t>(y, x) = (a + b + c + d) / 4;
         }
     }

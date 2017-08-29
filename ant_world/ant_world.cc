@@ -947,8 +947,7 @@ int main(int argc, char *argv[])
             // **TODO** it should be theoretically possible to go directly from frame buffer to GpuMat
             glReadPixels(0, displayRenderWidth + 10, displayRenderWidth, displayRenderHeight,
                          GL_BGR, GL_UNSIGNED_BYTE, snapshot.data);
-            //cv::imwrite("snapshot_raw.png", snapshot);
-            //cv::Mat snapshot(19, 74, CV_8UC1, matlabRawData.data() + (17 * 19 * trainPoint));
+
             // Process snapshot
             float *finalSnapshotData;
             unsigned int finalSnapshotStep;
