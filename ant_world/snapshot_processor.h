@@ -31,9 +31,6 @@ private:
     const unsigned int m_OutputWidth;
     const unsigned int m_OutputHeight;
 
-    // Host OpenCV array to hold intermediate resolution colour snapshot
-    cv::Mat m_IntermediateSnapshot;
-
     // Host OpenCV array to hold intermediate resolution greyscale snapshot
     cv::Mat m_IntermediateSnapshotGreyscale;
 

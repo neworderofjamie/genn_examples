@@ -63,8 +63,8 @@ constexpr float antTurnSpeed = 4.0f;
 constexpr float antMoveSpeed = 0.05f;
 
 // Constant to multiply degrees by to get radians
-constexpr int displayRenderWidth = 640;
-constexpr int displayRenderHeight = 178;
+constexpr int displayRenderWidth = 296;
+constexpr int displayRenderHeight = 76;
 
 constexpr int intermediateSnapshotWidth = 74;
 constexpr int intermediateSnapshowHeight = 19;
@@ -402,7 +402,7 @@ std::tuple<unsigned int, unsigned int, unsigned int> presentToMB(float *inputDat
     while(iT < endTimestep)
     {
         // Generate normally distributed noise on GPU
-        generate_random_gpuInput_xorwow<scalar>(d_RNGState, d_Noise, Parameters::numPN + Parameters::numKC + Parameters::numEN,
+        generate_random_gpuInput_xorwow<scalar>(d_RNGState, d_Noise, numNoiseSources,
                                                 1.0f, 0.0f,
                                                 sGrid, sThreads);
         // If we should be presenting an image
@@ -947,7 +947,8 @@ int main(int argc, char *argv[])
             // **TODO** it should be theoretically possible to go directly from frame buffer to GpuMat
             glReadPixels(0, displayRenderWidth + 10, displayRenderWidth, displayRenderHeight,
                          GL_BGR, GL_UNSIGNED_BYTE, snapshot.data);
-
+            //cv::imwrite("snapshot_raw.png", snapshot);
+            //cv::Mat snapshot(19, 74, CV_8UC1, matlabRawData.data() + (17 * 19 * trainPoint));
             // Process snapshot
             float *finalSnapshotData;
             unsigned int finalSnapshotStep;
