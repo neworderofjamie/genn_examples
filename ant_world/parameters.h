@@ -47,4 +47,27 @@ namespace Parameters
 
     // How many PN neurons are connected to each KC
     constexpr unsigned int numPNSynapsesPerKC = 10;
+
+    // Rendering parameters
+    // What colour should the ground be?
+    constexpr GLfloat groundColour[] = {0.898f, 0.718f, 0.353f};
+
+    // What colour should the brightest tussocks be?
+    constexpr GLfloat worldColour[] = {0.0f, 1.0f, 0.0f};
+
+    // Size of snapshots for initial pre-processing
+    constexpr unsigned int intermediateSnapshotWidth = 74;
+    constexpr unsigned int intermediateSnapshotHeight = 19;
+
+    // How much larger than intermediate snapshots, rendering is performed at
+    constexpr unsigned int displayScale = 8;
+
+    // From these calculate display size
+    constexpr unsigned int displayRenderWidth = intermediateSnapshotWidth * displayScale;
+    constexpr unsigned int displayRenderHeight = intermediateSnapshotHeight * displayScale;
+
+    // Ant parameters
+    // How fast does the ant move?
+    constexpr float antTurnSpeed = 4.0f;
+    constexpr float antMoveSpeed = 0.05f;
 }

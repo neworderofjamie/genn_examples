@@ -9,7 +9,7 @@
 class SnapshotProcessor
 {
 public:
-    SnapshotProcessor(unsigned int intermediateWidth, unsigned int intermediateHeight,
+    SnapshotProcessor(unsigned int displayScale, unsigned int intermediateWidth, unsigned int intermediateHeight,
                       unsigned int outputWidth, unsigned int outputHeight);
 
     //------------------------------------------------------------------------
@@ -23,6 +23,9 @@ private:
     //------------------------------------------------------------------------
     // Private members
     //------------------------------------------------------------------------
+    // How much larger than intermediate image size is snapshot
+    const unsigned int m_DisplayScale;
+
     // Dimensions of intermediate image
     const unsigned int m_IntermediateWidth;
     const unsigned int m_IntermediateHeight;

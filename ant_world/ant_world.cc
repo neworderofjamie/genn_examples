@@ -49,23 +49,6 @@
 //----------------------------------------------------------------------------
 namespace
 {
-// What colour should the ground be?
-constexpr GLfloat groundColour[] = {0.898f, 0.718f, 0.353f};
-
-// What colour should the brightest tussocks be?
-constexpr GLfloat worldColour[] = {0.0f, 1.0f, 0.0f};
-
-// How fast does the ant move?
-constexpr float antTurnSpeed = 4.0f;
-constexpr float antMoveSpeed = 0.05f;
-
-// Constant to multiply degrees by to get radians
-constexpr int displayRenderWidth = 296;
-constexpr int displayRenderHeight = 76;
-
-constexpr int intermediateSnapshotWidth = 74;
-constexpr int intermediateSnapshowHeight = 19;
-
 enum class State
 {
     Training,
@@ -253,8 +236,8 @@ void renderAntView(float antX, float antY, float antHeading,
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // Set viewport to strip at stop of window
-    glViewport(0, displayRenderWidth + 10,
-               displayRenderWidth, displayRenderHeight);
+    glViewport(0, Parameters::displayRenderWidth + 10,
+               Parameters::displayRenderWidth, Parameters::displayRenderHeight);
 
     // Bind cubemap texture
     glEnable(GL_TEXTURE_CUBE_MAP);
@@ -281,7 +264,7 @@ void renderTopDownView(float antX, float antY, float antHeading,
                        const World &world, const Route &route)
 {
     // Set viewport to square at bottom of screen
-    glViewport(0, 0, displayRenderWidth, displayRenderWidth);
+    glViewport(0, 0, Parameters::displayRenderWidth, Parameters::displayRenderWidth);
 
     // Configure top-down orthographic projection matrix
     glMatrixMode(GL_PROJECTION);
@@ -484,7 +467,7 @@ int main(int argc, char *argv[])
     glfwWindowHint(GLFW_RESIZABLE, false);
 
     // Create a windowed mode window and its OpenGL context
-    GLFWwindow *window = glfwCreateWindow(displayRenderWidth, displayRenderHeight + displayRenderWidth + 10,
+    GLFWwindow *window = glfwCreateWindow(Parameters::displayRenderWidth, Parameters::displayRenderHeight + Parameters::displayRenderWidth + 10,
                                           "Ant World", nullptr, nullptr);
     if(!window)
     {
@@ -523,7 +506,7 @@ int main(int argc, char *argv[])
     }
 
     // Load world into OpenGL
-    World world("world5000_gray.bin", worldColour, groundColour);
+    World world("world5000_gray.bin", Parameters::worldColour, Parameters::groundColour);
 
     // Build mesh to render cubemap to screen
     // **NOTE** this matches the matlab:
@@ -580,10 +563,11 @@ int main(int argc, char *argv[])
     initGeNN(gen);
 
     // Host OpenCV array to hold pixels read from screen
-    cv::Mat snapshot(displayRenderHeight, displayRenderWidth, CV_8UC3);
+    cv::Mat snapshot(Parameters::displayRenderHeight, Parameters::displayRenderWidth, CV_8UC3);
 
     // Create snapshot processor to perform image processing on snapshot
-    SnapshotProcessor snapshotProcessor(intermediateSnapshotWidth, intermediateSnapshowHeight,
+    SnapshotProcessor snapshotProcessor(Parameters::displayScale,
+                                        Parameters::intermediateSnapshotWidth, Parameters::intermediateSnapshotHeight,
                                         Parameters::inputWidth, Parameters::inputHeight);
 
     // Initialize ant position
@@ -641,18 +625,18 @@ int main(int argc, char *argv[])
         bool trainSnapshot = false;
         bool testSnapshot = false;
         if(keybits.test(KeyLeft)) {
-            antHeading -= antTurnSpeed;
+            antHeading -= Parameters::antTurnSpeed;
         }
         if(keybits.test(KeyRight)) {
-            antHeading += antTurnSpeed;
+            antHeading += Parameters::antTurnSpeed;
         }
         if(keybits.test(KeyUp)) {
-            antX += antMoveSpeed * sin(antHeading * degreesToRadians);
-            antY += antMoveSpeed * cos(antHeading * degreesToRadians);
+            antX += Parameters::antMoveSpeed * sin(antHeading * degreesToRadians);
+            antY += Parameters::antMoveSpeed * cos(antHeading * degreesToRadians);
         }
         if(keybits.test(KeyDown)) {
-            antX -= antMoveSpeed * sin(antHeading * degreesToRadians);
-            antY -= antMoveSpeed * cos(antHeading * degreesToRadians);
+            antX -= Parameters::antMoveSpeed * sin(antHeading * degreesToRadians);
+            antY -= Parameters::antMoveSpeed * cos(antHeading * degreesToRadians);
         }
         if(keybits.test(KeyReset)) {
             if(route.size() > 0) {
@@ -909,7 +893,7 @@ int main(int argc, char *argv[])
 
             // Read pixels from framebuffer
             // **TODO** it should be theoretically possible to go directly from frame buffer to GpuMat
-            glReadPixels(0, displayRenderWidth + 10, displayRenderWidth, displayRenderHeight,
+            glReadPixels(0, Parameters::displayRenderWidth + 10, Parameters::displayRenderWidth, Parameters::displayRenderHeight,
                          GL_BGR, GL_UNSIGNED_BYTE, snapshot.data);
 
             // Process snapshot
