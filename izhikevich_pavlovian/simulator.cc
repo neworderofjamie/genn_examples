@@ -93,8 +93,8 @@ int main()
         Timer<> t("Initializing sparse synapse variables:");
 
         // Initialize excitatory weights
-        std::fill_n(gEI, CEI.connN, 1.0f);
-        std::fill_n(gEE, CEE.connN, 1.0f);
+        std::fill_n(gEI, CEI.connN, Parameters::initExcWeight);
+        std::fill_n(gEE, CEE.connN, Parameters::initExcWeight);
 
         // Initialize synaptic tags
         std::fill_n(cEI, CEI.connN, 0.0f);
@@ -313,8 +313,8 @@ int main()
                 dEI = dEI * std::exp(-tMs / Parameters::tauD);
 
                 // Add effect of dopamine spike
-                dEE += 0.5f;
-                dEI += 0.5f;
+                dEE += Parameters::dopamineStrength;
+                dEI += Parameters::dopamineStrength;
 
                 // Update last reward time
                 tDEE = tMs;

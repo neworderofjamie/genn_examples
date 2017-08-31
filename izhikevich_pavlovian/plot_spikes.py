@@ -1,10 +1,12 @@
 import csv
 import matplotlib.pyplot as plt
 import numpy as np
+import sys
 
-num_excitatory = 800
-num_inhibitory = 200
-num_neurons = num_excitatory + num_inhibitory
+num_neurons = 1000 if len(sys.argv) <= 1 else int(sys.argv[1])
+num_excitatory = int(0.8 * num_neurons)
+num_inhibitory = int(0.2 * num_neurons)
+
 duration_ms = 60 * 60 * 1000
 bin_ms = 10
 display_time = 2000

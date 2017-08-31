@@ -69,23 +69,23 @@ void modelDefinition(NNmodel &model)
         0.0);   // Iext
 
     STDPDopamine::ParamValues dopeParams(
-        20.0,               // 0 - Potentiation time constant (ms)
-        20.0,               // 1 - Depression time constant (ms)
-        1000.0,             // 2 - Synaptic tag time constant (ms)
-        Parameters::tauD,   // 3 - Dopamine time constant (ms)
-        0.1,                // 4 - Rate of potentiation
-        0.15,               // 5 - Rate of depression
-        0.0,                // 6 - Minimum weight
-        4.0);               // 7 - Maximum weight
+        20.0,                       // 0 - Potentiation time constant (ms)
+        20.0,                       // 1 - Depression time constant (ms)
+        1000.0,                     // 2 - Synaptic tag time constant (ms)
+        Parameters::tauD,           // 3 - Dopamine time constant (ms)
+        0.1,                        // 4 - Rate of potentiation
+        0.15,                       // 5 - Rate of depression
+        0.0,                        // 6 - Minimum weight
+        Parameters::maxExcWeight);  // 7 - Maximum weight
 
     STDPDopamine::VarValues dopeInitVars(
-        1.0,    // Synaptic weight
-        0.0,    // Synaptic tag
-        0.0);   // Time of last synaptic tag update
+        Parameters::initExcWeight,  // Synaptic weight
+        0.0,                        // Synaptic tag
+        0.0);                       // Time of last synaptic tag update
 
 
     // Static synapse parameters
-    WeightUpdateModels::StaticPulse::VarValues inhSynInit(-1.0);
+    WeightUpdateModels::StaticPulse::VarValues inhSynInit(Parameters::inhWeight);
 
     // Create IF_curr neuron
     model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);

@@ -21,10 +21,20 @@ namespace Parameters
     // STDP params
     constexpr double tauD = 200.0;
 
-    // number of cells
-    constexpr unsigned int numExcitatory = 800;
-    constexpr unsigned int numInhibitory = 200;
+    // scaling
+    constexpr unsigned int sizeScaleFactor = 1;
+    constexpr double weightScaleFactor = 1.0 / (double)sizeScaleFactor;
+
+    // scaled number of cells
+    constexpr unsigned int numExcitatory = 800 * sizeScaleFactor;
+    constexpr unsigned int numInhibitory = 200 * sizeScaleFactor;
     constexpr unsigned int numCells = numExcitatory + numInhibitory;
+
+    // weights
+    constexpr double inhWeight = -1.0 * weightScaleFactor;
+    constexpr double initExcWeight = 1.0 * weightScaleFactor;
+    constexpr double maxExcWeight = 4.0 * weightScaleFactor;
+    constexpr double dopamineStrength = 0.5 * weightScaleFactor;
 
     // connection probability
     constexpr double probabilityConnection = 0.1;
