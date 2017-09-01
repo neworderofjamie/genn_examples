@@ -7,31 +7,34 @@
 #include <cstdint>
 
 // Common includes
-#include "i2c_transfer.h"
+#include "i2c_interface.h"
 
+//----------------------------------------------------------------------------
+// MotorI2C
+//----------------------------------------------------------------------------
 class MotorI2C
 {
     public:
-        //----READ SENSORS--------------------
-        std::vector<uint8_t> read_smell() {                                     // returns the current reading for the smell sensor
-            return i2c_transfer.read_data();
+        MotorI2C(const char *path = "/dev/i2c-1", int slaveAddress = 0x29) : m_I2C(path, slaveAddress)
+        {
+        }
+        
+        template<typename T, size_t N>
+        void read(T (&data)[N])
+        {
+            return m_I2C.read(data);
         }
         
         //---MOVE ROBOT------------------------
-        void move_robot(uint8_t left_wheel, uint8_t right_wheel) {  // move robot 1 forward 2 backward 0 stop
-            uint8_t buffer[2];
-            buffer[0] = left_wheel;
-            buffer[1] = right_wheel;
+        // move robot 1 forward 2 backward 0 stop
+        void tank(uint8_t left_wheel, uint8_t right_wheel) 
+        {  
+            uint8_t buffer[2] = { left_wheel, right_wheel };
+            
             // sending command to the arduino
-            i2c_transfer.write_data(buffer, 2);
+            m_I2C.write(buffer);
         }
         
-        //---STOP ROBOT------------------------
-        void stop_robot() {                                         // stops the robot - same as move_robot(0,0)
-            move_robot(0, 0);
-        }
-        //-------------------------------------
-
     private:
-        I2C_transfer i2c_transfer;
+        I2CInterface m_I2C;
 };
