@@ -41,6 +41,9 @@ IMPLEMENT_MODEL(Izhikevich);
 
 void modelDefinition(NNmodel &model)
 {
+    // Use maths intrinsics rather than accurate trancendentals
+    GENN_PREFERENCES::optimizeCode = true;
+
     initGeNN();
     model.setDT(Parameters::timestepMs);
     model.setName("izhikevich_pavlovian");
