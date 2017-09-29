@@ -115,7 +115,7 @@ inline void addSynapseToSparseProjection(unsigned int i, unsigned int j, unsigne
     // If these aren't the same (there are existing synapses after this one), shuffle up the indices
     if(rowEndIndex != lastSynapseIndex) {
         std::move_backward(&sparseProjection.ind[rowEndIndex], &sparseProjection.ind[lastSynapseIndex],
-                            &sparseProjection.ind[lastSynapseIndex + 1]);
+                           &sparseProjection.ind[lastSynapseIndex + 1]);
     }
 
     // Insert new synapse
@@ -128,7 +128,6 @@ inline void addSynapseToSparseProjection(unsigned int i, unsigned int j, unsigne
                        return (index + 1);
                    });
 }
-
 //----------------------------------------------------------------------------
 template <typename Generator>
 void buildFixedProbabilityConnector(unsigned int numPre, unsigned int numPost, float probability,
@@ -214,6 +213,13 @@ void buildFixedNumberPreConnector(unsigned int numPre, unsigned int numPost, uns
             // Swap the last available preindex with the one we have now used
             std::swap(preIndices[i], preIndices[numPre - c]);
         }
+    }
+
+    // Loop through rows and sort indices
+    for(unsigned int i = 0; i < numPre; i++) {
+        const unsigned int rowStartIndex = projection.indInG[i];
+        const unsigned int rowEndIndex = projection.indInG[i + 1];
+        std::sort(&projection.ind[rowStartIndex], &projection.ind[rowEndIndex]);
     }
 
     // Check correct number of connections were added
