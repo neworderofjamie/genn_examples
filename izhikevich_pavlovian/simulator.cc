@@ -4,11 +4,6 @@
 #include <numeric>
 #include <random>
 
-// GeNN includes
-#ifndef CPU_ONLY
-    #include "GeNNHelperKrnls.h"
-#endif  // CPU_ONLY
-
 // Common includes
 #include "../common/connectors.h"
 #include "../common/spike_csv_recorder.h"
@@ -111,28 +106,6 @@ int main()
         initizhikevich_pavlovian();
     }
 
-#ifndef CPU_ONLY
-    curandState *d_RNGState = nullptr;
-    scalar *d_Noise = nullptr;
-    {
-        Timer<> timer("Configuring on-device RNG:");
-
-
-        // Allocate device array to hold RNG state
-        CHECK_CUDA_ERRORS(cudaMalloc(&d_RNGState, Parameters::numCells * sizeof(curandState)));
-
-        // Initialize RNG state
-        xorwow_setup(d_RNGState, Parameters::numCells, 123);
-
-        // Allocate device array to hold input noise
-        CHECK_CUDA_ERRORS(cudaMalloc(&d_Noise, Parameters::numCells * sizeof(scalar)));
-
-        // Point extra neuron variables at correct parts of noise array
-        InoiseE = &d_Noise[0];
-        InoiseI = &d_Noise[Parameters::numExcitatory];
-    }
-#endif  // CPU_ONLY
-
     std::vector<std::vector<unsigned int>> inputSets;
     std::bitset<Parameters::numExcitatory> rewardedExcStimuliSet;
 
@@ -175,11 +148,6 @@ int main()
     {
         Timer<> t("Simulation:");
 
-        // Create distribution to pick an input to apply thamalic input to
-#ifdef CPU_ONLY
-        std::uniform_real_distribution<> inputCurrent(-6.5, 6.5);
-#endif  // CPU_ONLY
-
         // Create distribution to pick inter stimuli intervals
         std::uniform_int_distribution<> interStimuliInterval(convertMsToTimesteps(Parameters::minInterStimuliIntervalMs),
                                                              convertMsToTimesteps(Parameters::maxInterStimuliIntervalMs));
@@ -201,14 +169,6 @@ int main()
         const unsigned int recordEndStart = convertMsToTimesteps(Parameters::durationMs - Parameters::recordEndMs);
         const unsigned int weightRecordInterval = convertMsToTimesteps(Parameters::weightRecordIntervalMs);
 
-        // Configure threads and grids
-#ifndef CPU_ONLY
-        // **YUCK** I have no idea why this isn't in GeNNHelperKrnls
-        const int numNoiseBlocks = ceil(float(Parameters::numCells) / float(BlkSz));
-        const dim3 noiseThreads(BlkSz, 1);
-        const dim3 noiseGrid(numNoiseBlocks, 1);
-#endif  // CPU_ONLY
-
         // Loop through timesteps
         for(unsigned int t = 0; t < duration; t++)
         {
@@ -216,28 +176,14 @@ int main()
             const bool shouldRecordSpikes = (t < recordBeginningStop) || (t > recordEndStart);
             const bool shouldStimulate = (t == nextStimuliTimestep);
             const bool shouldReward = (t == nextRewardTimestep);
-#ifndef CPU_ONLY
-            // Generate normally distributed noise on GPU
-            generate_uniform_random_gpuInput_xorwow<scalar>(d_RNGState, d_Noise, Parameters::numCells,
-                                                            -6.5f, 6.5f,
-                                                            noiseGrid, noiseThreads);
-#else
-            // Generate uniformly distributed numbers to fill host array
-            std::generate_n(IextE, Parameters::numExcitatory,
-                [&inputCurrent, &gen](){ return inputCurrent(gen); });
-            std::generate_n(IextI, Parameters::numInhibitory,
-                [&inputCurrent, &gen](){ return inputCurrent(gen); });
-#endif
 
             // If we should be applying stimuli this timestep
             if(shouldStimulate) {
                 std::cout << "\tApplying stimuli set " << nextStimuliSet << " at timestep " << t << std::endl;
 
                 // Zero
-#ifndef CPU_ONLY
                 std::fill_n(IextE, Parameters::numExcitatory, 0.0f);
                 std::fill_n(IextI, Parameters::numInhibitory, 0.0f);
-#endif  // CPU_ONLY
 
                 // Loop through neurons in input set and add stimuli current
                 for(unsigned int n : inputSets[nextStimuliSet]) {

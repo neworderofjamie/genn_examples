@@ -12,30 +12,21 @@
 class Izhikevich : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Izhikevich, 4, 3);
+    DECLARE_MODEL(Izhikevich, 5, 3);
 
-#ifndef CPU_ONLY
     SET_SIM_CODE(
-        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext)+$(Inoise)[$(id)])*DT; //at two times for numerical stability\n"
-        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext)+$(Inoise)[$(id)])*DT;\n"
+        "scalar noise = ($(gennrand_uniform) * $(n) * 2.0) - $(n);\n"
+        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext)+noise)*DT; //at two times for numerical stability\n"
+        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext)+noise)*DT;\n"
         "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n");
-#else
-    SET_SIM_CODE(
-        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT; //at two times for numerical stability\n"
-        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT;\n"
-        "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n");
-#endif
 
     SET_THRESHOLD_CONDITION_CODE("$(V) >= 30.0");
     SET_RESET_CODE(
         "$(V)=$(c);\n"
         "$(U)+=$(d);\n");
 
-    SET_PARAM_NAMES({"a", "b", "c", "d"});
+    SET_PARAM_NAMES({"a", "b", "c", "d", "n"});
     SET_VARS({{"V","scalar"}, {"U", "scalar"}, {"Iext", "scalar"}});
-#ifndef CPU_ONLY
-    SET_EXTRA_GLOBAL_PARAMS({{"Inoise", "float*"}});
-#endif
 };
 IMPLEMENT_MODEL(Izhikevich);
 
@@ -56,14 +47,16 @@ void modelDefinition(NNmodel &model)
         0.02,   // a
         0.2,    // b
         -65.0,  // c
-        8.0);   // d
+        8.0,    // d
+        6.5);   // n
 
     // Inhibitory model parameters
     Izhikevich::ParamValues inhParams(
         0.1,   // a
         0.2,    // b
         -65.0,  // c
-        2.0);   // d
+        2.0,    // d
+        6.5);   // n
 
     // LIF initial conditions
     Izhikevich::VarValues izkInit(
