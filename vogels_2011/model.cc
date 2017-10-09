@@ -3,6 +3,7 @@
 
 #include "modelSpec.h"
 
+#include "../common/connectors.h"
 #include "../common/exp_curr.h"
 #include "../common/lif.h"
 #include "../common/vogels_2011.h"
@@ -62,17 +63,17 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<LIF>("E", 2000, lifParams, lifInit);
     model.addNeuronPopulation<LIF>("I", 500, lifParams, lifInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
@@ -83,6 +84,10 @@ void modelDefinition(NNmodel &model)
         vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
         inhibitoryExpCurrParams, {});
 
+    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 2000, 0.02));
+    ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 500, 0.02));
+    ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 500, 0.02));
+    ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 2000, 0.02));
     /*auto *ie = model.addSynapsePopulation(
         "IE", NSYNAPSE, SPARSE, INDIVIDUALG, NO_DELAY, MY_EXP_CURR,
         "I", "E",
@@ -95,8 +100,8 @@ void modelDefinition(NNmodel &model)
     model.setSpanTypeToPre("IE");*/
 
     // Use zero-copy for spikes and weights as we want to record them every timestep
-    e->setSpikeZeroCopyEnabled(true);
-    ie->setWUVarZeroCopyEnabled("g", true);
+    //e->setSpikeZeroCopyEnabled(true);
+    //ie->setWUVarZeroCopyEnabled("g", true);
 
     model.finalize();
 }

@@ -3,6 +3,7 @@
 
 #include "modelSpec.h"
 
+#include "../common/connectors.h"
 #include "../common/exp_curr.h"
 #include "../common/lif.h"
 
@@ -52,26 +53,38 @@ void modelDefinition(NNmodel &model)
     model.addNeuronPopulation<LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});
 
+    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
+                                                                      Parameters::probabilityConnection));
+    ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
+                                                                      Parameters::probabilityConnection));
+    ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
+                                                                      Parameters::probabilityConnection));
+    ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
+                                                                      Parameters::probabilityConnection));
+    /*ee->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+    ei->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+    ie->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+    ii->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);*/
     model.finalize();
 }
