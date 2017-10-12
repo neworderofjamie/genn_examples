@@ -16,4 +16,11 @@ namespace Parameters
     const unsigned int numCPU1 = 16;
 
     const double c = 0.33;
+
+    enum Hemisphere
+    {
+        HemisphereLeft,
+        HemisphereRight,
+        HemisphereMax,
+    };
 }

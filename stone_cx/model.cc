@@ -125,7 +125,7 @@ void modelDefinition(NNmodel &model)
         -0.5);   // Additive scale
 
     // TB1
-    Sigmoid::ParamValues tb1Params(WeightUpdateModels
+    Sigmoid::ParamValues tb1Params(
         5.0,    // Multiplicative scale
         0.0);   // Additive scale
 
