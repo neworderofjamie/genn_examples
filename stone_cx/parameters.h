@@ -23,4 +23,15 @@ namespace Parameters
         HemisphereRight,
         HemisphereMax,
     };
+
+    // Outbound path generation parameters
+    const unsigned int numTimesteps = 1000;
+
+    const double pathLambda = 0.4;
+    const double pathKappa = 100.0;
+
+    const double agentDrag = 0.15;
+
+    const double agentMinAcceleration = 0.0;
+    const double agentMaxAcceleration = 0.15;
 }
