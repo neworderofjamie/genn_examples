@@ -129,6 +129,21 @@ inline void addSynapseToSparseProjection(unsigned int i, unsigned int j, unsigne
                    });
 }
 //----------------------------------------------------------------------------
+void printSparseMatrix(unsigned int numPre, const SparseProjection &projection)
+{
+    for(unsigned int i = 0; i < numPre; i++)
+    {
+        std::cout << i << ":";
+
+        for(unsigned int j = projection.indInG[i]; j < projection.indInG[i + 1]; j++)
+        {
+            std::cout << projection.ind[j] << ",";
+        }
+
+        std::cout << std::endl;
+    }
+}
+//----------------------------------------------------------------------------
 void buildOneToOneConnector(unsigned int numPre, unsigned int numPost,
                             SparseProjection &sparseProjection, AllocateFn allocateFn)
 {
