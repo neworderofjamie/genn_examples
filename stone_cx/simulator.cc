@@ -162,14 +162,15 @@ int main()
     // Create output image
     cv::Mat outputImage(worldSize, worldSize, CV_8UC3, cv::Scalar::all(0));
 
+    // Create Von Mises distribution to sample angular acceleration from
     std::mt19937 gen;
     VonMisesDistribution<double> pathVonMises(0.0, Parameters::pathKappa);
 
-
-    //const unsigned int num
-
+    // Create acceleration spline
     tk::spline accelerationSpline;
     {
+        // Create vectors to hold the times at which linear acceleration
+        // should change and it's values at those time
         const unsigned int numAccelerationChanges = Parameters::numTimesteps / 50;
         std::vector<double> accelerationTime(numAccelerationChanges);
         std::vector<double> accelerationMagnitude(numAccelerationChanges);
@@ -184,8 +185,10 @@ int main()
             accelerationTime[i] = i * 50;
         }
 
+        // Build spline from these
         accelerationSpline.set_points(accelerationTime, accelerationMagnitude);
     }
+
     double omega = 0.0;
     double theta = 0.0;
     double xVelocity = 0.0;
@@ -197,14 +200,21 @@ int main()
         omega = (Parameters::pathLambda * omega) + pathVonMises(gen);
         theta += omega;
 
+        // Read linear acceleration off spline
         const double a = accelerationSpline((double)i);
 
-        xVelocity += (sin(theta) * a * (1.0 - Parameters::agentDrag));
-        yVelocity += (cos(theta) * a * (1.0 - Parameters::agentDrag));
+        // Update linear velocity
+        // **NOTE** this comes from https://github.com/InsectRobotics/path-integration/blob/master/bee_simulator.py#L77-L83 rather than paper
+        xVelocity += sin(theta) * a;
+        yVelocity += cos(theta) * a;
+        xVelocity -= Parameters::agentDrag * xVelocity;
+        yVelocity -= Parameters::agentDrag * yVelocity;
 
+        // Update position
         xPosition += xVelocity;
         yPosition += yVelocity;
 
+        // Draw agent position
         const cv::Point p(500 + (int)xPosition, 500 + (int)yPosition);
         cv::line(outputImage, p, p, CV_RGB(0xFF, 0xFF, 0xFF));
 
