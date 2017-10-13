@@ -72,7 +72,8 @@ void drawPopulationActivity(scalar *popActivity, unsigned int popSize, const cha
 int main()
 {
     const unsigned int pathImageSize = 1000;
-    const unsigned int activityImageSize = 500;
+    const unsigned int activityImageWidth = 500;
+    const unsigned int activityImageHeight = 1000;
     const double pi = 3.141592653589793238462643383279502884;
 
     allocateMem();
@@ -184,9 +185,9 @@ int main()
     cv::Mat pathImage(pathImageSize, pathImageSize, CV_8UC3, cv::Scalar::all(0));
 
     cv::namedWindow("Activity", CV_WINDOW_NORMAL);
-    cv::resizeWindow("Activity", activityImageSize, activityImageSize);
+    cv::resizeWindow("Activity", activityImageWidth, activityImageHeight);
     cv::moveWindow("Activity", pathImageSize, 0);
-    cv::Mat activityImage(activityImageSize, activityImageSize, CV_8UC3, cv::Scalar::all(0));
+    cv::Mat activityImage(activityImageHeight, activityImageWidth, CV_8UC3, cv::Scalar::all(0));
 
     // Create Von Mises distribution to sample angular acceleration from
     std::mt19937 gen;
@@ -231,10 +232,13 @@ int main()
         stepTimeCPU();
 
         // Draw neuron activity
-        drawPopulationActivity(rTB1, Parameters::numTB1, "TB1", cv::Point(10, 10), activityImage);
-        drawPopulationActivity(rCPU1, Parameters::numCPU1, "CPU1", cv::Point(10, 60), activityImage);
-        drawPopulationActivity(rCPU4, Parameters::numCPU4, "CPU4", cv::Point(10, 110), activityImage);
-        drawPopulationActivity(rPontine, Parameters::numPontine, "Pontine", cv::Point(10, 160), activityImage);
+        drawPopulationActivity(rTN2, Parameters::numTN2, "TN2", cv::Point(10, 10), activityImage);
+        drawPopulationActivity(rTL, Parameters::numTL, "TL", cv::Point(10, 80), activityImage);
+        drawPopulationActivity(rCL1, Parameters::numCL1, "CL1", cv::Point(10, 150), activityImage);
+        drawPopulationActivity(rTB1, Parameters::numTB1, "TB1", cv::Point(10, 230), activityImage);
+        drawPopulationActivity(rCPU1, Parameters::numCPU1, "CPU1", cv::Point(10, 310), activityImage);
+        drawPopulationActivity(rCPU4, Parameters::numCPU4, "CPU4", cv::Point(10, 390), activityImage);
+        drawPopulationActivity(rPontine, Parameters::numPontine, "Pontine", cv::Point(10, 470), activityImage);
 
 
         // Update angular velocity and thus heading of agent
