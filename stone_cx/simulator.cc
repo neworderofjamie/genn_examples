@@ -49,7 +49,7 @@ void buildTBToCPUConnector(unsigned int numPre, unsigned int numPost,
 void drawNeuronActivity(scalar activity, const cv::Point &position, cv::Mat &image)
 {
     // Convert activity to a 8-bit level
-	const unsigned char gray = (unsigned char)(255.0f * std::min(1.0f, std::max(0.0f, activity)));
+    const unsigned char gray = (unsigned char)(255.0f * std::min(1.0f, std::max(0.0f, activity)));
 
     // Draw rectangle of this colour
     cv::rectangle(image, position, position + cv::Point(25, 25), CV_RGB(gray, 0, 0), cv::FILLED);
@@ -82,15 +82,13 @@ int main()
     //---------------------------------------------------------------------------
     // Initialize neuron parameters
     //---------------------------------------------------------------------------
-    // TL
-    preferredAngleTL[Parameters::HemisphereLeft] = pi / 4.0;
-    preferredAngleTL[Parameters::HemisphereRight] = -pi / 4.0;
-
-    //---------------------------------------------------------------------------
     // TN2
-    //---------------------------------------------------------------------------
+    preferredAngleTN2[Parameters::HemisphereLeft] = pi / 4.0;
+    preferredAngleTN2[Parameters::HemisphereRight] = -pi / 4.0;
+
+    // TL
     for(unsigned int i = 0; i < 8; i++) {
-        preferredAngleTN2[i] = preferredAngleTN2[8 + i] = (pi / 4.0) * (double)i;
+        preferredAngleTL[i] = preferredAngleTL[8 + i] = (pi / 4.0) * (double)i;
     }
 
     //---------------------------------------------------------------------------
