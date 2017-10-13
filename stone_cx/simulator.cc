@@ -45,11 +45,34 @@ void buildTBToCPUConnector(unsigned int numPre, unsigned int numPost,
     }
     sparseProjection.indInG[numPre] = numPost;
 }
+
+void drawNeuronActivity(scalar activity, const cv::Point &position, cv::Mat &image)
+{
+    // Convert activity to a 8-bit level
+	const unsigned char gray = (unsigned char)(255.0f * std::min(1.0f, std::max(0.0f, activity)));
+
+    // Draw rectangle of this colour
+    cv::rectangle(image, position, position + cv::Point(25, 25), CV_RGB(gray, 0, 0), cv::FILLED);
+}
+
+void drawPopulationActivity(scalar *popActivity, unsigned int popSize, const char *popName,
+                            const cv::Point &position, cv::Mat &image)
+{
+    // Draw each neuron's activity
+    for(unsigned int i = 0; i < popSize; i++) {
+        drawNeuronActivity(popActivity[i], position + cv::Point(i * 27, 0), image);
+    }
+
+    // Label population
+    cv::putText(image, popName, position + cv::Point(0, 44),
+                cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(0xFF, 0xFF, 0xFF));
+}
 }   // Anonymous namespace
 
 int main()
 {
-    const unsigned int worldSize = 1000;
+    const unsigned int pathImageSize = 1000;
+    const unsigned int activityImageSize = 500;
     const double pi = 3.141592653589793238462643383279502884;
 
     allocateMem();
@@ -157,10 +180,13 @@ int main()
     initstone_cx();
 
     cv::namedWindow("Path", CV_WINDOW_NORMAL);
-    cv::resizeWindow("Path", worldSize, worldSize);
+    cv::resizeWindow("Path", pathImageSize, pathImageSize);
+    cv::Mat pathImage(pathImageSize, pathImageSize, CV_8UC3, cv::Scalar::all(0));
 
-    // Create output image
-    cv::Mat outputImage(worldSize, worldSize, CV_8UC3, cv::Scalar::all(0));
+    cv::namedWindow("Activity", CV_WINDOW_NORMAL);
+    cv::resizeWindow("Activity", activityImageSize, activityImageSize);
+    cv::moveWindow("Activity", pathImageSize, 0);
+    cv::Mat activityImage(activityImageSize, activityImageSize, CV_8UC3, cv::Scalar::all(0));
 
     // Create Von Mises distribution to sample angular acceleration from
     std::mt19937 gen;
@@ -189,6 +215,7 @@ int main()
         accelerationSpline.set_points(accelerationTime, accelerationMagnitude);
     }
 
+    // Simulate
     double omega = 0.0;
     double theta = 0.0;
     double xVelocity = 0.0;
@@ -196,6 +223,20 @@ int main()
     double xPosition = 0.0;
     double yPosition = 0.0;
     for(unsigned int i = 0; i < Parameters::numTimesteps; i++) {
+        // Update network input
+        headingAngleTN2 = headingAngleTL = theta;
+        vXTN2 = xVelocity;
+        vYTN2 = yVelocity;
+
+        stepTimeCPU();
+
+        // Draw neuron activity
+        drawPopulationActivity(rTB1, Parameters::numTB1, "TB1", cv::Point(10, 10), activityImage);
+        drawPopulationActivity(rCPU1, Parameters::numCPU1, "CPU1", cv::Point(10, 60), activityImage);
+        drawPopulationActivity(rCPU4, Parameters::numCPU4, "CPU4", cv::Point(10, 110), activityImage);
+        drawPopulationActivity(rPontine, Parameters::numPontine, "Pontine", cv::Point(10, 160), activityImage);
+
+
         // Update angular velocity and thus heading of agent
         omega = (Parameters::pathLambda * omega) + pathVonMises(gen);
         theta += omega;
@@ -215,11 +256,12 @@ int main()
         yPosition += yVelocity;
 
         // Draw agent position
-        const cv::Point p(500 + (int)xPosition, 500 + (int)yPosition);
-        cv::line(outputImage, p, p, CV_RGB(0xFF, 0xFF, 0xFF));
+        const cv::Point p((pathImageSize / 2) + (int)xPosition, (pathImageSize / 2) + (int)yPosition);
+        cv::line(pathImage, p, p, CV_RGB(0xFF, 0xFF, 0xFF));
 
         // Show output image
-        cv::imshow("Path", outputImage);
+        cv::imshow("Path", pathImage);
+        cv::imshow("Activity", activityImage);
         cv::waitKey(33);
     }
     return 0;
