@@ -46,26 +46,43 @@ void buildTBToCPUConnector(unsigned int numPre, unsigned int numPost,
     sparseProjection.indInG[numPre] = numPost;
 }
 
-void drawNeuronActivity(scalar activity, const cv::Point &position, cv::Mat &image)
+template<typename F>
+void drawNeuronActivity(scalar activity, const cv::Point &position, F getColourFn, cv::Mat &image)
 {
     // Convert activity to a 8-bit level
     const unsigned char gray = (unsigned char)(255.0f * std::min(1.0f, std::max(0.0f, activity)));
 
     // Draw rectangle of this colour
-    cv::rectangle(image, position, position + cv::Point(25, 25), CV_RGB(gray, 0, 0), cv::FILLED);
+    cv::rectangle(image, position, position + cv::Point(25, 25), getColourFn(gray), cv::FILLED);
 }
 
+template<typename F>
 void drawPopulationActivity(scalar *popActivity, unsigned int popSize, const char *popName,
-                            const cv::Point &position, cv::Mat &image)
+                            const cv::Point &position, F getColourFn, cv::Mat &image)
 {
     // Draw each neuron's activity
     for(unsigned int i = 0; i < popSize; i++) {
-        drawNeuronActivity(popActivity[i], position + cv::Point(i * 27, 0), image);
+        drawNeuronActivity(popActivity[i], position + cv::Point(i * 27, 0), getColourFn, image);
     }
 
     // Label population
     cv::putText(image, popName, position + cv::Point(0, 44),
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(0xFF, 0xFF, 0xFF));
+}
+
+cv::Scalar getReds(unsigned char gray)
+{
+    return CV_RGB(gray, 0, 0);
+}
+
+cv::Scalar getGreens(unsigned char gray)
+{
+    return CV_RGB(0, gray, 0);
+}
+
+cv::Scalar getBlues(unsigned char gray)
+{
+    return CV_RGB(0, 0, gray);
 }
 }   // Anonymous namespace
 
@@ -230,13 +247,22 @@ int main()
         stepTimeCPU();
 
         // Draw neuron activity
-        drawPopulationActivity(rTN2, Parameters::numTN2, "TN2", cv::Point(10, 10), activityImage);
-        drawPopulationActivity(rTL, Parameters::numTL, "TL", cv::Point(10, 80), activityImage);
-        drawPopulationActivity(rCL1, Parameters::numCL1, "CL1", cv::Point(10, 150), activityImage);
-        drawPopulationActivity(rTB1, Parameters::numTB1, "TB1", cv::Point(10, 230), activityImage);
-        drawPopulationActivity(rCPU1, Parameters::numCPU1, "CPU1", cv::Point(10, 310), activityImage);
-        drawPopulationActivity(rCPU4, Parameters::numCPU4, "CPU4", cv::Point(10, 390), activityImage);
-        drawPopulationActivity(rPontine, Parameters::numPontine, "Pontine", cv::Point(10, 470), activityImage);
+        drawPopulationActivity(rTN2, Parameters::numTN2, "TN2", cv::Point(10, 10),
+                               getBlues, activityImage);
+
+        drawPopulationActivity(rTL, Parameters::numTL, "TL", cv::Point(10, 90),
+                               getReds, activityImage);
+        drawPopulationActivity(rCL1, Parameters::numCL1, "CL1", cv::Point(10, 160),
+                               getReds, activityImage);
+        drawPopulationActivity(rTB1, Parameters::numTB1, "TB1", cv::Point(10, 240),
+                               getReds, activityImage);
+
+        drawPopulationActivity(rCPU1, Parameters::numCPU1, "CPU1", cv::Point(10, 330),
+                               getGreens, activityImage);
+        drawPopulationActivity(rCPU4, Parameters::numCPU4, "CPU4", cv::Point(10, 410),
+                               getGreens, activityImage);
+        drawPopulationActivity(rPontine, Parameters::numPontine, "Pontine", cv::Point(10, 490),
+                               getGreens, activityImage);
 
 
         // Update angular velocity and thus heading of agent
