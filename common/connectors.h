@@ -129,6 +129,17 @@ inline void addSynapseToSparseProjection(unsigned int i, unsigned int j, unsigne
                    });
 }
 //----------------------------------------------------------------------------
+template<typename T>
+void printDenseMatrix(unsigned int numPre, unsigned int numPost, T *weights)
+{
+    for(unsigned int i = 0; i < numPre; i++) {
+        for(unsigned int j = 0; j < numPost; j++) {
+            std::cout << *(weights++) << ",";
+        }
+        std::cout << std::endl;
+    }
+}
+//----------------------------------------------------------------------------
 void printSparseMatrix(unsigned int numPre, const SparseProjection &projection)
 {
     for(unsigned int i = 0; i < numPre; i++)
