@@ -205,7 +205,13 @@ int main()
     cv::Mat activityImage(activityImageHeight, activityImageWidth, CV_8UC3, cv::Scalar::all(0));
 
     // Create Von Mises distribution to sample angular acceleration from
-    std::mt19937 gen;
+    std::array<uint32_t, std::mt19937::state_size> seedData;
+    std::random_device seedSource;
+    std::generate(seedData.begin(), seedData.end(),
+                  [&seedSource](){ return seedSource(); });
+    std::seed_seq seeds(std::begin(seedData), std::end(seedData));
+    std::mt19937 gen(seeds);
+
     VonMisesDistribution<double> pathVonMises(0.0, Parameters::pathKappa);
 
     // Create acceleration spline
@@ -213,7 +219,7 @@ int main()
     {
         // Create vectors to hold the times at which linear acceleration
         // should change and it's values at those time
-        const unsigned int numAccelerationChanges = Parameters::numTimesteps / 50;
+        const unsigned int numAccelerationChanges = Parameters::numOutwardTimesteps / 50;
         std::vector<double> accelerationTime(numAccelerationChanges);
         std::vector<double> accelerationMagnitude(numAccelerationChanges);
 
@@ -238,7 +244,7 @@ int main()
     double yVelocity = 0.0;
     double xPosition = 0.0;
     double yPosition = 0.0;
-    for(unsigned int i = 0; i < Parameters::numTimesteps; i++) {
+    for(unsigned int i = 0; i < (Parameters::numOutwardTimesteps + Parameters::numInwardTimesteps); i++) {
         // Update TN2 input input
         headingAngleTN2 = theta;
         vXTN2 = xVelocity;
@@ -269,12 +275,29 @@ int main()
                                getGreens, activityImage);
 
 
-        // Update angular velocity and thus heading of agent
-        omega = (Parameters::pathLambda * omega) + pathVonMises(gen);
-        theta += omega;
+        // If we are on outbound segment of route
+        const bool outbound = (i < Parameters::numOutwardTimesteps);
+        double a = 0.0;
+        if(outbound) {
+            // Update angular velocity
+            omega = (Parameters::pathLambda * omega) + pathVonMises(gen);
 
-        // Read linear acceleration off spline
-        const double a = accelerationSpline((double)i);
+            // Read linear acceleration off spline
+            a = accelerationSpline((double)i);
+        }
+        // Otherwise we're path integrating home
+        else {
+            // Sum left and right motor activity
+            const scalar leftMotor = std::accumulate(&rCPU1[0], &rCPU1[8], 0);
+            const scalar rightMotor = std::accumulate(&rCPU1[8], &rCPU1[16], 0);
+            omega = Parameters::agentM * (rightMotor - leftMotor);
+
+            // Use fixed acceleration
+            a = 0.1;
+        }
+
+        // Update heading
+        theta += omega;
 
         // Update linear velocity
         // **NOTE** this comes from https://github.com/InsectRobotics/path-integration/blob/master/bee_simulator.py#L77-L83 rather than the methods section
@@ -289,12 +312,13 @@ int main()
 
         // Draw agent position (centring so origin is in centre of path image)
         const cv::Point p((pathImageSize / 2) + (int)xPosition, (pathImageSize / 2) + (int)yPosition);
-        cv::line(pathImage, p, p, CV_RGB(0xFF, 0xFF, 0xFF));
+        cv::line(pathImage, p, p,
+                 outbound ? CV_RGB(0xFF, 0, 0) : CV_RGB(0, 0xFF, 0));
 
         // Show output image
         cv::imshow("Path", pathImage);
         cv::imshow("Activity", activityImage);
-        cv::waitKey(33);
+        cv::waitKey(1);
     }
     return 0;
 }

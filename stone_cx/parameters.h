@@ -25,7 +25,8 @@ namespace Parameters
     };
 
     // Outbound path generation parameters
-    const unsigned int numTimesteps = 5000;
+    const unsigned int numOutwardTimesteps = 1500;
+    const unsigned int numInwardTimesteps = 1500;
 
     const double pathLambda = 0.4;
     const double pathKappa = 100.0;
@@ -34,4 +35,5 @@ namespace Parameters
 
     const double agentMinAcceleration = 0.0;
     const double agentMaxAcceleration = 0.15;
+    const double agentM = 0.5;
 }
