@@ -300,8 +300,10 @@ int main()
         // Otherwise we're path integrating home
         else {
             // Sum left and right motor activity
-            const scalar leftMotor = std::accumulate(&rCPU1[0], &rCPU1[8], 0);
-            const scalar rightMotor = std::accumulate(&rCPU1[8], &rCPU1[16], 0);
+            const scalar leftMotor = std::accumulate(&rCPU1[0], &rCPU1[8], 0.0f);
+            const scalar rightMotor = std::accumulate(&rCPU1[8], &rCPU1[16], 0.0f);
+
+            // Use difference between left and right to calculate angular velocity
             omega = Parameters::agentM * (rightMotor - leftMotor);
 
             // Use fixed acceleration
