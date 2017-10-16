@@ -30,11 +30,11 @@ class TN2Linear : public NeuronModels::Base
 public:
     DECLARE_MODEL(TN2Linear,0, 2);
 
+    // **NOTE** this comes from https://github.com/InsectRobotics/path-integration/blob/master/cx_rate.py#L170-L173 rather than the methods section
     SET_SIM_CODE(
         "const scalar iTN = (sin($(headingAngle) + $(preferredAngle)) * $(vX)) + \n"
         "   (cos($(headingAngle) + $(preferredAngle)) * $(vY));\n"
-        "$(r) = max(0.0, (2.0 * iTN) - 1.0);\n"
-    );
+        "$(r) = min(1.0, max(iTN, 0.0));\n");
 
     SET_VARS({{"r", "scalar"},
               {"preferredAngle", "scalar"}});
@@ -134,7 +134,7 @@ void modelDefinition(NNmodel &model)
         5.0,    // Multiplicative scale
         2.5,    // Additive scale
         0.0025, // Input scale
-        0.1);   // Offset current
+        0.125);   // Offset current **NOTE** this is the value from github
 
     CPU4Sigmoid::VarValues cpu4Init(
         0.0,    // r

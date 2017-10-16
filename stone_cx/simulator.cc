@@ -130,15 +130,15 @@ int main()
     // TB1_TB1
     for(unsigned int i = 0; i < Parameters::numTB1; i++) {
         for(unsigned int j = 0; j < Parameters::numTB1; j++) {
-            const double preferredI = preferredAngleTN2[i];
-            const double preferredJ = preferredAngleTN2[j];
+            const double preferredI = preferredAngleTL[i];
+            const double preferredJ = preferredAngleTL[j];
 
             const double w = (cos(preferredI - preferredJ) - 1.0) / 2.0;
             gTB1_TB1[(i * Parameters::numTB1) + j] = Parameters::c * w;
         }
     }
-    //std::cout << "TB1->TB1" << std::endl;
-    //printSparseMatrix(Parameters::numTL, CTL_CL1);
+    std::cout << "TB1->TB1" << std::endl;
+    printDenseMatrix(Parameters::numTB1, Parameters::numTB1, gTB1_TB1);
 
     // CPU4_Pontine
     buildOneToOneConnector(Parameters::numCPU4, Parameters::numPontine,
@@ -239,11 +239,15 @@ int main()
     double xPosition = 0.0;
     double yPosition = 0.0;
     for(unsigned int i = 0; i < Parameters::numTimesteps; i++) {
-        // Update network input
-        headingAngleTN2 = headingAngleTL = theta;
+        // Update TN2 input input
+        headingAngleTN2 = theta;
         vXTN2 = xVelocity;
         vYTN2 = yVelocity;
 
+        // Update TL input
+        headingAngleTL = theta;
+
+        // Step network
         stepTimeCPU();
 
         // Draw neuron activity
@@ -273,7 +277,7 @@ int main()
         const double a = accelerationSpline((double)i);
 
         // Update linear velocity
-        // **NOTE** this comes from https://github.com/InsectRobotics/path-integration/blob/master/bee_simulator.py#L77-L83 rather than paper
+        // **NOTE** this comes from https://github.com/InsectRobotics/path-integration/blob/master/bee_simulator.py#L77-L83 rather than the methods section
         xVelocity += sin(theta) * a;
         yVelocity += cos(theta) * a;
         xVelocity -= Parameters::agentDrag * xVelocity;
@@ -283,7 +287,7 @@ int main()
         xPosition += xVelocity;
         yPosition += yVelocity;
 
-        // Draw agent position
+        // Draw agent position (centring so origin is in centre of path image)
         const cv::Point p((pathImageSize / 2) + (int)xPosition, (pathImageSize / 2) + (int)yPosition);
         cv::line(pathImage, p, p, CV_RGB(0xFF, 0xFF, 0xFF));
 
