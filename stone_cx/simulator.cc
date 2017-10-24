@@ -12,6 +12,7 @@
 #include <opencv2/opencv.hpp>
 
 // Common includes
+#include "../common/analogue_csv_recorder.h"
 #include "../common/connectors.h"
 #include "../common/von_mises_distribution.h"
 
@@ -249,6 +250,14 @@ int main()
         accelerationSpline.set_points(accelerationTime, accelerationMagnitude);
     }
 
+#ifdef RECORD_ELECTROPHYS
+    AnalogueCSVRecorder<scalar> tn2Recorder("tn2.csv", rTN2, Parameters::numTN2, "TN2");
+    AnalogueCSVRecorder<scalar> cl1Recorder("cl1.csv", rCL1, Parameters::numCL1, "CL1");
+    AnalogueCSVRecorder<scalar> tb1Recorder("tb1.csv", rTB1, Parameters::numTB1, "TB1");
+    AnalogueCSVRecorder<scalar> cpu4Recorder("cpu4.csv", rCPU4, Parameters::numCPU4, "CPU4");
+    AnalogueCSVRecorder<scalar> cpu1Recorder("cpu1.csv", rCPU1, Parameters::numCPU1, "CPU1");
+#endif  // RECORD_ELECTROPHYS
+
     // Simulate
     double omega = 0.0;
     double theta = 0.0;
@@ -267,6 +276,14 @@ int main()
 
         // Step network
         stepTimeCPU();
+
+#ifdef RECORD_ELECTROPHYS
+        tn2Recorder.record(i);
+        cl1Recorder.record(i);
+        tb1Recorder.record(i);
+        cpu4Recorder.record(i);
+        cpu1Recorder.record(i);
+#endif  // RECORD_ELECTROPHYS
 
         // Draw neuron activity
         drawPopulationActivity(rTN2, Parameters::numTN2, "TN2", cv::Point(10, 10),
@@ -304,7 +321,7 @@ int main()
             const scalar rightMotor = std::accumulate(&rCPU1[8], &rCPU1[16], 0.0f);
 
             // Use difference between left and right to calculate angular velocity
-            omega = Parameters::agentM * (rightMotor - leftMotor);
+            omega = -Parameters::agentM * (rightMotor - leftMotor);
 
             // Use fixed acceleration
             a = 0.1;
