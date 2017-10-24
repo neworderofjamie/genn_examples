@@ -78,7 +78,8 @@ public:
     DECLARE_MODEL(CPU4Sigmoid, 4, 2);
 
     SET_SIM_CODE(
-        "$(i) += $(h) * ($(Isyn) - $(k));\n"
+        "$(i) += $(h) * min(1.0, max($(Isyn), 0.0));\n"
+        "$(i) -= $(h) * $(k);\n"
         "$(i) = min(1.0, max($(i), 0.0));\n"
         "$(r) = 1.0 / (1.0 + exp(-(($(a) * $(i)) - $(b))));\n"
     );
@@ -158,6 +159,8 @@ void modelDefinition(NNmodel &model)
     Continuous::VarValues continuousInhInit(-1.0);
 
     Continuous::VarValues cl1TB1Init(1.0 - Parameters::c);
+    Continuous::VarValues cpu4CPU1Init(0.5);
+    Continuous::VarValues pontineCPU1Init(-0.5);
 
     //---------------------------------------------------------------------------
     // Neuron populations
@@ -212,7 +215,7 @@ void modelDefinition(NNmodel &model)
     auto *cpu4CPU1 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "CPU4_CPU1", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "CPU4", "CPU1",
-        {}, continuousExcInit,
+        {}, cpu4CPU1Init,
         {}, {});
 
     auto *tn2CPU4 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
@@ -224,7 +227,7 @@ void modelDefinition(NNmodel &model)
     auto *pontineCPU1 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "Pontine_CPU1", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "Pontine", "CPU1",
-        {}, continuousInhInit,
+        {}, pontineCPU1Init,
         {}, {});
 
     // Finalize model
