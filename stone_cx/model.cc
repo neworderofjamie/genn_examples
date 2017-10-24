@@ -146,10 +146,10 @@ void modelDefinition(NNmodel &model)
         5.0,     // Multiplicative scale
         2.5);   // Additive scale
 
-    // CPU1
+    // CPU1 **NOTE** these are the values from https://github.com/InsectRobotics/path-integration/blob/master/cx_rate.py#L231-L232
     Sigmoid::ParamValues cpu1Params(
-        6.0,     // Multiplicative scale
-        2.0);   // Additive scale
+        7.5,     // Multiplicative scale
+        -1.0);   // Additive scale
 
     //---------------------------------------------------------------------------
     // Synapse parameters
