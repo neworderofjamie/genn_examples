@@ -285,24 +285,23 @@ int main()
         cpu1Recorder.record(i);
 #endif  // RECORD_ELECTROPHYS
 
-        // Draw neuron activity
-        drawPopulationActivity(rTN2, Parameters::numTN2, "TN2", cv::Point(10, 10),
-                               getBlues, activityImage);
-
-        drawPopulationActivity(rTL, Parameters::numTL, "TL", cv::Point(10, 90),
+        // Draw compass system activity
+        drawPopulationActivity(rTL, Parameters::numTL, "TL", cv::Point(10, 10),
                                getReds, activityImage, 8);
-        drawPopulationActivity(rCL1, Parameters::numCL1, "CL1", cv::Point(10, 190),
+        drawPopulationActivity(rCL1, Parameters::numCL1, "CL1", cv::Point(10, 110),
                                getReds, activityImage, 8);
-        drawPopulationActivity(rTB1, Parameters::numTB1, "TB1", cv::Point(10, 290),
+        drawPopulationActivity(rTB1, Parameters::numTB1, "TB1", cv::Point(10, 210),
                                getReds, activityImage);
 
-        drawPopulationActivity(rCPU1, Parameters::numCPU1, "CPU1", cv::Point(10, 390),
-                               getGreens, activityImage, 8);
-        drawPopulationActivity(rCPU4, Parameters::numCPU4, "CPU4", cv::Point(10, 490),
-                               getGreens, activityImage, 8);
-        drawPopulationActivity(rPontine, Parameters::numPontine, "Pontine", cv::Point(10, 590),
-                               getGreens, activityImage, 8);
+        drawPopulationActivity(rTN2, Parameters::numTN2, "TN2", cv::Point(300, 310),
+                               getBlues, activityImage, 1);
 
+        drawPopulationActivity(rCPU4, Parameters::numCPU4, "CPU4", cv::Point(10, 310),
+                               getGreens, activityImage, 8);
+        drawPopulationActivity(rPontine, Parameters::numPontine, "Pontine", cv::Point(10, 410),
+                               getGreens, activityImage, 8);
+        drawPopulationActivity(rCPU1, Parameters::numCPU1, "CPU1", cv::Point(10, 510),
+                               getGreens, activityImage, 8);
 
         // If we are on outbound segment of route
         const bool outbound = (i < Parameters::numOutwardTimesteps);
