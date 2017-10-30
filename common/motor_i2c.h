@@ -14,27 +14,57 @@
 //----------------------------------------------------------------------------
 class MotorI2C
 {
-    public:
-        MotorI2C(const char *path = "/dev/i2c-1", int slaveAddress = 0x29) : m_I2C(path, slaveAddress)
-        {
-        }
+public:
+    MotorI2C(const char *path = "/dev/i2c-1", int slaveAddress = 0x29) : m_I2C(path, slaveAddress)
+    {
+    }
+    
+    //----------------------------------------------------------------------------
+    // Public API
+    //----------------------------------------------------------------------------
+    void tank(float left, float right) 
+    {  
+        // Convert standard (-1,1) values to bytes in order to send to I2C slave
+        uint8_t buffer[2] = { floatToI2C(left), floatToI2C(left) };
         
-        template<typename T, size_t N>
-        void read(T (&data)[N])
-        {
-            return m_I2C.read(data);
+        // Send buffer
+        write(buffer);
+    }
+
+    template<typename T, size_t N>
+    void read(T (&data)[N])
+    {
+        m_I2C.read(data);
+    }
+    
+    template<typename T, size_t N>
+    void write(const T (&data)[N]) 
+    {
+        m_I2C.write(data);
+    }
+    
+    
+private:
+    //----------------------------------------------------------------------------
+    // Private methods
+    //----------------------------------------------------------------------------
+    uint8_t floatToI2C(float speed) 
+    {
+        // Forward = 1
+        if(speed > 0.0f) {
+            return 1;
         }
-        
-        //---MOVE ROBOT------------------------
-        // move robot 1 forward 2 backward 0 stop
-        void tank(uint8_t left_wheel, uint8_t right_wheel) 
-        {  
-            uint8_t buffer[2] = { left_wheel, right_wheel };
-            
-            // sending command to the arduino
-            m_I2C.write(buffer);
+        // Backwards = 2
+        else if(speed < 0.0f) {
+            return 2;
         }
-        
-    private:
-        I2CInterface m_I2C;
+        // Stop = 0
+        else {
+            return 0;
+        }
+    }
+    //----------------------------------------------------------------------------
+    // Private members
+    //----------------------------------------------------------------------------
+    I2CInterface m_I2C;
 };
