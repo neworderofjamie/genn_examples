@@ -129,6 +129,51 @@ inline void addSynapseToSparseProjection(unsigned int i, unsigned int j, unsigne
                    });
 }
 //----------------------------------------------------------------------------
+template<typename T>
+void printDenseMatrix(unsigned int numPre, unsigned int numPost, T *weights)
+{
+    for(unsigned int i = 0; i < numPre; i++) {
+        for(unsigned int j = 0; j < numPost; j++) {
+            std::cout << *(weights++) << ",";
+        }
+        std::cout << std::endl;
+    }
+}
+//----------------------------------------------------------------------------
+void printSparseMatrix(unsigned int numPre, const SparseProjection &projection)
+{
+    for(unsigned int i = 0; i < numPre; i++)
+    {
+        std::cout << i << ":";
+
+        for(unsigned int j = projection.indInG[i]; j < projection.indInG[i + 1]; j++)
+        {
+            std::cout << projection.ind[j] << ",";
+        }
+
+        std::cout << std::endl;
+    }
+}
+//----------------------------------------------------------------------------
+void buildOneToOneConnector(unsigned int numPre, unsigned int numPost,
+                            SparseProjection &sparseProjection, AllocateFn allocateFn)
+{
+    if(numPre != numPost) {
+        throw std::runtime_error("One-to-one connector can only be used between two populations of the same size");
+    }
+
+    // Allocate SparseProjection arrays
+    allocateFn(numPre);
+
+    // Configure synaptic rows
+    for(unsigned int i = 0; i < numPre; i++)
+    {
+        sparseProjection.indInG[i] = i;
+        sparseProjection.ind[i] = i;
+    }
+    sparseProjection.indInG[numPre] = numPre;
+}
+//----------------------------------------------------------------------------
 template <typename Generator>
 void buildFixedProbabilityConnector(unsigned int numPre, unsigned int numPost, float probability,
                                     SparseProjection &projection, AllocateFn allocate, Generator &gen)
