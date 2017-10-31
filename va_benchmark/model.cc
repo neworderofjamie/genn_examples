@@ -35,7 +35,7 @@ void modelDefinition(NNmodel &model)
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
-    LIF::VarInitialisers lifInit(
+    LIF::VarValues lifInit(
         initVar<VarInitSnippet::Uniform>(vDist),     // 0 - V
         0.0);   // 1 - RefracTime
 
@@ -43,7 +43,7 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
         Parameters::excitatoryWeight);    // 0 - Wij (nA)
 
-    WeightUpdateModels::StaticPulse::VarInitialisers inhibitoryStaticSynapseInit(
+    WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
         Parameters::inhibitoryWeight);    // 0 - Wij (nA)
 
     // Exponential current parameters
