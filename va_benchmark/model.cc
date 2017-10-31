@@ -20,6 +20,10 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
+    VarInitSnippet::Uniform::ParamValues vDist(
+        Parameters::resetVoltage,       // 0 - min
+        Parameters::thresholdVoltage);  // 1 - max
+
     // LIF model parameters
     LIF::ParamValues lifParams(
         1.0,    // 0 - C
@@ -31,15 +35,15 @@ void modelDefinition(NNmodel &model)
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
-    LIF::VarValues lifInit(
-        -55.0,  // 0 - V
-        0.0);    // 1 - RefracTime
+    LIF::VarInitialisers lifInit(
+        initVar<VarInitSnippet::Uniform>(vDist),     // 0 - V
+        0.0);   // 1 - RefracTime
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
         Parameters::excitatoryWeight);    // 0 - Wij (nA)
 
-    WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
+    WeightUpdateModels::StaticPulse::VarInitialisers inhibitoryStaticSynapseInit(
         Parameters::inhibitoryWeight);    // 0 - Wij (nA)
 
     // Exponential current parameters
@@ -82,7 +86,7 @@ void modelDefinition(NNmodel &model)
                                                                       Parameters::probabilityConnection));
     ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
                                                                       Parameters::probabilityConnection));
-    /*ee->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+   /*ee->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
     ei->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
     ie->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
     ii->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);*/

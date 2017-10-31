@@ -84,22 +84,6 @@ int main()
                                     Parameters::probabilityConnection, CEI, &allocateEI, gen);
     }
 
-    {
-        Timer<> t("Initializing sparse synapse variables:");
-
-        // Initialize excitatory weights
-        std::fill_n(gEI, CEI.connN, Parameters::initExcWeight);
-        std::fill_n(gEE, CEE.connN, Parameters::initExcWeight);
-
-        // Initialize synaptic tags
-        std::fill_n(cEI, CEI.connN, 0.0f);
-        std::fill_n(cEE, CEE.connN, 0.0f);
-
-        // Initialize times to last update
-        std::fill_n(tCEI, CEI.connN, 0.0f);
-        std::fill_n(tCEE, CEE.connN, 0.0f);
-    }
-
     // Final setup
     {
         Timer<> t("Sparse init:");

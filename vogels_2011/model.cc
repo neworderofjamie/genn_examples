@@ -15,10 +15,15 @@ void modelDefinition(NNmodel &model)
     model.setDT(1.0);
     model.setName("vogels_2011");
 
+    GENN_PREFERENCES::autoInitSparseVars = true;
 
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
+    VarInitSnippet::Uniform::ParamValues vDist(
+        -60.0,  // 0 - min
+        -50.0); // 1 - max
+
     // LIF model parameters
     LIF::ParamValues lifParams(
         0.2,    // 0 - C
@@ -30,15 +35,15 @@ void modelDefinition(NNmodel &model)
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
-    LIF::VarValues lifInit(
-        -55.0,  // 0 - V
-        0.0);    // 1 - RefracTime
+    LIF::VarInitialisers lifInit(
+        initVar<VarInitSnippet::Uniform>(vDist),    // 0 - V
+        0.0);                                       // 1 - RefracTime
 
     // Static synapse parameters
-    WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
-        0.03);    // 0 - Wij (nA)
+    WeightUpdateModels::StaticPulse::VarInitialisers excitatoryStaticSynapseInit(
+        0.03);     // 0 - Wij (nA)
 
-    WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
+    WeightUpdateModels::StaticPulse::VarInitialisers inhibitoryStaticSynapseInit(
         -0.03);    // 0 - Wij (nA)
 
     // Additive STDP synapse parameters
@@ -49,7 +54,7 @@ void modelDefinition(NNmodel &model)
         -1.0,    // 3 - Wmin
         0.0);    // 4 - Wmax
 
-    Vogels2011::VarValues vogels2011AdditiveSTDPInit(
+    Vogels2011::VarInitialisers vogels2011AdditiveSTDPInit(
         0.0);  // 0 - g
 
     // Exponential current parameters

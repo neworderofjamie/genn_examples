@@ -18,35 +18,18 @@ int main()
   auto  initStart = chrono::steady_clock::now(); 
   initialize();
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
-
   buildFixedProbabilityConnector(500, 500, 0.02f,
-                                 CII, &allocateII, gen);
+                                 CII, &allocateII, rng);
   buildFixedProbabilityConnector(500, 2000, 0.02f,
-                                 CIE, &allocateIE, gen);
+                                 CIE, &allocateIE, rng);
   buildFixedProbabilityConnector(2000, 2000, 0.02f,
-                                 CEE, &allocateEE, gen);
+                                 CEE, &allocateEE, rng);
   buildFixedProbabilityConnector(2000, 500, 0.02f,
-                                 CEI, &allocateEI, gen);
-
-  // Copy conductances
-  std::fill(&gIE[0], &gIE[CIE.connN], 0.0);
+                                 CEI, &allocateEI, rng);
 
   // Setup reverse connection indices for STDP
   initvogels_2011();
 
-  // Randomlise initial membrane voltages
-  std::uniform_real_distribution<> dis(-60.0, -50.0);
-  for(unsigned int i = 0; i < 2000; i++)
-  {
-    VE[i] = dis(gen);
-  }
-
-  for(unsigned int i = 0; i < 500; i++)
-  {
-    VI[i] = dis(gen);
-  }
   auto  initEnd = chrono::steady_clock::now();
   printf("Init %ldms\n", chrono::duration_cast<chrono::milliseconds>(initEnd - initStart).count());
 
