@@ -35,15 +35,15 @@ void modelDefinition(NNmodel &model)
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
-    LIF::VarInitialisers lifInit(
+    LIF::VarValues lifInit(
         initVar<VarInitSnippet::Uniform>(vDist),    // 0 - V
         0.0);                                       // 1 - RefracTime
 
     // Static synapse parameters
-    WeightUpdateModels::StaticPulse::VarInitialisers excitatoryStaticSynapseInit(
+    WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
         0.03);     // 0 - Wij (nA)
 
-    WeightUpdateModels::StaticPulse::VarInitialisers inhibitoryStaticSynapseInit(
+    WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
         -0.03);    // 0 - Wij (nA)
 
     // Additive STDP synapse parameters
@@ -54,7 +54,7 @@ void modelDefinition(NNmodel &model)
         -1.0,    // 3 - Wmin
         0.0);    // 4 - Wmax
 
-    Vogels2011::VarInitialisers vogels2011AdditiveSTDPInit(
+    Vogels2011::VarValues vogels2011AdditiveSTDPInit(
         0.0);  // 0 - g
 
     // Exponential current parameters
