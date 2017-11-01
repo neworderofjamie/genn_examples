@@ -176,55 +176,55 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Synapse populations
     //---------------------------------------------------------------------------
-    auto *tlCL1 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "TL_CL1", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "TL", "CL1",
         {}, continuousInhInit,
         {}, {});
 
-    auto *cl1TB1 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "CL1_TB1", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "CL1", "TB1",
         {}, cl1TB1Init,
         {}, {});
 
-    auto *tb1TB1 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "TB1_TB1", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "TB1", "TB1",
         {}, continuousInhInit,
         {}, {});
 
-    auto *cpu4Pontine = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "CPU4_Pontine", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "CPU4", "Pontine",
         {}, continuousExcInit,
         {}, {});
 
-    auto *tb1CPU4 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "TB1_CPU4", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "TB1", "CPU4",
         {}, continuousInhInit,
         {}, {});
 
-    auto *tb1CPU1 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "TB1_CPU1", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "TB1", "CPU1",
         {}, continuousInhInit,
         {}, {});
 
-    auto *cpu4CPU1 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "CPU4_CPU1", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "CPU4", "CPU1",
         {}, cpu4CPU1Init,
         {}, {});
 
-    auto *tn2CPU4 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "TN2_CPU4", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "TN2", "CPU4",
         {}, continuousExcInit,
         {}, {});
 
-    auto *pontineCPU1 = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
         "Pontine_CPU1", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "Pontine", "CPU1",
         {}, pontineCPU1Init,
