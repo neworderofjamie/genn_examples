@@ -66,19 +66,27 @@ public:
     }
     
     template<typename T, size_t N>
-    void read(T (&data)[N])
+    bool read(T (&data)[N])
     {
         if (::read(m_I2C, &data[0], sizeof(T) * N) < 0) {
             std::cerr << "Failed to read from i2c bus" << std::endl;
+            return false;
+        }
+        else {
+            return true;
         }
     }
     
     // writes data
     template<typename T, size_t N>
-    void write(const T (&data)[N]) 
+    bool write(const T (&data)[N]) 
     {  
         if (::write(m_I2C, &data[0], sizeof(T) * N) < 0) {
             std::cerr << "Failed to write to i2c bus" << std::endl;
+            return false;
+        }
+        else {
+            return true;
         }
     }
 
