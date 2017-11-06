@@ -181,7 +181,6 @@ public:
     };
     
     
-    
     LM9DS1(const char *path = "/dev/i2c-1", int accelGyroSlaveAddress = 0x6B, int magnetoSlaveAddress = 0x1E)
     {
         if(!init(path, accelGyroSlaveAddress, magnetoSlaveAddress)) {
@@ -231,6 +230,9 @@ public:
     
     bool initGyro(const GyroSettings &settings)
     {
+        // Cache gyro sensitivity
+        m_GyroSensitivity = getGyroSensitivity(settings.scale);
+        
         // CTRL_REG1_G (Default value: 0x00)
         // [ODR_G2][ODR_G1][ODR_G0][FS_G1][FS_G0][0][BW_G1][BW_G0]
         // ODR_G[2:0] - Output data rate selection
@@ -312,11 +314,17 @@ public:
             return false;
         }
         
+        std::cout << "Gyro initialised" << std::endl;
+        
         return true;
     }
     
     bool initAccel(const AccelSettings &settings)
     {
+        // Cache accelerometer sensitivity
+        m_AccelSensitivity = getAccelSensitivity(settings.scale);
+        
+        
         //	CTRL_REG5_XL (0x1F) (Default value: 0x38)
         //	[DEC_1][DEC_0][Zen_XL][Yen_XL][Zen_XL][0][0][0]
         //	DEC[0:1] - Decimation of accel data on OUT REG and FIFO.
@@ -372,9 +380,8 @@ public:
     
     bool initMagneto(const MagnetoSettings &settings)
     {
-        // Calculate sensitivity
-        static constexpr float magSensitivity[4] = {0.00014, 0.00029, 0.00043, 0.00058};
-        m_MagnetoSensitivity = magSensitivity[static_cast<uint8_t>(settings.scale)];
+        // Cache magneto sensitivity
+        m_MagnetoSensitivity = getMagnetoSensitivity(settings.scale);
         
         // CTRL_REG1_M (Default value: 0x10)
         // [TEMP_COMP][OM1][OM0][DO2][DO1][DO0][0][ST]
@@ -451,6 +458,82 @@ public:
         return true;
     }
     
+    bool calibrateAccelGyro()
+    {
+        if(!setFIFOEnabled(true)) {
+            std::cerr << "Cannot enable FIFO" << std::endl;
+            return false;
+        }
+        
+        if(!setFIFOMode(FIFOMode::Threshold, 31)) {
+            std::cerr << "Cannot set FIFO mode" << std::endl;
+            return false;
+        }
+        
+        // Accumulate 32 samples
+        unsigned int numSamples = 0;
+        while(numSamples < 31) {
+            if(!getNumFIFOSamples(numSamples)) {
+                std::cerr << "Cannot get FIFO sample count" << std::endl;
+                return false;
+            }
+        }
+        
+        // Accumulate bias from sensor samples
+        // **NOTE** 32-bit to prevent overflow
+        int32_t accelBias[3] = {0, 0, 0};
+        int32_t gyroBias[3] = {0, 0, 0};
+        for(unsigned int i = 0; i < numSamples; i++)
+        {
+            // Read a sample from gyroscope
+            int16_t gyroSample[3];
+            if(!readGyro(gyroSample)) {
+                std::cerr << "Cannot read sample from gyro" << std::endl;
+                return false;
+            }
+            
+         
+            //std::cout << "Gyro sample:" << gyroSample[0] << "," << gyroSample[1] << "," << gyroSample[2] << std::endl;
+            // Add to gyro bias
+            gyroBias[0] += gyroSample[0];
+            gyroBias[1] += gyroSample[1];
+            gyroBias[2] += gyroSample[2];
+            
+            // Read a sample from accelerometer
+            int16_t accelSample[3];
+            if(!readAccel(accelSample)) {
+                std::cerr << "Cannot read sample from accelerometer" << std::endl;
+                return false;
+            }
+            
+            std::cout << "Accel sample:" << accelSample[0] << "," << accelSample[1] << "," << accelSample[2] << std::endl;
+            // Add to acclerometer bias
+            accelBias[0] += accelSample[0];
+            accelBias[1] += accelSample[1];
+            accelBias[2] += accelSample[2];
+        }
+        
+        //  Divide biases by number of samples to get means
+        std::transform(std::begin(accelBias), std::end(accelBias), std::begin(m_AccelBias),
+                       [numSamples](int32_t v){ return v / numSamples; });
+        std::transform(std::begin(gyroBias), std::end(gyroBias), std::begin(m_GyroBias),
+                       [numSamples](int32_t v){ return v / numSamples; });
+        
+        if(!setFIFOEnabled(false)) {
+            std::cerr << "Cannot disable FIFO" << std::endl;
+            return false;
+        }
+        
+        if(!setFIFOMode(FIFOMode::Off, 0)) {
+            std::cerr << "Cannot set FIFO mode" << std::endl;
+            return false;
+        }
+        
+        std::cout << "Accel bias:" << m_AccelBias[0] << "," << m_AccelBias[1] << "," << m_AccelBias[2] << std::endl;
+        std::cout << "Gyro bias:" << m_GyroBias[0] << "," << m_GyroBias[1] << "," << m_GyroBias[2] << std::endl;
+        return true;
+    }
+    
     bool isAccelAvailable()
     {
         uint8_t status;
@@ -477,6 +560,11 @@ public:
         }
     }
     
+    bool readGyro(int16_t (&data)[3])
+    {
+        return readAccelGyroData(AccelGyroReg::OUT_X_L_G, data);
+    }
+    
     bool readAccel(int16_t (&data)[3])
     {
         return readAccelGyroData(AccelGyroReg::OUT_X_L_XL, data);
@@ -499,26 +587,6 @@ public:
             return false;
         }
     }
-    
-    bool setFIFOEnabled(bool enabled)
-    {
-        uint8_t ctrlReg9Value;
-        if(readAccelGyroByte(AccelGyroReg::CTRL_REG9, ctrlReg9Value)) {
-            if(enabled) {
-                ctrlReg9Value |= (1 << 6);
-            }
-            else {
-                ctrlReg9Value &= ~(1 << 6);
-            }
-            
-            return writeAccelGyroByte(AccelGyroReg::CTRL_REG9, ctrlReg9Value);
-        }
-        else {
-            std::cerr << "Cannot read control register 9" << std::endl;
-            return false;
-        }
-    }
-    
 
 private:
     //----------------------------------------------------------------------------
@@ -530,6 +598,15 @@ private:
     //----------------------------------------------------------------------------
     // Enumerations
     //----------------------------------------------------------------------------
+    enum class FIFOMode : uint8_t
+    {
+        Off                 = 0,
+        Threshold           = 1,
+        ContinuousTrigger   = 3,
+        OffTrigger          = 4,
+        Continuous          = 5,
+    };
+    
     enum class AccelGyroReg : uint8_t
     {
         ACT_THS = 0x04,
@@ -670,11 +747,96 @@ private:
         return writeByte(m_MagnetoI2C, static_cast<uint8_t>(reg), byte);
     }
     
+    bool setFIFOEnabled(bool enabled)
+    {
+        uint8_t ctrlReg9Value;
+        if(readAccelGyroByte(AccelGyroReg::CTRL_REG9, ctrlReg9Value)) {
+            if(enabled) {
+                ctrlReg9Value |= (1 << 1);
+            }
+            else {
+                ctrlReg9Value &= ~(1 << 1);
+            }
+            
+            return writeAccelGyroByte(AccelGyroReg::CTRL_REG9, ctrlReg9Value);
+        }
+        else {
+            std::cerr << "Cannot read control register 9" << std::endl;
+            return false;
+        }
+    }
+    
+    bool setFIFOMode(FIFOMode mode, uint8_t threshold) {
+        // Clamp threshold
+        threshold = std::min((uint8_t)31, threshold);
+        
+        const uint8_t fifoCtrl = (static_cast<uint8_t>(mode) << 5) | threshold;
+        return writeAccelGyroByte(AccelGyroReg::FIFO_CTRL, fifoCtrl);
+    }
+    
+    bool getNumFIFOSamples(unsigned int &numSamples)
+    {
+        uint8_t temp;
+        if(readAccelGyroByte(AccelGyroReg::FIFO_SRC, temp)) {
+            numSamples = temp & 0x3F;
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    
+    float getGyroSensitivity(GyroScale scale) const
+    {
+        switch(scale) {
+            case GyroScale::DPS245:
+                return 245.0f / 32768.0f;
+            case GyroScale::DPS500:
+                return 500.0f / 32768.0f;
+            case GyroScale::DPS2000:
+                return 2000.0f / 32768.0f;
+        }
+    }
+    
+    float getAccelSensitivity(AccelScale scale) const
+    {
+        switch(scale) {
+            case AccelScale::G2:
+                return 2.0f / 32768.0f;
+            case AccelScale::G16:
+                return 16.0f / 32768.0f;
+            case AccelScale::G4:
+                return 4.0f /  32768.0f;
+            case AccelScale::G8:
+                return 8.0f /  32768.0f;
+        }
+    }
+    
+    float getMagnetoSensitivity(MagnetoScale scale) const
+    {
+        switch(scale) {
+            case MagnetoScale::GS4:
+                return 0.00014f;
+            case MagnetoScale::GS8:
+                return 0.00029f;
+            case MagnetoScale::GS12:
+                return 0.00043f;
+            case MagnetoScale::GS16:
+                return 0.00058f;
+        }
+    }
+    
     //----------------------------------------------------------------------------
     // Members
     //----------------------------------------------------------------------------
     float m_MagnetoSensitivity;
     float m_AccelSensitivity;
+    float m_GyroSensitivity;
+  
+    int16_t m_MagnetoBias[3];
+    int16_t m_AccelBias[3];
+    int16_t m_GyroBias[3];
+    
     I2CInterface m_AccelGyroI2C;
     I2CInterface m_MagnetoI2C;
 };
