@@ -212,7 +212,7 @@ public:
             return false;
         }
         if(!readMagnetoByte(MagnetoReg::WHO_AM_I, magnetoID)) {
-            std::cerr << "Cannot read accelerometer/gyro id" << std::endl;
+            std::cerr << "Cannot read magneto id" << std::endl;
             return false;
         }
         
@@ -616,24 +616,17 @@ private:
     //----------------------------------------------------------------------------
     bool readByte(I2CInterface &interface, uint8_t address, uint8_t &byte)
     {
-        if(!interface.write({address})) {
+        if(!interface.writeByte(address)) {
             return false;
         }
         
-        uint8_t value[1];
-        if(!interface.read(value)) {
-            return false;
-        }
-        else {
-            byte = value[0];
-            return true;
-        }
+        return interface.readByte(byte);
     }
     
     template<typename T, size_t N>
     bool readData(I2CInterface &interface, uint8_t address, T (&data)[N])
     {
-        if(!interface.write({address | 0x80})) {
+        if(!interface.writeByte(address | 0x80)) {
             return false;
         }
         
@@ -642,26 +635,7 @@ private:
     
     bool writeByte(I2CInterface &interface, uint8_t address, uint8_t byte)
     {
-        if(!interface.write({address})) {
-            return false;
-        }
-        
-        if(!interface.write({byte})) {
-            return false;
-        }
-        
-        uint8_t test;
-        if(!readByte(interface, address, test)) {
-            return false;
-        }
-        else if(test != byte) {
-            std::cerr << "Value " << (int)byte << " not set (" << (int)test << ")" << std::endl;
-            return false;
-        }
-        else
-        {
-            return true;
-        }
+        return interface.writeByteCommand(address, byte);
     }
     
     bool readAccelGyroByte(AccelGyroReg reg, uint8_t &byte)

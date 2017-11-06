@@ -14,7 +14,6 @@
 #include <sys/ioctl.h>
 
 // I2C includes
-#include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 
 //----------------------------------------------------------------------------
@@ -65,11 +64,60 @@ public:
         }
     }
     
+    bool readByteCommand(uint8_t address, uint8_t &byte)
+    {
+        auto data = i2c_smbus_read_byte_data(m_I2C, address);
+        if(data < 0) {
+            std::cerr << "Failed to read byte from i2c bus" << std::endl;
+            return false;
+        }
+        else {
+            byte = (uint8_t)data;
+            return true;
+        }
+    }
+    
+    bool readByte(uint8_t &byte)
+    {
+        auto data = i2c_smbus_read_byte(m_I2C);
+        if(data < 0) {
+            std::cerr << "Failed to read byte from i2c bus" << std::endl;
+            return false;
+        }
+        else {
+            byte = (uint8_t)data;
+            return true;
+        }
+    }
+    
     template<typename T, size_t N>
     bool read(T (&data)[N])
     {
-        if (::read(m_I2C, &data[0], sizeof(T) * N) < 0) {
+        const size_t size = sizeof(T) * N;
+        if (::read(m_I2C, &data[0], size) != size) {
             std::cerr << "Failed to read from i2c bus" << std::endl;
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+    
+    bool writeByteCommand(uint8_t address, uint8_t byte)
+    {
+        if(i2c_smbus_write_byte_data(m_I2C, address, byte) < 0) {
+            std::cerr << "Failed to write byte to i2c bus" << std::endl;
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+    
+    bool writeByte(uint8_t byte)
+    {
+        if(i2c_smbus_write_byte(m_I2C, byte) < 0) {
+            std::cerr << "Failed to write byte to i2c bus" << std::endl;
             return false;
         }
         else {
@@ -81,7 +129,8 @@ public:
     template<typename T, size_t N>
     bool write(const T (&data)[N]) 
     {  
-        if (::write(m_I2C, &data[0], sizeof(T) * N) < 0) {
+        const size_t size = sizeof(T) * N;
+        if (::write(m_I2C, &data[0], size) != size) {
             std::cerr << "Failed to write to i2c bus" << std::endl;
             return false;
         }
