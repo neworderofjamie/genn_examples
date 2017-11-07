@@ -138,6 +138,7 @@ public:
     //----------------------------------------------------------------------------
     struct GyroSettings
     {
+        // Which axes are enabled
         bool enableX = true;
         bool enableY = true;
         bool enableZ = true;
@@ -146,6 +147,8 @@ public:
         uint8_t bandwidth = 0;
         bool lowPowerEnable = false;
         GyroHPF hpf = GyroHPF::Disabled;
+        
+        // Which axes are flipped
         bool flipX = false;
         bool flipY = false;
         bool flipZ = false;
@@ -157,6 +160,7 @@ public:
     //----------------------------------------------------------------------------
     struct AccelSettings
     {
+        // Which axes are enabled
         bool enableX = true;
         bool enableY = true;
         bool enableZ = true;
@@ -182,6 +186,8 @@ public:
     
     
     LM9DS1(const char *path = "/dev/i2c-1", int accelGyroSlaveAddress = 0x6B, int magnetoSlaveAddress = 0x1E)
+        : m_MagnetoSensitivity(1.0f), m_AccelSensitivity(1.0f), m_GyroSensitivity(1.0f), 
+          m_MagnetoBias{0, 0, 0}, m_AccelBias{0, 0, 0}, m_GyroBias{0, 0, 0}
     {
         if(!init(path, accelGyroSlaveAddress, magnetoSlaveAddress)) {
             throw std::runtime_error("Cannot connect to IMU");
@@ -325,13 +331,13 @@ public:
         m_AccelSensitivity = getAccelSensitivity(settings.scale);
         
         
-        //	CTRL_REG5_XL (0x1F) (Default value: 0x38)
-        //	[DEC_1][DEC_0][Zen_XL][Yen_XL][Zen_XL][0][0][0]
-        //	DEC[0:1] - Decimation of accel data on OUT REG and FIFO.
-        //		00: None, 01: 2 samples, 10: 4 samples 11: 8 samples
-        //	Zen_XL - Z-axis output enabled
-        //	Yen_XL - Y-axis output enabled
-        //	Xen_XL - X-axis output enabled
+        // CTRL_REG5_XL (0x1F) (Default value: 0x38)
+        // [DEC_1][DEC_0][Zen_XL][Yen_XL][Zen_XL][0][0][0]
+        // DEC[0:1] - Decimation of accel data on OUT REG and FIFO.
+        //  00: None, 01: 2 samples, 10: 4 samples 11: 8 samples
+        // Zen_XL - Z-axis output enabled
+        // Yen_XL - Y-axis output enabled
+        // Xen_XL - X-axis output enabled
         uint8_t ctrlReg5Value = 0;
         if (settings.enableZ) {
             ctrlReg5Value |= (1 << 5);
@@ -387,8 +393,8 @@ public:
         // [TEMP_COMP][OM1][OM0][DO2][DO1][DO0][0][ST]
         // TEMP_COMP - Temperature compensation
         // OM[1:0] - X & Y axes op mode selection
-        //	00:low-power, 01:medium performance
-        //	10: high performance, 11:ultra-high performance
+        // 00:low-power, 01:medium performance
+        // 10: high performance, 11:ultra-high performance
         // DO[2:0] - Output data rate selection
         // ST - Self-test enable
         uint8_t ctrlReg1Value = 0;
@@ -420,7 +426,7 @@ public:
         // LP - Low-power mode cofiguration (1:enable)
         // SIM - SPI mode selection (0:write-only, 1:read/write enable)
         // MD[1:0] - Operating mode
-        //	00:continuous conversion, 01:single-conversion,
+        // 00:continuous conversion, 01:single-conversion,
         //  10,11: Power-down
         uint8_t ctrlReg3Value = 0;
         if (settings.lowPowerEnable) {
@@ -435,8 +441,8 @@ public:
         // CTRL_REG4_M (Default value: 0x00)
         // [0][0][0][0][OMZ1][OMZ0][BLE][0]
         // OMZ[1:0] - Z-axis operative mode selection
-        //	00:low-power mode, 01:medium performance
-        //	10:high performance, 10:ultra-high performance
+        // 00:low-power mode, 01:medium performance
+        // 10:high performance, 10:ultra-high performance
         // BLE - Big/little endian data
         const uint8_t ctrlReg4Value = static_cast<uint8_t>(settings.zPerformance) << 2;
         if(!writeMagnetoByte(MagnetoReg::CTRL_REG4, ctrlReg4Value)) {
@@ -447,19 +453,21 @@ public:
         // CTRL_REG5_M (Default value: 0x00)
         // [0][BDU][0][0][0][0][0][0]
         // BDU - Block data update for magnetic data
-        //	0:continuous, 1:not updated until MSB/LSB are read
+        // 0:continuous, 1:not updated until MSB/LSB are read
         if(!writeMagnetoByte(MagnetoReg::CTRL_REG5, 0)){
             std::cerr << "Cannot set magneto control register 5" << std::endl;
             return false;
         }
         
-        std::cout << "Magneto initialised" << std::endl;
+        std::cout << "Magnetometer initialised" << std::endl;
         
         return true;
     }
     
     bool calibrateAccelGyro()
     {
+        std::cout << "Calibrating accelerometer and gyroscope" << std::endl;
+        
         if(!setFIFOEnabled(true)) {
             std::cerr << "Cannot enable FIFO" << std::endl;
             return false;
@@ -491,9 +499,7 @@ public:
                 std::cerr << "Cannot read sample from gyro" << std::endl;
                 return false;
             }
-            
-         
-            //std::cout << "Gyro sample:" << gyroSample[0] << "," << gyroSample[1] << "," << gyroSample[2] << std::endl;
+
             // Add to gyro bias
             gyroBias[0] += gyroSample[0];
             gyroBias[1] += gyroSample[1];
@@ -506,18 +512,18 @@ public:
                 return false;
             }
             
-            std::cout << "Accel sample:" << accelSample[0] << "," << accelSample[1] << "," << accelSample[2] << std::endl;
             // Add to acclerometer bias
+            // **NOTE** we subtract gravity from Y as sensor is vertical in current robot
             accelBias[0] += accelSample[0];
-            accelBias[1] += accelSample[1];
+            accelBias[1] += accelSample[1] - (int16_t)(1.0f / m_AccelSensitivity);
             accelBias[2] += accelSample[2];
         }
         
         //  Divide biases by number of samples to get means
         std::transform(std::begin(accelBias), std::end(accelBias), std::begin(m_AccelBias),
-                       [numSamples](int32_t v){ return v / numSamples; });
+                       [numSamples](int32_t v){ return v / (int32_t)numSamples; });
         std::transform(std::begin(gyroBias), std::end(gyroBias), std::begin(m_GyroBias),
-                       [numSamples](int32_t v){ return v / numSamples; });
+                       [numSamples](int32_t v){ return v / (int32_t)numSamples; });
         
         if(!setFIFOEnabled(false)) {
             std::cerr << "Cannot disable FIFO" << std::endl;
@@ -529,9 +535,47 @@ public:
             return false;
         }
         
-        std::cout << "Accel bias:" << m_AccelBias[0] << "," << m_AccelBias[1] << "," << m_AccelBias[2] << std::endl;
-        std::cout << "Gyro bias:" << m_GyroBias[0] << "," << m_GyroBias[1] << "," << m_GyroBias[2] << std::endl;
+        std::cout << "\tAccel bias:" << m_AccelBias[0] << "," << m_AccelBias[1] << "," << m_AccelBias[2] << std::endl;
+        std::cout << "\tGyro bias:" << m_GyroBias[0] << "," << m_GyroBias[1] << "," << m_GyroBias[2] << std::endl;
         return true;
+    }
+    
+    bool calibrateMagneto()
+    {
+        std::cout << "Calibrating magnetometer" << std::endl;
+        
+        int16_t magMin[3] = {0, 0, 0};
+        int16_t magMax[3] = {0, 0, 0};  // The road warrior
+        
+        for(unsigned int i = 0; i < 128; i++) {
+            // Wait for magneto data to become available
+            while(!isMagnetoAvailable()) {
+            }
+            
+            // Read sample from magneto
+            int16_t magSample[3];
+            if(!readMagneto(magSample)) {
+                std::cerr << "Cannot read sample from magneto" << std::endl;
+                return false;
+            }
+          
+            // Update max and min
+            std::transform(std::begin(magSample), std::end(magSample), std::begin(magMin), std::begin(magMin),
+                           [](int16_t v, int16_t min){ return std::min(v, min); });
+            std::transform(std::begin(magSample), std::end(magSample), std::begin(magMax), std::begin(magMax),
+                           [](int16_t v, int16_t max){ return std::max(v, max); });
+        }
+        
+        // Calculate bias
+        int16_t magBias[3];
+        std::transform(std::begin(magMin), std::end(magMin), std::begin(magMax), std::begin(magBias),
+                       [](int16_t min, int16_t max){ return (min + max) / 2; });
+        std::cout << "\tBias: " << magBias[0] << ", " << magBias[1] << ", " << magBias[2] << std::endl;
+        
+        // Set device bias
+        return (setMagnetoOffset(MagnetoReg::OFFSET_X_REG_L, MagnetoReg::OFFSET_X_REG_H, magBias[0]) 
+            && setMagnetoOffset(MagnetoReg::OFFSET_Y_REG_L, MagnetoReg::OFFSET_Y_REG_H, magBias[1])
+            && setMagnetoOffset(MagnetoReg::OFFSET_Z_REG_L, MagnetoReg::OFFSET_Z_REG_H, magBias[2]));
     }
     
     bool isAccelAvailable()
@@ -562,12 +606,26 @@ public:
     
     bool readGyro(int16_t (&data)[3])
     {
-        return readAccelGyroData(AccelGyroReg::OUT_X_L_G, data);
+        if(readAccelGyroData(AccelGyroReg::OUT_X_L_G, data)) {
+            std::transform(std::begin(data), std::end(data), std::begin(m_GyroBias), std::begin(data),
+                           [this](int16_t v, int16_t bias){ return v - bias; });
+            return true;
+        }
+        else {
+            return false;
+        }
     }
     
     bool readAccel(int16_t (&data)[3])
     {
-        return readAccelGyroData(AccelGyroReg::OUT_X_L_XL, data);
+        if(readAccelGyroData(AccelGyroReg::OUT_X_L_XL, data)) {
+            std::transform(std::begin(data), std::end(data), std::begin(m_AccelBias), std::begin(data),
+                           [this](int16_t v, int16_t bias){ return v - bias; });
+            return true;
+        }
+        else {
+            return false;
+        }
     }
     
     bool readMagneto(int16_t (&data)[3]) 
@@ -575,10 +633,36 @@ public:
         return readMagnetoData(MagnetoReg::OUT_X_L, data);
     }
     
+    bool readGyro(float (&data)[3]) 
+    {
+        int16_t dataInt[3];
+        if(readGyro(dataInt)) {
+            std::transform(std::begin(dataInt), std::end(dataInt), std::begin(data),
+                           [this](int16_t v){ return m_GyroSensitivity * (float)v; });
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    
+    bool readAccel(float (&data)[3]) 
+    {
+        int16_t dataInt[3];
+        if(readAccel(dataInt)) {
+            std::transform(std::begin(dataInt), std::end(dataInt), std::begin(data),
+                           [this](int16_t v){ return m_AccelSensitivity * (float)v; });
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    
     bool readMagneto(float (&data)[3]) 
     {
         int16_t dataInt[3];
-        if(readMagnetoData(MagnetoReg::OUT_X_L, dataInt)) {
+        if(readMagneto(dataInt)) {
             std::transform(std::begin(dataInt), std::end(dataInt), std::begin(data),
                            [this](int16_t v){ return m_MagnetoSensitivity * (float)v; });
             return true;
@@ -745,6 +829,23 @@ private:
     bool writeMagnetoByte(MagnetoReg reg, uint8_t byte)
     {
         return writeByte(m_MagnetoI2C, static_cast<uint8_t>(reg), byte);
+    }
+    
+    bool setMagnetoOffset(MagnetoReg lowReg, MagnetoReg highReg, uint16_t axisBias)
+    {
+        const uint8_t axisBiasMSB = (axisBias & 0xFF00) >> 8;
+        const uint8_t axisBiasLSB = (axisBias & 0x00FF);
+        if(!writeMagnetoByte(lowReg, axisBiasLSB)) {
+            std::cerr << "Cannot write magneto axis bias" << std::endl;
+            return false;
+        }
+        
+        if(!writeMagnetoByte(highReg, axisBiasMSB)) {
+            std::cerr << "Cannot write magneto axis bias" << std::endl;
+            return false;
+        }
+        
+        return true;
     }
     
     bool setFIFOEnabled(bool enabled)
