@@ -10,23 +10,15 @@ int main()
     LM9DS1 imu;
     
     LM9DS1::GyroSettings gyroSettings;
-    if(!imu.initGyro(gyroSettings)) {
-        return EXIT_FAILURE;
-    }
+    imu.initGyro(gyroSettings);
     
     LM9DS1::AccelSettings accelSettings;
-    if(!imu.initAccel(accelSettings)) {
-        return EXIT_FAILURE;
-    }
+    imu.initAccel(accelSettings);
     
     LM9DS1::MagnetoSettings magSettings;
-    if(!imu.initMagneto(magSettings)) {
-        return EXIT_FAILURE;
-    }
+    imu.initMagneto(magSettings);
     
-    if(!imu.calibrateAccelGyro()) {
-        return EXIT_FAILURE;
-    }
+    imu.calibrateAccelGyro();
     
     //if(!imu.calibrateMagneto()) {
     //    return EXIT_FAILURE;
@@ -35,13 +27,10 @@ int main()
     //return EXIT_SUCCESS;
     while(true) {
         // Read accelerometer sample
-        float accelData[3];
         while(!imu.isAccelAvailable()) {
         }
-        
-        if(!imu.readAccel(accelData)) {
-            return EXIT_FAILURE;
-        }
+        float accelData[3];
+        imu.readAccel(accelData);
         
         // Calculate roll and pitch
         const float roll = atan2(accelData[0], sqrt((accelData[2] * accelData[2]) + (accelData[1] * accelData[1])));
@@ -49,14 +38,11 @@ int main()
         
         
         // Read magnetometer sample
-        float magnetoData[3];
         while(!imu.isMagnetoAvailable()) {
         }
-        
-        if(!imu.readMagneto(magnetoData)) {
-            return EXIT_FAILURE;
-        }
-        
+        float magnetoData[3];
+        imu.readMagneto(magnetoData);
+            
         const float yawUncorrected = atan2(magnetoData[0], magnetoData[2]);
         //const float yaw = atan2((-magnetoData[0] * cos(roll)) + (magnetoData[1] * sin(roll)), 
         //                        (magnetoData[2] * cos(pitch)) + (magnetoData[1] * sin(pitch) * sin(roll)) + (magnetoData[1] * sin(pitch) * cos(roll)));
