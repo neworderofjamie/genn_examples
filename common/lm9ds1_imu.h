@@ -187,7 +187,8 @@ public:
     
     LM9DS1(const char *path = "/dev/i2c-1", int accelGyroSlaveAddress = 0x6B, int magnetoSlaveAddress = 0x1E)
         : m_MagnetoSensitivity(1.0f), m_AccelSensitivity(1.0f), m_GyroSensitivity(1.0f), 
-          m_MagnetoBias{0, 0, 0}, m_AccelBias{0, 0, 0}, m_GyroBias{0, 0, 0}
+          m_MagnetoHardIronBias{0.20825f, -0.14784f, -1.60125f}, m_MagnetoSoftIronScale{0.960237096f, 1.426265591f, 0.795254653f},
+          m_AccelBias{0, 0, 0}, m_GyroBias{0, 0, 0}
     {
         init(path, accelGyroSlaveAddress, magnetoSlaveAddress);
     }
@@ -345,7 +346,7 @@ public:
     {
         // Cache magneto sensitivity
         m_MagnetoSensitivity = getMagnetoSensitivity(settings.scale);
-        
+        std::cout << m_MagnetoSensitivity << std::endl;
         // CTRL_REG1_M (Default value: 0x10)
         // [TEMP_COMP][OM1][OM0][DO2][DO1][DO0][0][ST]
         // TEMP_COMP - Temperature compensation
@@ -455,12 +456,14 @@ public:
         std::cout << "\tGyro bias:" << m_GyroBias[0] << "," << m_GyroBias[1] << "," << m_GyroBias[2] << std::endl;
     }
     
-    void calibrateMagneto()
+    /*void calibrateMagneto()
     {
         std::cout << "Calibrating magnetometer" << std::endl;
         
-        int16_t magMin[3] = {0, 0, 0};
-        int16_t magMax[3] = {0, 0, 0};  // The road warrior
+        int16_t magMin[3];
+        int16_t magMax[3];
+        std::fill(std::begin(magMin), std::end(magMin), std::numeric_limits<int16_t>::max());
+        std::fill(std::begin(magMax), std::end(magMax), std::numeric_limits<int16_t>::min());
         
         for(unsigned int i = 0; i < 128; i++) {
             // Wait for magneto data to become available
@@ -471,6 +474,7 @@ public:
             int16_t magSample[3];
             readMagneto(magSample);
           
+            //std::cout << magSample[0] << ", " << magSample[1] << ", " << magSample[2] << std::endl;
             // Update max and min
             std::transform(std::begin(magSample), std::end(magSample), std::begin(magMin), std::begin(magMin),
                            [](int16_t v, int16_t min){ return std::min(v, min); });
@@ -479,16 +483,17 @@ public:
         }
         
         // Calculate bias
-        int16_t magBias[3];
-        std::transform(std::begin(magMin), std::end(magMin), std::begin(magMax), std::begin(magBias),
+        //int16_t magBias[3];
+        std::transform(std::begin(magMin), std::end(magMin), std::begin(magMax), std::begin(m_MagnetoBias),
                        [](int16_t min, int16_t max){ return (min + max) / 2; });
-        std::cout << "\tBias: " << magBias[0] << ", " << magBias[1] << ", " << magBias[2] << std::endl;
+        std::cout << "\tBias: " << m_MagnetoBias[0] << ", " << m_MagnetoBias[1] << ", " << m_MagnetoBias[2] << std::endl;
         
         // Set device bias
-        setMagnetoOffset(MagnetoReg::OFFSET_X_REG_L, MagnetoReg::OFFSET_X_REG_H, magBias[0]);
-        setMagnetoOffset(MagnetoReg::OFFSET_Y_REG_L, MagnetoReg::OFFSET_Y_REG_H, magBias[1]);
-        setMagnetoOffset(MagnetoReg::OFFSET_Z_REG_L, MagnetoReg::OFFSET_Z_REG_H, magBias[2]);
-    }
+        // **NOTE** I have no idea why this isn't working
+        //setMagnetoOffset(MagnetoReg::OFFSET_X_REG_L, MagnetoReg::OFFSET_X_REG_H, magBias[0]);
+        //setMagnetoOffset(MagnetoReg::OFFSET_Y_REG_L, MagnetoReg::OFFSET_Y_REG_H, magBias[1]);
+        //setMagnetoOffset(MagnetoReg::OFFSET_Z_REG_L, MagnetoReg::OFFSET_Z_REG_H, magBias[2]);
+    }*/
     
     bool isAccelAvailable()
     {
@@ -540,8 +545,13 @@ public:
     {
         int16_t dataInt[3];
         readMagneto(dataInt);
-        std::transform(std::begin(dataInt), std::end(dataInt), std::begin(data),
-                       [this](int16_t v){ return m_MagnetoSensitivity * (float)v; });
+        for(unsigned int a = 0; a < 3; a++) {
+            // Convert raw float values to gauss
+            const float rawFloat = dataInt[a] * m_MagnetoSensitivity;
+            
+            // Apply hard and soft iron corrections
+            data[a] = (rawFloat - m_MagnetoHardIronBias[a]) * m_MagnetoSoftIronScale[a];
+        }
     }
 
 private:
@@ -639,7 +649,7 @@ private:
         OUT_Z_L = 0x2C,
         OUT_Z_H = 0x2D,
         INT_CFG = 0x30,
-        INT_SRC = 0x30,
+        INT_SRC = 0x31,
         INT_THS_L = 0x32,
         INT_THS_H = 0x33,
     };
@@ -713,7 +723,7 @@ private:
         writeByte(m_MagnetoI2C, static_cast<uint8_t>(reg), byte);
     }
     
-    void setMagnetoOffset(MagnetoReg lowReg, MagnetoReg highReg, uint16_t axisBias)
+    void setMagnetoOffset(MagnetoReg lowReg, MagnetoReg highReg, int16_t axisBias)
     {
         const uint8_t axisBiasMSB = (axisBias & 0xFF00) >> 8;
         const uint8_t axisBiasLSB = (axisBias & 0x00FF);
@@ -750,11 +760,11 @@ private:
     {
         switch(scale) {
             case GyroScale::DPS245:
-                return 245.0f / 32768.0f;
+                return 0.00875f;
             case GyroScale::DPS500:
-                return 500.0f / 32768.0f;
+                return 0.0175f;
             case GyroScale::DPS2000:
-                return 2000.0f / 32768.0f;
+                return 0.07f;
         }
     }
     
@@ -762,13 +772,13 @@ private:
     {
         switch(scale) {
             case AccelScale::G2:
-                return 2.0f / 32768.0f;
-            case AccelScale::G16:
-                return 16.0f / 32768.0f;
-            case AccelScale::G4:
-                return 4.0f /  32768.0f;
+                return 0.000061f;
+             case AccelScale::G4:
+                return 0.000122f;
             case AccelScale::G8:
-                return 8.0f /  32768.0f;
+                return 0.000244f;
+            case AccelScale::G16:
+                return 0.000732f;
         }
     }
     
@@ -793,7 +803,9 @@ private:
     float m_AccelSensitivity;
     float m_GyroSensitivity;
   
-    int16_t m_MagnetoBias[3];
+    float m_MagnetoHardIronBias[3];
+    float m_MagnetoSoftIronScale[3];
+    
     int16_t m_AccelBias[3];
     int16_t m_GyroBias[3];
     
