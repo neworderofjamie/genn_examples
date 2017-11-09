@@ -8,20 +8,19 @@
 
 int main()
 {
-    Vicon::UDPClient<Vicon::ItemData> vicon(51001, 100);
+    Vicon::UDPClient<Vicon::ObjectData> vicon(51001, 100);
 
-    while(vicon.getNumItems() == 0) {
+    while(vicon.getNumObjects() == 0) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::cout << "Waiting for object" << std::endl;
     }
 
     while(true) {
-        auto itemData = vicon.getItemData(0);
-        const auto &translation = itemData.getTranslation();
-        const auto &rotation = itemData.getRotation();
+        auto objectData = vicon.getObjectData(0);
+        const auto &translation = objectData.getTranslation();
+        const auto &rotation = objectData.getRotation();
 
-        std::cout << "Translation:" << translation[0] << ", " << translation[1] << ", " << translation[2] << std::endl;
-        std::cout << "Rotation:" << rotation[0] << ", " << rotation[1] << ", " << rotation[2] << std::endl;
+        std::cout << translation[0] << ", " << translation[1] << ", " << translation[2] << ", " << rotation[0] << ", " << rotation[1] << ", " << rotation[2] << std::endl;
     }
     return EXIT_SUCCESS;
 }

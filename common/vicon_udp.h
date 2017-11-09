@@ -31,13 +31,13 @@ namespace Vicon
 typedef double Vector[3];
 
 //----------------------------------------------------------------------------
-// Vicon::ItemData
+// Vicon::ObjectData
 //----------------------------------------------------------------------------
-//! Simplest item data class - just tracks position and translation
-class ItemData
+//! Simplest object data class - just tracks position and translation
+class ObjectData
 {
 public:
-    ItemData() : m_Translation{0.0, 0.0, 0.0}, m_Rotation{0.0, 0.0, 0.0}
+    ObjectData() : m_Translation{0.0, 0.0, 0.0}, m_Rotation{0.0, 0.0, 0.0}
     {
     }
 
@@ -66,7 +66,7 @@ private:
 // Vicon::UDPClient
 //----------------------------------------------------------------------------
 // Receiver for Vicon UDP streams
-template<typename ItemClass>
+template<typename ObjectDataType>
 class UDPClient
 {
 public:
@@ -115,20 +115,20 @@ public:
         return true;
     }
 
-    unsigned int getNumItems()
+    unsigned int getNumObjects()
     {
-        std::lock_guard<std::mutex> guard(m_ItemDataMutex);
-        return m_ItemData.size();
+        std::lock_guard<std::mutex> guard(m_ObjectDataMutex);
+        return m_ObjectData.size();
     }
 
-    ItemClass getItemData(unsigned int id)
+    ObjectDataType getObjectData(unsigned int id)
     {
-        std::lock_guard<std::mutex> guard(m_ItemDataMutex);
-        if(id < m_ItemData.size()) {
-            return m_ItemData[id];
+        std::lock_guard<std::mutex> guard(m_ObjectDataMutex);
+        if(id < m_ObjectData.size()) {
+            return m_ObjectData[id];
         }
         else {
-            throw std::runtime_error("Invalid item id:" + std::to_string(id));
+            throw std::runtime_error("Invalid object id:" + std::to_string(id));
         }
     }
 
@@ -136,18 +136,18 @@ private:
     //----------------------------------------------------------------------------
     // Private API
     //----------------------------------------------------------------------------
-    void updateItemData(unsigned int id, const Vector &translation, const Vector &rotation)
+    void updateObjectData(unsigned int id, const Vector &translation, const Vector &rotation)
     {
         // Lock mutex
-        std::lock_guard<std::mutex> guard(m_ItemDataMutex);
+        std::lock_guard<std::mutex> guard(m_ObjectDataMutex);
 
-        // If no item data structure has been created for this ID, add one
-        if(id >= m_ItemData.size()) {
-            m_ItemData.resize(id + 1);
+        // If no object data structure has been created for this ID, add one
+        if(id >= m_ObjectData.size()) {
+            m_ObjectData.resize(id + 1);
         }
 
-        // Update item data with translation and rotation
-        m_ItemData[id].update(translation, rotation);
+        // Update object data with translation and rotation
+        m_ObjectData[id].update(translation, rotation);
     }
 
     void readThread(int socket)
@@ -179,21 +179,24 @@ private:
                 // Loop through items in blcok
                 unsigned int itemOffset = 5;
                 for(unsigned int i = 0; i < itemsInBlock; i++) {
-                    // Read item ID
-                    const unsigned int itemID = (unsigned int)buffer[itemOffset];
+                    // Read object ID
+                    const unsigned int objectID = (unsigned int)buffer[itemOffset];
 
                     // Read size of item
                     uint16_t itemDataSize;
                     memcpy(&itemDataSize, &buffer[itemOffset + 1], sizeof(uint16_t));
                     assert(itemDataSize == 72);
 
-                    // Read item translation
-                    double itemTranslation[3];
-                    memcpy(&itemTranslation[0], &buffer[itemOffset + 27], 3 * sizeof(double));
+                    // Read object translation
+                    double translation[3];
+                    memcpy(&translation[0], &buffer[itemOffset + 27], 3 * sizeof(double));
 
-                    // Read item rotation
-                    double itemRotation[3];
-                    memcpy(&itemRotation[0], &buffer[itemOffset + 51], 3 * sizeof(double));
+                    // Read object rotation
+                    double rotation[3];
+                    memcpy(&rotation[0], &buffer[itemOffset + 51], 3 * sizeof(double));
+
+                    // Update item
+                    updateObjectData(objectID, translation, rotation);
 
                     // Update offset for next offet
                     itemOffset += itemDataSize;
@@ -211,7 +214,7 @@ private:
     std::atomic<bool> m_ShouldQuit;
     std::thread m_ReadThread;
 
-    std::mutex m_ItemDataMutex;
-    std::vector<ItemClass> m_ItemData;
+    std::mutex m_ObjectDataMutex;
+    std::vector<ObjectDataType> m_ObjectData;
 };
 } // namespace Vicon
