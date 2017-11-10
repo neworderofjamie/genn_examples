@@ -25,7 +25,7 @@ public:
     void tank(float left, float right) 
     {  
         // Convert standard (-1,1) values to bytes in order to send to I2C slave
-        uint8_t buffer[2] = { floatToI2C(left), floatToI2C(left) };
+        uint8_t buffer[2] = { floatToI2C(left), floatToI2C(right) };
         
         // Send buffer
         write(buffer);
