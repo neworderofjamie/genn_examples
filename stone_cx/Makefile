@@ -1,7 +1,7 @@
 EXECUTABLE      := simulator
 SOURCES         := simulator.cc
-LINK_FLAGS	:= -lopencv_core -lopencv_imgcodecs -lopencv_imgproc -lopencv_highgui
-
+LINK_FLAGS      := `pkg-config --libs opencv`
+CXXFLAGS       := `pkg-config --cflags opencv`
 CPU_ONLY=1
 
 ifdef RECORD_ELECTROPHYS
