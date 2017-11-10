@@ -86,17 +86,14 @@ int main()
     const unsigned int activityImageWidth = 500;
     const unsigned int activityImageHeight = 1000;
     const double pi = 3.141592653589793238462643383279502884;
-
+    const double preferredAngleTN2[] = { pi / 4.0, -pi / 4.0 };
+    
     allocateMem();
     initialize();
 
     //---------------------------------------------------------------------------
     // Initialize neuron parameters
     //---------------------------------------------------------------------------
-    // TN2
-    preferredAngleTN2[Parameters::HemisphereLeft] = pi / 4.0;
-    preferredAngleTN2[Parameters::HemisphereRight] = -pi / 4.0;
-
     // TL
     for(unsigned int i = 0; i < 8; i++) {
         preferredAngleTL[i] = preferredAngleTL[8 + i] = (pi / 4.0) * (double)i;
@@ -167,10 +164,11 @@ int main()
     double xPosition = 0.0;
     double yPosition = 0.0;
     for(unsigned int i = 0; i < (Parameters::numOutwardTimesteps + Parameters::numInwardTimesteps); i++) {
-        // Update TN2 input input
-        headingAngleTN2 = theta;
-        vXTN2 = xVelocity;
-        vYTN2 = yVelocity;
+        // Project velocity onto each TN2 cell's preferred angle and use as speed input
+        for(unsigned int j = 0; j < Parameters::numTN2; j++) {
+            speedTN2[j] = (sin(theta + preferredAngleTN2[j]) * xVelocity) + 
+                (cos(theta + preferredAngleTN2[j]) * yVelocity);
+        }
 
         // Update TL input
         headingAngleTL = theta;
