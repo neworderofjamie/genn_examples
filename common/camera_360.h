@@ -15,10 +15,10 @@ class Camera360
 {
 public:
     Camera360(int device, const cv::Size &cameraResolution, const cv::Size &unwrappedResolution,
-              double centreX = 0.5, double centreY = 0.5, double inner = 0.1, double outer = 0.5)
+              double centreX = 0.5, double centreY = 0.5, double inner = 0.1, double outer = 0.5, double offsetRadians = 0.0)
     {
         if(!open(device, cameraResolution, unwrappedResolution, 
-            centreX, centreY, inner, outer)) 
+            centreX, centreY, inner, outer, offsetRadians))
         {
             throw std::runtime_error("Unable to open camera");
         }
@@ -28,7 +28,7 @@ public:
     // Public API
     //------------------------------------------------------------------------
     bool open(int device, const cv::Size &cameraResolution, const cv::Size &unwrappedResolution,
-              double centreX = 0.5, double centreY = 0.5, double inner = 0.1, double outer = 0.5)
+              double centreX = 0.5, double centreY = 0.5, double inner = 0.1, double outer = 0.5, double offsetRadians = 0.0)
     {
         // Open capture device
         if(!m_Capture.open(device)) {
@@ -36,6 +36,8 @@ public:
             return false;
         }
         
+        // Check camera resolution matches actual resolution
+        // **HACK** we SHOULD be able to set camera resoltion from OpenCV but it doesn't seem to work on Jetson
         assert(cameraResolution.width == m_Capture.get(cv::CAP_PROP_FRAME_WIDTH));
         assert(cameraResolution.height == m_Capture.get(cv::CAP_PROP_FRAME_HEIGHT));
         // Set camera resolution
@@ -69,7 +71,7 @@ public:
         for (int i = 0; i < unwrappedResolution.height; i++) {
             for (int j = 0; j < unwrappedResolution.width; j++) {
                 const float r = ((float)i / (float)unwrappedResolution.height) * (outerPixel - innerPixel) + innerPixel;
-                const float th = ((float)j / (float)unwrappedResolution.width) * 2.0f * pi;
+                const float th = (((float)j / (float)unwrappedResolution.width) * 2.0f * pi) + offsetRadians;
                 const float x = centreXPixel - r * sin(th);
                 const float y = centreYPixel + r * cos(th);
                 m_UnwrapMapX.at<float>(i, j) = x;
