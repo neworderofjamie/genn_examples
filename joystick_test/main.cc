@@ -2,19 +2,22 @@
 
 int main()
 {
-    JoystickXbox360 test;
+    constexpr float deadzone = 0.25f;
+    Joystick test;
 
     while(true) {
-        if(test.isButtonDown(JoystickXbox360::Button::DPadLeft)) {
+        const float x = test.getAxisState(0);
+        const float y = test.getAxisState(1);
+        if(x < -deadzone) {
             std::cout << "TANK LEFT" << std::endl;
         }
-        else if(test.isButtonDown(JoystickXbox360::Button::DPadRight)) {
+        else if(x > deadzone) {
             std::cout << "TANK RIGHT" << std::endl;
         }
-        else if(test.isButtonDown(JoystickXbox360::Button::DPadUp)) {
+        else if(y < -deadzone) {
             std::cout << "TANK FORWARD" << std::endl;
         }
-        else if(test.isButtonDown(JoystickXbox360::Button::DPadDown)) {
+        else if(y > deadzone) {
             std::cout << "TANK BACK" << std::endl;
         }
 

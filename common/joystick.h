@@ -1,6 +1,7 @@
 #pragma once
 
 // Standard C++ includes
+#include <algorithm>
 #include <atomic>
 #include <bitset>
 #include <iostream>
@@ -27,6 +28,7 @@ class Joystick
 public:
     Joystick(const char *device = "/dev/input/js0")
     {
+        std::fill(std::begin(m_AxisState), std::end(m_AxisState), 0);
         if(!open(device)) {
             throw std::runtime_error("Cannot open joystick");
         }
@@ -114,59 +116,4 @@ private:
     std::mutex m_StateMutex;
     int16_t m_AxisState[std::numeric_limits<uint8_t>::max()];
     std::bitset<std::numeric_limits<uint8_t>::max()> m_ButtonState;
-};
-
-//----------------------------------------------------------------------------
-// JoystickXbox360
-//----------------------------------------------------------------------------
-class JoystickXbox360 : public Joystick
-{
-public:
-    //------------------------------------------------------------------------
-    // Enumerations
-    //------------------------------------------------------------------------
-    enum class Button : uint8_t
-    {
-        A,
-        B,
-        X,
-        Y,
-        LB,
-        RB,
-        Back,
-        Start,
-        Xbox,
-        DPadLeft = 11,
-        DPadRight,
-        DPadUp,
-        DPadDown,
-    };
-
-    enum class Axis : uint8_t
-    {
-        LeftAnalogueX,
-        LeftAnalogueY,
-        LT,
-        RightAnalogueX,
-        RightAnalogueY,
-        RT,
-        DPadX,
-        DPadY,
-    };
-
-    JoystickXbox360(const char *device = "/dev/input/js0") : Joystick(device)
-    {
-    };
-
-    //------------------------------------------------------------------------
-    // Public API
-    //------------------------------------------------------------------------
-    bool isButtonDown(Button button) {
-        return Joystick::isButtonDown(static_cast<uint8_t>(button));
-    }
-
-    float getAxisState(Axis axis) {
-        return Joystick::getAxisState(static_cast<uint8_t>(axis));
-    }
-
 };
