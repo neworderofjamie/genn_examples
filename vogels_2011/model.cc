@@ -15,10 +15,15 @@ void modelDefinition(NNmodel &model)
     model.setDT(1.0);
     model.setName("vogels_2011");
 
+    GENN_PREFERENCES::autoInitSparseVars = true;
 
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
+    InitVarSnippet::Uniform::ParamValues vDist(
+        -60.0,  // 0 - min
+        -50.0); // 1 - max
+
     // LIF model parameters
     LIF::ParamValues lifParams(
         0.2,    // 0 - C
@@ -31,12 +36,12 @@ void modelDefinition(NNmodel &model)
 
     // LIF initial conditions
     LIF::VarValues lifInit(
-        -55.0,  // 0 - V
-        0.0);    // 1 - RefracTime
+        initVar<InitVarSnippet::Uniform>(vDist),    // 0 - V
+        0.0);                                       // 1 - RefracTime
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
-        0.03);    // 0 - Wij (nA)
+        0.03);     // 0 - Wij (nA)
 
     WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
         -0.03);    // 0 - Wij (nA)
