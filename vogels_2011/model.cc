@@ -20,7 +20,7 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
-    VarInitSnippet::Uniform::ParamValues vDist(
+    InitVarSnippet::Uniform::ParamValues vDist(
         -60.0,  // 0 - min
         -50.0); // 1 - max
 
@@ -36,7 +36,7 @@ void modelDefinition(NNmodel &model)
 
     // LIF initial conditions
     LIF::VarValues lifInit(
-        initVar<VarInitSnippet::Uniform>(vDist),    // 0 - V
+        initVar<InitVarSnippet::Uniform>(vDist),    // 0 - V
         0.0);                                       // 1 - RefracTime
 
     // Static synapse parameters
