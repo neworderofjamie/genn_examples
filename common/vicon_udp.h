@@ -44,7 +44,7 @@ public:
     //----------------------------------------------------------------------------
     // Public API
     //----------------------------------------------------------------------------
-    void update(const Vector &translation, const Vector &rotation)
+    void update(const Vector &translation, const Vector &rotation, double)
     {
         // Copy vectors into class
         std::copy(std::begin(translation), std::end(translation), std::begin(m_Translation));
@@ -63,6 +63,40 @@ private:
 };
 
 //----------------------------------------------------------------------------
+// Vicon::ObjectDataVelocity
+//----------------------------------------------------------------------------
+//! Object data class which also calculate (un-filtered) velocity
+class ObjectDataVelocity : public ObjectData
+{
+public:
+    ObjectDataVelocity() : m_Velocity{0.0, 0.0, 0.0}
+    {
+    }
+
+    //----------------------------------------------------------------------------
+    // Public API
+    //----------------------------------------------------------------------------
+    void update(const Vector &translation, const Vector &rotation, double dt)
+    {
+        // Calculate velocity
+        const Vector &oldTranslation = getTranslation();
+        std::transform(std::begin(translation), std::end(translation), std::begin(oldTranslation), std::begin(m_Velocity),
+                       [dt](double curr, double prev){ return (curr - prev) / dt; });
+
+        // Superclass
+        ObjectData::update(translation, rotation, dt);
+    }
+
+    const Vector &getVelocity() const{ return m_Velocity; }
+
+private:
+    //----------------------------------------------------------------------------
+    // Members
+    //----------------------------------------------------------------------------
+    Vector m_Velocity;
+};
+
+//----------------------------------------------------------------------------
 // Vicon::UDPClient
 //----------------------------------------------------------------------------
 // Receiver for Vicon UDP streams
@@ -71,7 +105,7 @@ class UDPClient
 {
 public:
     UDPClient(){}
-    UDPClient(unsigned int port, int sampleRate)
+    UDPClient(unsigned int port, double sampleRate)
     {
         if(!connect(port, sampleRate)) {
             throw std::runtime_error("Cannot connect");
@@ -88,8 +122,11 @@ public:
     //----------------------------------------------------------------------------
     // Public API
     //----------------------------------------------------------------------------
-    bool connect(unsigned int port, int sampleRate)
+    bool connect(unsigned int port, double sampleRate)
     {
+        // Calculate timestep
+        m_DT = 1.0 / sampleRate;
+
         // Create socket
         int socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if(socket < 0) {
@@ -147,7 +184,7 @@ private:
         }
 
         // Update object data with translation and rotation
-        m_ObjectData[id].update(translation, rotation);
+        m_ObjectData[id].update(translation, rotation, m_DT);
     }
 
     void readThread(int socket)
@@ -216,5 +253,7 @@ private:
 
     std::mutex m_ObjectDataMutex;
     std::vector<ObjectDataType> m_ObjectData;
+
+    double m_DT;
 };
 } // namespace Vicon
