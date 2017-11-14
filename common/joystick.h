@@ -2,12 +2,9 @@
 
 // Standard C++ includes
 #include <algorithm>
-#include <atomic>
 #include <bitset>
 #include <iostream>
 #include <limits>
-#include <mutex>
-#include <thread>
 
 // Standard C includes
 #include <cstdint>
@@ -36,9 +33,9 @@ public:
 
     ~Joystick()
     {
-        // Set quit flag and join read thread
-        m_ShouldQuit = true;
-        m_ReadThread.join();
+       if(m_Joystick >= 0) {
+           close(m_Joystick);
+       }
     }
 
     //------------------------------------------------------------------------
@@ -46,46 +43,38 @@ public:
     //------------------------------------------------------------------------
     bool open(const char *device)
     {
-        int joystick = ::open(device, O_RDONLY);
-        if (joystick < 0) {
+        // Open joystick for non-blocking IO
+        m_Joystick = ::open(device, O_RDONLY | O_NONBLOCK);
+        if (m_Joystick < 0) {
             std::cerr << "Could not open joystick device '" << device << "' (" << strerror(errno) << ")" << std::endl;
             return false;
         }
-
-        // Clear atomic stop flag and start thread
-        m_ShouldQuit = false;
-        m_ReadThread = std::thread(&Joystick::readThread, this, joystick);
-        return true;
+        else {
+            return true;
+        }
     }
 
-    bool isButtonDown(uint8_t button) {
-        std::lock_guard<std::mutex> guard(m_StateMutex);
-        return m_ButtonState[button];
-    }
-
-    float getAxisState(uint8_t axis) {
-        std::lock_guard<std::mutex> guard(m_StateMutex);
-        return (float)m_AxisState[axis] / (float)std::numeric_limits<int16_t>::max();
-    }
-
-private:
-    //------------------------------------------------------------------------
-    // Private methods
-    //------------------------------------------------------------------------
-    void readThread(int joystick)
+    bool read()
     {
-        js_event event;
-        while(!m_ShouldQuit) {
-            // Read from joystick device (blocking)
-            if(::read(joystick, &event, sizeof(js_event)) != sizeof(js_event)) {
-                std::cerr << "Error: Could not read from joystick (" << strerror(errno) << ")" << std::endl;
-                break;
+        while(true) {
+            // Attempt to read event from joystick device (non-blocking)
+            js_event event;
+            const ssize_t bytesRead = ::read(m_Joystick, &event, sizeof(js_event));
+            
+            // If there was an error
+            if(bytesRead == -1) {
+                // If there are no more events, return true
+                if(errno == EAGAIN) {
+                    return true;
+                }
+                // Otherwise return false
+                else {
+                    std::cerr << "Error: Could not read from joystick (" << strerror(errno) << ")" << std::endl;
+                    return false;
+                }
             }
-
-            {
-                // Lock state mutex
-                std::lock_guard<std::mutex> guard(m_StateMutex);
-
+            // Otherwise, if an event was read
+            else if(bytesRead == sizeof(js_event)){
                 // If event is axis, copy value into axis
                 // **NOTE** initial state is specified by ORing these
                 // types with JS_EVENT_INIT so this test handles initial state too
@@ -98,22 +87,33 @@ private:
                 }
                 else {
                     std::cerr << "Unknown event type " << (unsigned int)event.type << std::endl;
+                    continue;
                 }
             }
-
+            else {
+                std::cerr << "Unknown error" << std::endl;
+                return false;
+            }
         }
-
-        // Close joystick
-        close(joystick);
+        
+    }
+    
+    bool isButtonDown(uint8_t button) 
+    {
+        return m_ButtonState[button];
     }
 
+    float getAxisState(uint8_t axis) 
+    {
+        return (float)m_AxisState[axis] / (float)std::numeric_limits<int16_t>::max();
+    }
+
+private:
     //----------------------------------------------------------------------------
     // Members
     //----------------------------------------------------------------------------
-    std::atomic<bool> m_ShouldQuit;
-    std::thread m_ReadThread;
-
-    std::mutex m_StateMutex;
+    int m_Joystick;
+    
     int16_t m_AxisState[std::numeric_limits<uint8_t>::max()];
     std::bitset<std::numeric_limits<uint8_t>::max()> m_ButtonState;
 };
