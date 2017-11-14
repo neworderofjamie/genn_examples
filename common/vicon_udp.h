@@ -115,8 +115,10 @@ public:
     ~UDPClient()
     {
         // Set quit flag and join read thread
-        m_ShouldQuit = true;
-        m_ReadThread.join();
+        if(m_ReadThread.joinable()) {
+            m_ShouldQuit = true;
+            m_ReadThread.join();
+        }
     }
 
     //----------------------------------------------------------------------------
@@ -131,6 +133,20 @@ public:
         int socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if(socket < 0) {
             std::cerr << "Cannot open socket: " << strerror(errno) << std::endl;
+            return false;
+        }
+        
+        // Set socket to have 1s read timeout
+        // **NOTE** this is largely to allow read thread to be stopped
+#ifdef _WIN32
+        DWORD timeout = 1000;
+#else
+        timeval timeout = {
+            .tv_sec = 1,
+            .tv_usec = 0 };
+#endif
+        if(setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
+            std::cerr << "Cannot set socket timeout: " << strerror(errno) << std::endl;
             return false;
         }
 
@@ -196,16 +212,23 @@ private:
         // Loop until quit flag is set
         for(unsigned int f = 0; !m_ShouldQuit; f++) {
             // Read datagram
-            ssize_t bytesReceived = recvfrom(socket, &buffer[0], 1024,
-                                             0, NULL, NULL);
+            const ssize_t bytesReceived = recvfrom(socket, &buffer[0], 1024,
+                                                   0, NULL, NULL);
 
-            // If there was an error stop
-            if(bytesReceived < 0) {
-                std::cerr << "Cannot read datagram: " << strerror(errno) << std::endl;
-                break;
+            // If there was an error
+            if(bytesReceived == -1) {
+                // If this was a timeout, continue
+                if(errno == EAGAIN) {
+                    continue;
+                }
+                // Otherwise, display error and stop
+                else {
+                    std::cerr << "Cannot read datagram: " << strerror(errno) << std::endl;
+                    break;
+                }
             }
             // Otherwise, if data was received
-            else if(bytesReceived > 0) {
+            else {
                 // Read frame number
                 uint32_t frameNumber;
                 memcpy(&frameNumber, &buffer[0], sizeof(uint32_t));
