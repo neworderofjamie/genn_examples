@@ -174,6 +174,11 @@ public:
         return m_ObjectData.size();
     }
 
+    uint32_t getFrameNumber() const
+    {
+        return m_FrameNumber;
+    }
+
     ObjectDataType getObjectData(unsigned int id)
     {
         std::lock_guard<std::mutex> guard(m_ObjectDataMutex);
@@ -233,6 +238,9 @@ private:
                 uint32_t frameNumber;
                 memcpy(&frameNumber, &buffer[0], sizeof(uint32_t));
 
+                // Atomically store frame number
+                m_FrameNumber = frameNumber;
+
                 // Read items in block
                 const unsigned int itemsInBlock = (unsigned int)buffer[4];
 
@@ -271,6 +279,7 @@ private:
     //----------------------------------------------------------------------------
     // Members
     //----------------------------------------------------------------------------
+    std::atomic<uint32_t> m_FrameNumber;
     std::atomic<bool> m_ShouldQuit;
     std::thread m_ReadThread;
 

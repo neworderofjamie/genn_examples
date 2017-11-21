@@ -3,6 +3,7 @@
 #include <numeric>
 
 // Common includes
+#include "../common/analogue_csv_recorder.h"
 #include "../common/joystick.h"
 #include "../common/motor_i2c.h"
 #include "../common/vicon_udp.h"
@@ -19,9 +20,9 @@ int main(int argc, char *argv[])
 {
     constexpr double pi = 3.141592653589793238462643383279502884;
     constexpr float joystickDeadzone = 0.25f;
-    constexpr float velocityScale = 1.0f / 500.0f;
-    constexpr float motorSteerThreshold = 2.0f;
-    constexpr int64_t targetTickMicroseconds = (int64_t)(DT * 1000.0) - 10;
+    constexpr float speedScale = 1.0f / 400.0f;
+    constexpr float motorSteerThreshold = 0.1f;
+    constexpr int64_t targetTickMicroseconds = (int64_t)(20.0 * 1000.0) - 10;
     
     // Create joystick interface
     Joystick joystick;
@@ -50,6 +51,14 @@ int main(int argc, char *argv[])
     buildConnectivity();
     
     initstone_cx();
+
+#ifdef RECORD_ELECTROPHYS
+    AnalogueCSVRecorder<scalar> tn2Recorder("tn2.csv", rTN2, Parameters::numTN2, "TN2");
+    AnalogueCSVRecorder<scalar> cl1Recorder("cl1.csv", rCL1, Parameters::numCL1, "CL1");
+    AnalogueCSVRecorder<scalar> tb1Recorder("tb1.csv", rTB1, Parameters::numTB1, "TB1");
+    AnalogueCSVRecorder<scalar> cpu4Recorder("cpu4.csv", rCPU4, Parameters::numCPU4, "CPU4");
+    AnalogueCSVRecorder<scalar> cpu1Recorder("cpu1.csv", rCPU1, Parameters::numCPU1, "CPU1");
+#endif  // RECORD_ELECTROPHYS
     
     // Wait for VICON system to track some objects
     while(vicon.getNumObjects() == 0) {
@@ -83,21 +92,32 @@ int main(int argc, char *argv[])
         
         // Calculate scalar speed and apply to both TN2 hemisphere
         // **NOTE** robot is incapable of holonomic motion!
-        const float speed = sqrt(std::accumulate(std::begin(velocity), std::end(velocity), 0.0f,
-                                                 [](float acc, double v){ return acc + (float)(v * v); }));
+        float speed = sqrt(std::accumulate(std::begin(velocity), std::end(velocity), 0.0f,
+                                           [](float acc, double v){ return acc + (float)(v * v); }));
 
+        speed *= speedScale;
         speedTN2[Parameters::HemisphereLeft] = speed;
         speedTN2[Parameters::HemisphereRight] = speed;
 
 
         // Get yaw from VICON and pass to TL neurons
         // **TODO** check axes and add enum
-        headingAngleTL = rotation[2];
-
+        headingAngleTL = rotation[2] + pi;
+        if(numTicks % 100 == 0) {
+            std::cout <<  "Ticks:" << numTicks << ", Heading: " << headingAngleTL << ", Speed:" << speed << std::endl;
+        }
         //std::cout << "Heading:" << headingAngleTL << std::endl;
 
         // Step network
         stepTimeCPU();
+
+#ifdef RECORD_ELECTROPHYS
+        tn2Recorder.record(numTicks);
+        cl1Recorder.record(numTicks);
+        tb1Recorder.record(numTicks);
+        cpu4Recorder.record(numTicks);
+        cpu1Recorder.record(numTicks);
+#endif  // RECORD_ELECTROPHYS
 
         // If we are going outbound
         if(outbound) {
@@ -134,6 +154,9 @@ int main(int argc, char *argv[])
 
             // Steer based on signal
             const scalar steering = leftMotor - rightMotor;
+            if(numTicks % 100 == 0) {
+                std::cout << "Steer:" << steering << std::endl;
+            }
             if(steering > motorSteerThreshold) {
                 motor.tank(1.0f, -1.0f);
             }
