@@ -16,6 +16,13 @@
 #include "simulatorCommon.h"
 
 
+enum class ViconEvent : unsigned int
+{
+    TrialStart,
+    HomeStart,
+    TrialEnd,
+};
+
 int main(int argc, char *argv[])
 {
     constexpr double pi = 3.141592653589793238462643383279502884;
@@ -65,7 +72,11 @@ int main(int argc, char *argv[])
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::cout << "Waiting for object..." << std::endl;
     }
-    
+
+    std::ofstream eventStream("events.csv", std::ios_base::app);
+    eventStream << "Frame number, event id" << std::endl;    
+    eventStream << vicon.getFrameNumber() << "," << static_cast<unsigned int>(ViconEvent::TrialStart) << std::endl;
+
     // Loop until second joystick button is pressed
     bool outbound = true;
     unsigned int numTicks = 0;
@@ -144,6 +155,7 @@ int main(int argc, char *argv[])
             if(joystick.isButtonDown(0)) {
                 std::cout << "Returning home!" << std::endl;
                 outbound = false;
+                eventStream << vicon.getFrameNumber() << "," << static_cast<unsigned int>(ViconEvent::HomeStart) << std::endl;
             }
         }
         // Otherwise we're returning home
@@ -189,6 +201,7 @@ int main(int argc, char *argv[])
     
     // Show overflow stats
     std::cout << numOverflowTicks << "/" << numTicks << " ticks overflowed, mean tick time: " << (double)totalMicroseconds / (double)numTicks << "uS" << std::endl;
+    eventStream << vicon.getFrameNumber() << "," << static_cast<unsigned int>(ViconEvent::TrialEnd) << std::endl;
     
     // Stop motor
     motor.tank(0.0f, 0.0f);
