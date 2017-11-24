@@ -6,6 +6,8 @@
 //------------------------------------------------------------------------
 namespace Parameters
 {
+    const double pi = 3.141592653589793238462643383279502884;
+    
     // Population sizes
     const unsigned int numTN2 = 2;
     const unsigned int numTL = 16;
@@ -22,18 +24,5 @@ namespace Parameters
         HemisphereLeft,
         HemisphereRight,
         HemisphereMax,
-    };
-
-    // Outbound path generation parameters
-    const unsigned int numOutwardTimesteps = 1500;
-    const unsigned int numInwardTimesteps = 1500;
-
-    const double pathLambda = 0.4;
-    const double pathKappa = 100.0;
-
-    const double agentDrag = 0.15;
-
-    const double agentMinAcceleration = 0.0;
-    const double agentMaxAcceleration = 0.15;
-    const double agentM = 0.5;
+    }; 
 }

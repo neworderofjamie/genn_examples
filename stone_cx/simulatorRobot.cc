@@ -18,6 +18,7 @@
 
 // Model includes
 #include "parameters.h"
+#include "robotParameters.h"
 #include "simulatorCommon.h"
 
 //---------------------------------------------------------------------------
@@ -118,10 +119,7 @@ void opticalFlowThreadFunc(int cameraDevice, std::atomic<bool> &shouldQuit, std:
 
 int main(int argc, char *argv[])
 {
-    constexpr float joystickDeadzone = 0.25f;
     constexpr float velocityScale = 1.0f / 500.0f;
-    constexpr float motorSteerThreshold = 2.0f;
-    constexpr int64_t targetTickMicroseconds = (int64_t)(DT * 1000.0) - 10;
     
     // Create joystick interface
     Joystick joystick;
@@ -139,7 +137,7 @@ int main(int argc, char *argv[])
     //---------------------------------------------------------------------------
     // TL
     for(unsigned int i = 0; i < 8; i++) {
-        preferredAngleTL[i] = preferredAngleTL[8 + i] = (pi / 4.0) * (double)i;
+        preferredAngleTL[i] = preferredAngleTL[8 + i] = (Parameters::pi / 4.0) * (double)i;
     }
 
     //---------------------------------------------------------------------------
@@ -193,24 +191,8 @@ int main(int argc, char *argv[])
         
         // If we are going outbound
         if(outbound) {
-            // Read joystick axis state and drive robot manually
-            const float joystickX = joystick.getAxisState(0);
-            const float joystickY = joystick.getAxisState(1);
-            if(joystickX < -joystickDeadzone) {
-                motor.tank(1.0f, -1.0f);
-            }
-            else if(joystickX > joystickDeadzone) {
-                motor.tank(-1.0f, 1.0f);
-            }
-            else if(joystickY < -joystickDeadzone) {
-                motor.tank(1.0f, 1.0f);
-            }
-            else if(joystickY > joystickDeadzone) {
-                motor.tank(-1.0f, -1.0f);
-            }
-            else {
-                motor.tank(0.0f, 0.0f);
-            }
+            // Drive motor using joystick
+            joystick.driveMotor(motor, RobotParameters::joystickDeadzone);
             
             // If first button is pressed switch to returning home
             if(joystick.isButtonDown(0)) {
@@ -218,23 +200,9 @@ int main(int argc, char *argv[])
                 outbound = false;
             }
         }
-        // Otherwise we're returning home
+        // Otherwise we're returning home - use CPU1 output to drive motor
         else {
-            // Sum left and right motor activity
-            const scalar leftMotor = std::accumulate(&rCPU1[0], &rCPU1[8], 0.0f);
-            const scalar rightMotor = std::accumulate(&rCPU1[8], &rCPU1[16], 0.0f);
-            
-            // Steer based on signal
-            const scalar steering = leftMotor - rightMotor;
-            if(steering > motorSteerThreshold) {
-                motor.tank(1.0f, -1.0f);
-            }
-            else if(steering < -motorSteerThreshold) {
-                motor.tank(-1.0f, 1.0f);
-            }
-            else {
-                motor.tank(1.0f, 1.0f);
-            }
+            driveMotorFromCPU1(motor, RobotParameters::motorSteerThreshold, (numTicks % 100) == 0);
         }
         
         // Record time at end of tick
@@ -247,8 +215,8 @@ int main(int argc, char *argv[])
         totalMicroseconds += tickMicroseconds;
         
         // If there is time left in tick, sleep for remainder
-        if(tickMicroseconds < targetTickMicroseconds) {
-            std::this_thread::sleep_for(std::chrono::microseconds(targetTickMicroseconds - tickMicroseconds));
+        if(tickMicroseconds < RobotParameters::targetTickMicroseconds) {
+            std::this_thread::sleep_for(std::chrono::microseconds(RobotParameters::targetTickMicroseconds - tickMicroseconds));
         }
         // Otherwise, increment overflow counter
         else {

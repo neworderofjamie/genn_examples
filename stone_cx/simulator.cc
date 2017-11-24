@@ -20,6 +20,7 @@
 
 // Model includes
 #include "parameters.h"
+#include "simParameters.h"
 #include "simulatorCommon.h"
 #include "spline.h"
 
@@ -85,8 +86,8 @@ int main()
     const unsigned int pathImageSize = 1000;
     const unsigned int activityImageWidth = 500;
     const unsigned int activityImageHeight = 1000;
-    const double pi = 3.141592653589793238462643383279502884;
-    const double preferredAngleTN2[] = { pi / 4.0, -pi / 4.0 };
+    
+    const double preferredAngleTN2[] = { Parameters::pi / 4.0, -Parameters::pi / 4.0 };
     
     allocateMem();
     initialize();
@@ -96,7 +97,7 @@ int main()
     //---------------------------------------------------------------------------
     // TL
     for(unsigned int i = 0; i < 8; i++) {
-        preferredAngleTL[i] = preferredAngleTL[8 + i] = (pi / 4.0) * (double)i;
+        preferredAngleTL[i] = preferredAngleTL[8 + i] = (Parameters::pi / 4.0) * (double)i;
     }
 
     //---------------------------------------------------------------------------
@@ -123,20 +124,20 @@ int main()
     std::seed_seq seeds(std::begin(seedData), std::end(seedData));
     std::mt19937 gen(seeds);
 
-    VonMisesDistribution<double> pathVonMises(0.0, Parameters::pathKappa);
+    VonMisesDistribution<double> pathVonMises(0.0, SimParameters::pathKappa);
 
     // Create acceleration spline
     tk::spline accelerationSpline;
     {
         // Create vectors to hold the times at which linear acceleration
         // should change and it's values at those time
-        const unsigned int numAccelerationChanges = Parameters::numOutwardTimesteps / 50;
+        const unsigned int numAccelerationChanges = SimParameters::numOutwardTimesteps / 50;
         std::vector<double> accelerationTime(numAccelerationChanges);
         std::vector<double> accelerationMagnitude(numAccelerationChanges);
 
         // Draw accelerations from real distribution
-        std::uniform_real_distribution<double> acceleration(Parameters::agentMinAcceleration,
-                                                            Parameters::agentMaxAcceleration);
+        std::uniform_real_distribution<double> acceleration(SimParameters::agentMinAcceleration,
+                                                            SimParameters::agentMaxAcceleration);
         std::generate(accelerationMagnitude.begin(), accelerationMagnitude.end(),
                       [&gen, &acceleration](){ return acceleration(gen); });
 
@@ -163,7 +164,7 @@ int main()
     double yVelocity = 0.0;
     double xPosition = 0.0;
     double yPosition = 0.0;
-    for(unsigned int i = 0; i < (Parameters::numOutwardTimesteps + Parameters::numInwardTimesteps); i++) {
+    for(unsigned int i = 0; i < (SimParameters::numOutwardTimesteps + SimParameters::numInwardTimesteps); i++) {
         // Project velocity onto each TN2 cell's preferred angle and use as speed input
         for(unsigned int j = 0; j < Parameters::numTN2; j++) {
             speedTN2[j] = (sin(theta + preferredAngleTN2[j]) * xVelocity) + 
@@ -203,11 +204,11 @@ int main()
                                getGreens, activityImage, 8);
 
         // If we are on outbound segment of route
-        const bool outbound = (i < Parameters::numOutwardTimesteps);
+        const bool outbound = (i < SimParameters::numOutwardTimesteps);
         double a = 0.0;
         if(outbound) {
             // Update angular velocity
-            omega = (Parameters::pathLambda * omega) + pathVonMises(gen);
+            omega = (SimParameters::pathLambda * omega) + pathVonMises(gen);
 
             // Read linear acceleration off spline
             a = accelerationSpline((double)i);
@@ -219,7 +220,7 @@ int main()
             const scalar rightMotor = std::accumulate(&rCPU1[8], &rCPU1[16], 0.0f);
 
             // Use difference between left and right to calculate angular velocity
-            omega = -Parameters::agentM * (rightMotor - leftMotor);
+            omega = -SimParameters::agentM * (rightMotor - leftMotor);
 
             // Use fixed acceleration
             a = 0.1;
@@ -232,8 +233,8 @@ int main()
         // **NOTE** this comes from https://github.com/InsectRobotics/path-integration/blob/master/bee_simulator.py#L77-L83 rather than the methods section
         xVelocity += sin(theta) * a;
         yVelocity += cos(theta) * a;
-        xVelocity -= Parameters::agentDrag * xVelocity;
-        yVelocity -= Parameters::agentDrag * yVelocity;
+        xVelocity -= SimParameters::agentDrag * xVelocity;
+        yVelocity -= SimParameters::agentDrag * yVelocity;
 
         // Update position
         xPosition += xVelocity;
