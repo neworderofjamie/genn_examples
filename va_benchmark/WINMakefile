@@ -1,0 +1,5 @@
+EXECUTABLE	=simulator.exe
+SOURCES		=simulator.cc
+
+SIM_CODE    = va_benchmark_CODE
+!include $(GENN_PATH)\userproject\include\makefile_common_win.mk

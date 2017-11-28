@@ -34,6 +34,7 @@ void modelDefinition(NNmodel &model)
 {
     // Use maths intrinsics rather than accurate trancendentals
     GENN_PREFERENCES::optimizeCode = true;
+    GENN_PREFERENCES::autoInitSparseVars = true;
 
     initGeNN();
     model.setDT(Parameters::timestepMs);

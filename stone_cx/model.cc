@@ -31,16 +31,10 @@ public:
     DECLARE_MODEL(TN2Linear,0, 2);
 
     // **NOTE** this comes from https://github.com/InsectRobotics/path-integration/blob/master/cx_rate.py#L170-L173 rather than the methods section
-    SET_SIM_CODE(
-        "const scalar iTN = (sin($(headingAngle) + $(preferredAngle)) * $(vX)) + \n"
-        "   (cos($(headingAngle) + $(preferredAngle)) * $(vY));\n"
-        "$(r) = min(1.0, max(iTN, 0.0));\n");
+    SET_SIM_CODE("$(r) = min(1.0, max($(speed), 0.0));\n");
 
     SET_VARS({{"r", "scalar"},
-              {"preferredAngle", "scalar"}});
-
-    SET_EXTRA_GLOBAL_PARAMS({{"headingAngle", "scalar"},
-                             {"vX", "scalar"}, {"vY", "scalar"}});
+              {"speed", "scalar"}});
 };
 IMPLEMENT_MODEL(TN2Linear);
 
@@ -109,7 +103,7 @@ void modelDefinition(NNmodel &model)
     // TN2
     TN2Linear::VarValues tn2Init(
         0.0,    // r
-        0.0);   // Preference angle (radians)
+        0.0);   // speed
 
     // TL
     TLSigmoid::ParamValues tlParams(

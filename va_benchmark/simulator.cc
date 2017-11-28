@@ -20,32 +20,17 @@ int main()
   auto  initStart = chrono::steady_clock::now(); 
   initialize();
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
-
   buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                 CII, &allocateII, gen);
+                                 CII, &allocateII, rng);
   buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
-                                 CIE, &allocateIE, gen);
+                                 CIE, &allocateIE, rng);
   buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::probabilityConnection,
-                                 CEE, &allocateEE, gen);
+                                 CEE, &allocateEE, rng);
   buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                 CEI, &allocateEI, gen);
+                                 CEI, &allocateEI, rng);
 
   // Final setup
   initva_benchmark();
-
-  // Randomlise initial membrane voltages
-  std::uniform_real_distribution<> dis(Parameters::resetVoltage, Parameters::thresholdVoltage);
-  for(unsigned int i = 0; i < Parameters::numExcitatory; i++)
-  {
-    VE[i] = dis(gen);
-  }
-
-  for(unsigned int i = 0; i < Parameters::numInhibitory; i++)
-  {
-    VI[i] = dis(gen);
-  }
 
   auto  initEnd = chrono::steady_clock::now();
   printf("Init %ldms\n", chrono::duration_cast<chrono::milliseconds>(initEnd - initStart).count());

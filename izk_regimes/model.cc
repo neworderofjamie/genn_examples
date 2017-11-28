@@ -35,8 +35,14 @@ void modelDefinition(NNmodel &model)
   model.setName("izk_regimes");
 
   // Izhikevich model parameters
-  auto paramValues = IzhikevichV::ParamValues(10.0);
-  auto initValues = IzhikevichV::VarValues(-65.0, -20.0, 0.02, 0.2, -65.0, 8.0);
+  IzhikevichV::ParamValues paramValues(10.0);
+  IzhikevichV::VarValues initValues(
+      -65.0,
+      -20.0,
+      uninitialisedVar(),
+      uninitialisedVar(),
+      uninitialisedVar(),
+      uninitialisedVar());
 
   // Create population of Izhikevich neurons
   model.addNeuronPopulation<IzhikevichV>("Neurons", 4, paramValues, initValues);

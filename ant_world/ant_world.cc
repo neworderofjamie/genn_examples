@@ -582,7 +582,8 @@ int main(int argc, char *argv[])
     State state = (route.size() > 0) ? State::Training : State::Idle;
     //State state = State::RandomWalk;
 
-    unsigned int trainPoint = 0;
+    size_t trainPoint = 0;
+    size_t maxTestPoint = 0;
 
     unsigned int testingScan = 0;
 
@@ -765,9 +766,16 @@ int main(int argc, char *argv[])
 
                         // If we are further away than error threshold
                         if(distanceToRoute > Parameters::errorDistance) {
-                            // Snap ant to next snapshot position
-                            // **HACK** this is dubious but looks very much like what the original model was doing in figure 1i
-                            std::tie(antX, antY, antHeading) = route[nearestRouteWaypoint + 1];
+                            // If we have previously reached further down route than nearest point
+                            // the furthest point reached is our 'best' waypoint otherwise it's the nearest waypoint
+                            const size_t bestWaypoint = (nearestRouteWaypoint < maxTestPoint) ? maxTestPoint : nearestRouteWaypoint;
+
+                            // Snap ant to the waypoint after this (clamping to size of route)
+                            const size_t snapWaypoint = std::min(bestWaypoint + 1, route.size() - 1);
+                            std::tie(antX, antY, antHeading) = route[snapWaypoint];
+
+                            // Update maximum test point reached
+                            maxTestPoint = std::max(maxTestPoint, snapWaypoint);
 
                             // Add error point to route
                             route.addPoint(antX, antY, true);
@@ -775,8 +783,9 @@ int main(int argc, char *argv[])
                             // Increment error counter
                             numErrors++;
                         }
-                        // Otherwise add 'correct' point to route
+                        // Otherwise, update maximum test point reached and add 'correct' point to route
                         else {
+                            maxTestPoint = std::max(maxTestPoint, nearestRouteWaypoint);
                             route.addPoint(antX, antY, false);
                         }
 

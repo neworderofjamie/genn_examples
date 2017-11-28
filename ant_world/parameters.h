@@ -50,10 +50,10 @@ namespace Parameters
 
     // Rendering parameters
     // What colour should the ground be?
-    constexpr GLfloat groundColour[] = {0.898f, 0.718f, 0.353f};
+    constexpr float groundColour[] = {0.898f, 0.718f, 0.353f};
 
     // What colour should the brightest tussocks be?
-    constexpr GLfloat worldColour[] = {0.0f, 1.0f, 0.0f};
+    constexpr float worldColour[] = {0.0f, 1.0f, 0.0f};
 
     // Size of snapshots for initial pre-processing
     constexpr unsigned int intermediateSnapshotWidth = 74;

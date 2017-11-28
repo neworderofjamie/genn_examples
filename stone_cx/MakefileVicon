@@ -1,7 +1,7 @@
-EXECUTABLE      := simulator
-SOURCES         := simulator.cc simulatorCommon.cc
+EXECUTABLE      := simulatorVicon
+SOURCES         := simulatorVicon.cc simulatorCommon.cc
 LINK_FLAGS      := `pkg-config --libs opencv`
-CXXFLAGS       := `pkg-config --cflags opencv`
+CXXFLAGS       := `pkg-config --cflags opencv` -pthread
 CPU_ONLY=1
 
 ifdef RECORD_ELECTROPHYS
