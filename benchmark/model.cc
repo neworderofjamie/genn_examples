@@ -10,7 +10,10 @@
 
 void modelDefinition(NNmodel &model)
 {
-    //GENN_PREFERENCES::autoInitSparseVars = true;
+    // Enable new automatic initialisation mode
+    GENN_PREFERENCES::autoInitSparseVars = true;
+    //GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_HOST;
 
     initGeNN();
     model.setDT(1.0);
@@ -20,6 +23,10 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
+    InitVarSnippet::Normal::ParamValues gDist(
+        0.0,    // 0 - mean
+        0.1);   // 1 - sd
+
     // LIF model parameters
     LIF::ParamValues lifParams(
         0.2,    // 0 - C
@@ -44,7 +51,7 @@ void modelDefinition(NNmodel &model)
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
-        0.0);    // 0 - Wij (nA)
+        initVar<InitVarSnippet::Normal>(gDist));    // 0 - Wij (nA)
 
     // Exponential current parameters
     ExpCurr::ParamValues expCurrParams(
