@@ -3,9 +3,10 @@
 
 #include "modelSpec.h"
 
-#include "../common/connectors.h"
-#include "../common/exp_curr.h"
-#include "../common/lif.h"
+// GeNN robotics includes
+#include "connectors.h"
+#include "exp_curr.h"
+#include "lif.h"
 
 #include "parameters.h"
 
@@ -16,6 +17,8 @@ void modelDefinition(NNmodel &model)
     model.setDT(1.0);
     model.setName("va_benchmark");
 
+    GENN_PREFERENCES::autoInitSparseVars = true;
+    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
     //---------------------------------------------------------------------------
     // Build model
@@ -54,8 +57,8 @@ void modelDefinition(NNmodel &model)
         10.0);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
-    model.addNeuronPopulation<LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
-    model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
+    auto *e = model.addNeuronPopulation<LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
+    auto *i = model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
@@ -86,9 +89,10 @@ void modelDefinition(NNmodel &model)
                                                                       Parameters::probabilityConnection));
     ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
                                                                       Parameters::probabilityConnection));
-   /*ee->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-    ei->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-    ie->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-    ii->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);*/
+
+    // Configure spike variables so that they can be downloaded to host
+    e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+
     model.finalize();
 }

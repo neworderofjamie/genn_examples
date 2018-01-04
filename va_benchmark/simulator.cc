@@ -3,8 +3,9 @@
 #include <numeric>
 #include <random>
 
-#include "../common/connectors.h"
-#include "../common/spike_csv_recorder.h"
+// GeNN robotics includes
+#include "connectors.h"
+#include "spike_csv_recorder.h"
 
 #include "parameters.h"
 
@@ -20,6 +21,9 @@ int main()
   auto  initStart = chrono::steady_clock::now(); 
   initialize();
 
+#ifndef CPU_ONLY
+  std::mt19937 rng;
+#endif
   buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
                                  CII, &allocateII, rng);
   buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
