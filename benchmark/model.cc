@@ -3,21 +3,30 @@
 
 #include "modelSpec.h"
 
-#include "../common/exp_curr.h"
-#include "../common/lif.h"
+#include "exp_curr.h"
+#include "lif.h"
 
 #include "parameters.h"
 
 void modelDefinition(NNmodel &model)
 {
+    // Enable new automatic initialisation mode
+    GENN_PREFERENCES::autoInitSparseVars = true;
+    //GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_HOST;
+
     initGeNN();
     model.setDT(1.0);
     model.setName("benchmark");
-
+    model.setTiming(true);
 
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
+    InitVarSnippet::Normal::ParamValues gDist(
+        0.0,    // 0 - mean
+        0.1);   // 1 - sd
+
     // LIF model parameters
     LIF::ParamValues lifParams(
         0.2,    // 0 - C
@@ -34,32 +43,27 @@ void modelDefinition(NNmodel &model)
         -55.0,  // 0 - V
         0.0);    // 1 - RefracTime
 
-    NeuronModels::Poisson::ParamValues poissonParams(
-        10.0,        // 0 - firing rate
-        2.5,        // 1 - refratory period
-        20.0,       // 2 - Vspike
-        -60.0);       // 3 - Vrest
+    NeuronModels::PoissonNew::ParamValues poissonParams(
+        10.0);      // 0 - firing rate
 
-    NeuronModels::Poisson::VarValues poissonInit(
-        -60.0,        // 0 - V
-        0,           // 1 - seed
-        -10.0);     // 2 - SpikeTime
+    NeuronModels::PoissonNew::VarValues poissonInit(
+       0.0);     // 2 - SpikeTime
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
-        0.0);    // 0 - Wij (nA)
+        initVar<InitVarSnippet::Normal>(gDist));    // 0 - Wij (nA)
 
     // Exponential current parameters
     ExpCurr::ParamValues expCurrParams(
         5.0);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
-    model.addNeuronPopulation<NeuronModels::Poisson>("Stim", Parameters::numPre,
+    model.addNeuronPopulation<NeuronModels::PoissonNew>("Stim", Parameters::numPre,
                                 poissonParams, poissonInit);
     model.addNeuronPopulation<LIF>("Neurons", Parameters::numPost,
                                    lifParams, lifInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", Parameters::synapseMatrixType, NO_DELAY,
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
                              "Stim", "Neurons",
                              {}, staticSynapseInit,
                              expCurrParams, {});
