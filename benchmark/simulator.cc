@@ -1,11 +1,7 @@
-#include <algorithm>
-#include <chrono>
 #include <random>
 
-#include "modelSpec.h"
-
-#include "../common/connectors.h"
-#include "../common/timer.h"
+#include "connectors.h"
+#include "timer.h"
 
 #include "parameters.h"
 
@@ -14,25 +10,33 @@
 int main()
 {
     {
-        Timer<std::milli> t("Alloc:");
+        Timer<> t("Allocation:");
         allocateMem();
     }
+    {
+        Timer<> t("Initialization:");
+        initialize();
+    }
+    std::cout << "\tHost:" << initHost_tme * 1000.0 << std::endl;
+    std::cout << "\tDevice:" << initDevice_tme * 1000.0 << std::endl;
 
     {
-        Timer<std::milli> t("Init:");
-        initialize();
-
-        std::cout << "Initialise host:" << initHost_tme * 1000.0 << std::endl;
-        std::cout << "Initialise device:" << initDevice_tme * 1000.0 << std::endl;
-
+        Timer<> t("Building connectivity:");
         std::random_device rd;
         std::mt19937 gen(rd());
 
 #ifdef SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
         buildFixedProbabilityConnector(Parameters::numPre, Parameters::numPost, Parameters::connectionProbability,
                                        CSyn, &allocateSyn, gen);
+#elif defined(SYNAPSE_MATRIX_CONNECTIVITY_BITMASK)
+        buildFixedProbabilityConnector((Parameters::numPre * Parameters::numPre) / 32 + 1, Parameters::connectionProbability,
+                                       gpSyn, gen);
 #endif  // SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
+    }
 
+    // Final setup
+    {
+        Timer<> t("Sparse init:");
         // Perform sparse initialisation
         initbenchmark();
 
@@ -41,7 +45,7 @@ int main()
     }
 
     {
-        Timer<std::milli> t("Sim:");
+        Timer<> t("Sim:");
 
         // Loop through timesteps
         for(unsigned int t = 0; t < 5000; t++)
@@ -54,6 +58,8 @@ int main()
 #endif
         }
     }
+    std::cout << "\tNeuron:" << neuron_tme * 1000.0 << std::endl;
+    std::cout << "\tSynapse:" << synapse_tme * 1000.0 << std::endl;
 
   return 0;
 }

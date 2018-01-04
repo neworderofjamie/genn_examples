@@ -3,6 +3,7 @@
 
 #include "modelSpec.h"
 
+#include "connectors.h"
 #include "exp_curr.h"
 #include "lif.h"
 
@@ -12,8 +13,7 @@ void modelDefinition(NNmodel &model)
 {
     // Enable new automatic initialisation mode
     GENN_PREFERENCES::autoInitSparseVars = true;
-    //GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_HOST;
+    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
     initGeNN();
     model.setDT(1.0);
@@ -51,7 +51,8 @@ void modelDefinition(NNmodel &model)
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
-        initVar<InitVarSnippet::Normal>(gDist));    // 0 - Wij (nA)
+        //initVar<InitVarSnippet::Normal>(gDist));    // 0 - Wij (nA)
+        0.0);
 
     // Exponential current parameters
     ExpCurr::ParamValues expCurrParams(
@@ -63,10 +64,14 @@ void modelDefinition(NNmodel &model)
     model.addNeuronPopulation<LIF>("Neurons", Parameters::numPost,
                                    lifParams, lifInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
-                             "Stim", "Neurons",
-                             {}, staticSynapseInit,
-                             expCurrParams, {});
+    auto *syn = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
+                                                                                     "Stim", "Neurons",
+                                                                                     {}, staticSynapseInit,
+                                                                                     expCurrParams, {});
+#ifdef SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
+    syn->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numPre, Parameters::numPost,
+                                                                       Parameters::connectionProbability));
+#endif  // SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
 
     model.finalize();
 }
