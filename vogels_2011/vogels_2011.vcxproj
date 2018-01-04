@@ -4,6 +4,11 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{2498E60B-FD3F-459A-B840-E41248C27576}</ProjectGuid>
   </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(GENN_ROBOTICS_PATH)\common</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="simulator.cc" />
   </ItemGroup>
