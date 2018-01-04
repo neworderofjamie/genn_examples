@@ -1,10 +1,8 @@
-#include <cmath>
-#include <vector>
-
 #include "modelSpec.h"
 
-#include "../common/exp_curr.h"
-#include "../common/lif.h"
+// GeNN robotics includes
+#include "exp_curr.h"
+#include "lif.h"
 
 
 void modelDefinition(NNmodel &model)
