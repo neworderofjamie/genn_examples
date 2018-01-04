@@ -4,10 +4,10 @@
 #include <numeric>
 #include <random>
 
-// Common includes
+// GeNN robotics includes
 #include "connectors.h"
-#include "../common/spike_csv_recorder.h"
-#include "../common/timer.h"
+#include "spike_csv_recorder.h"
+#include "timer.h"
 
 // GeNN generated code includes
 #include "izhikevich_pavlovian_CODE/definitions.h"
