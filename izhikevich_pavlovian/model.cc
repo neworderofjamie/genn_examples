@@ -2,7 +2,7 @@
 #include "modelSpec.h"
 
 // Common includes
-#include "../common/connectors.h"
+#include "connectors.h"
 #include "../common/stdp_dopamine.h"
 
 // Model includes
@@ -35,6 +35,8 @@ void modelDefinition(NNmodel &model)
     // Use maths intrinsics rather than accurate trancendentals
     GENN_PREFERENCES::optimizeCode = true;
     GENN_PREFERENCES::autoInitSparseVars = true;
+    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+
 
     initGeNN();
     model.setDT(Parameters::timestepMs);
@@ -85,8 +87,8 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(Parameters::inhWeight);
 
     // Create IF_curr neuron
-    model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
-    model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
+    auto e = model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
+    auto i = model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
 
     auto ee = model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
@@ -108,6 +110,18 @@ void modelDefinition(NNmodel &model)
         "I", "E",
         {}, inhSynInit,
         {}, {});
+
+    // Configure external input current variables so they can be uploaded from host
+    e->setVarMode("Iext", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    i->setVarMode("Iext", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+
+    // Configure spike variables so they can be downloaded to host
+    e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+
+    // Configure synaptic weight variables so they can be downloaded to host
+    ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    ei->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     // Calculate max connections
     ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,

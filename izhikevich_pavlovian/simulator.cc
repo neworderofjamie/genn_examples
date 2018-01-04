@@ -5,7 +5,7 @@
 #include <random>
 
 // Common includes
-#include "../common/connectors.h"
+#include "connectors.h"
 #include "../common/spike_csv_recorder.h"
 #include "../common/timer.h"
 
