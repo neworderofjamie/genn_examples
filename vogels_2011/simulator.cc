@@ -1,4 +1,5 @@
 // Standard C++ includes
+#include <numeric>
 #include <random>
 
 // GeNN robotics includes
