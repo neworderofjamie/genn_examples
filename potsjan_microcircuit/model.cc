@@ -10,6 +10,26 @@
 // Model includes
 #include "parameters.h"
 
+//----------------------------------------------------------------------------
+// InitVarSnippet::Base
+//----------------------------------------------------------------------------
+class NormalClipped : public InitVarSnippet::Base
+{
+public:
+    DECLARE_SNIPPET(NormalClipped, 4);
+
+    SET_CODE(
+        "scalar normal;"
+        "do\n"
+        "{\n"
+        "   normal = $(mean) + ($(gennrand_normal) * $(sd));\n"
+        "} while (normal > $(max) || normal < $(min));\n"
+        "$(value) = normal;\n");
+
+    SET_PARAM_NAMES({"mean", "sd", "min", "max"});
+};
+IMPLEMENT_SNIPPET(NormalClipped);
+
 void modelDefinition(NNmodel &model)
 {
     initGeNN();
@@ -122,6 +142,51 @@ void modelDefinition(NNmodel &model)
                     // If there are any connections
                     if(k > 0) {
                         std::cout << "Connection between '" << srcName << "' and '" << trgName << "': K=" << k << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << std::endl;
+
+                        // Build unique synapse name
+                        const std::string synapseName = srcName + "_" + trgName;
+
+                        // Excitatory
+                        if(srcPop == Parameters::PopulationE) {
+                            // Build distribution for weight parameters
+                            NormalClipped::ParamValues wDist(
+                                meanWeight,                                 // 0 - mean
+                                weightSD,                                   // 1 - sd
+                                0.0,                                        // 2 - min
+                                std::numeric_limits<double>::infinity());   // 3 - max
+
+                            // Create weight parameters
+                            WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
+                                initVar<NormalClipped>(wDist));    // 0 - Wij (nA)
+
+                            // Add synapse population
+                            auto *synapsePop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+                                srcName, trgName,
+                                {}, staticSynapseInit,
+                                excitatoryExpCurrParams, {});
+                        }
+                        // Inhibitory
+                        else {
+                            // Build distribution for weight parameters
+                            NormalClipped::ParamValues wDist(
+                                meanWeight,                                 // 0 - mean
+                                weightSD,                                   // 1 - sd
+                                -std::numeric_limits<double>::infinity(),   // 2 - min
+                                0.0);                                       // 3 - max
+
+                            // Create weight parameters
+                            WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
+                                initVar<NormalClipped>(wDist));    // 0 - Wij (nA)
+
+                            // Add synapse population
+                            auto *synapsePop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+                                srcName, trgName,
+                                {}, staticSynapseInit,
+                                inhibitoryExpCurrParams, {});
+                        }
+
                     }
                 }
             }
