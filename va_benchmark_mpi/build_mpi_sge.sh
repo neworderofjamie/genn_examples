@@ -4,4 +4,4 @@ export CUDA_PATH=$CUDA_HOME
 export MPI_PATH=$MPI_HOME
 
 # Generate code
-genn-buildmodel.sh -m -i $GENN_ROBOTICS_PATH/common model.cc
+./build_mpi.sh
