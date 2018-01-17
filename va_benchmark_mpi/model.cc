@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 
 #include "modelSpec.h"
@@ -20,6 +21,14 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
+    // If the SGE grid engine has already allocated us a GPU we should use it!
+    if(const char *sgeGPU = std::getenv("SGE_HGR_gpu"))
+    {
+        GENN_PREFERENCES::autoChooseDevice = 0;
+        GENN_PREFERENCES::defaultDevice = atoi(sgeGPU);
+
+        printf("SGE selected GPU:%u\n", GENN_PREFERENCES::defaultDevice);
+    }
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
