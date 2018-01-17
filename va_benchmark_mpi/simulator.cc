@@ -62,47 +62,75 @@ int main()
 #ifndef I_REMOTE
     SpikeCSVRecorder spikesI("spikes_i.csv", glbSpkCntI, glbSpkI);
 #endif  // E_REMOTE
+    double simulationMs = 0.0;
+    double pullLocalMs = 0.0;
+    double recordMs = 0.0;
+    double mpiMs = 0.0;
+    double pushRemoteMs = 0.0;
     {
-        Timer<> t("Simulation:");
         // Loop through timesteps
         for(unsigned int t = 0; t < 10000; t++)
         {
             // Simulate
 #ifndef CPU_ONLY
-            stepTimeGPU();
+            {
+                TimerAccumulate<> timer(simulationMs);
+                stepTimeGPU();
+            }
 
             // Pull spikes to host for populations being simulated on local machine
+            {
+                TimerAccumulate<> timer(pullLocalMs);
 #ifndef E_REMOTE
-            pullECurrentSpikesFromDevice();
+                pullECurrentSpikesFromDevice();
 #endif  // E_REMOTE
 #ifndef I_REMOTE
-            pullICurrentSpikesFromDevice();
+                pullICurrentSpikesFromDevice();
 #endif  // I_REMOTE
-#else
-            stepTimeCPU();
-#endif
+            }
+#else   // CPU_ONLY
+            {
+                TimerAccumulate<> timer(simulationMs);
+                stepTimeCPU();
+            }
+#endif  // !CPU_ONLY
             // Record spikes to disk for populations being simulated on local machine
+            {
+                TimerAccumulate<> timer(recordMs);
 #ifndef E_REMOTE
-            spikesE.record(t);
+                spikesE.record(t);
 #endif  // E_REMOTE
 #ifndef I_REMOTE
-            spikesI.record(t);
+                spikesI.record(t);
 #endif  // I_REMOTE
+            }
 
 #ifdef MPI_ENABLE
             // Synchronise nodes using MPI
-            communicateSpikes();
+            {
+                TimerAccumulate<> timer(mpiMs);
+                synchroniseMPI();
+            }
 
             // Push spikes received from remote populations to device
+            {
+                TimerAccumulate<> timer(pushRemoteMs);
 #ifdef E_REMOTE
-            pushECurrentSpikesToDevice();
+                pushECurrentSpikesToDevice();
 #endif  // E_REMOTE
 #ifdef I_REMOTE
-            pushICurrentSpikesToDevice();
+                pushICurrentSpikesToDevice();
 #endif  // I_REMOTE
+            }
 #endif  // MPI_ENABLE
         }
     }
+
+    std::cout << "Simulation:" << simulationMs << "ms" << std::endl;
+    std::cout << "Pull local:" << pullLocalMs << "ms" << std::endl;
+    std::cout << "Record:" << recordMs << "ms" << std::endl;
+    std::cout << "MPI:" << mpiMs << "ms" << std::endl;
+    std::cout << "Push remote:" << pushRemoteMs << "ms" << std::endl;
 
     // Exit GeNN
     // **NOTE** this is particularily important for MPI simulations as MPI_Finalize is called here
