@@ -3,4 +3,4 @@
 export CUDA_PATH=$CUDA_HOME
 export MPI_PATH=$MPI_HOME
 
-./run_mpi_sge.sh
+./run_mpi.sh
