@@ -29,6 +29,7 @@ module load gcc/4.9.4 cuda/7.5 openmpi/2.0.1/gcc/4.9.4
 
 # **NOTE** CUDA module exports CUDA_HOME, but GeNN expects CUDA_PATH
 export CUDA_PATH=$CUDA_HOME
+export MPI_PATH=$MPI_HOME
 
 # Generate code
 mpirun -np 2 ./build_mpi.sh
