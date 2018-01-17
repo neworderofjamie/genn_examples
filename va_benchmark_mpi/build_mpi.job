@@ -1,0 +1,35 @@
+######################################################################
+# Options for the batch system
+# These options are not executed by the script, but are instead read by the
+# batch system before submitting the job. Each option is preceeded by '#$' to
+# signify that it is for grid engine.
+#
+# All of these options are the same as flags you can pass to qsub on the
+# command line and can be **overriden** on the command line. see man qsub for
+# all the details
+######################################################################
+# -- The shell used to interpret this script
+#$ -S /bin/bash
+# -- Execute this job from the current working directory.
+#$ -cwd
+# -- Job output to stderr will be merged into standard out. Remove this line if
+# -- you want to have separate stderr and stdout log files
+#$ -j y
+#$ -o .
+
+######################################################################
+# Job Script
+# Here we are writing in bash (as we set bash as our shell above). In here you
+# should set up the environment for your program, copy around any data that
+# needs to be copied, and then execute the program
+######################################################################
+# Load GCC, CUDA and OpenMPI modules
+# **NOTE** this is the newest GCC CUDA 7.5 supports
+module load gcc/4.9.4 cuda/7.5 openmpi/2.0.1/gcc/4.9.4
+
+# **NOTE** CUDA module exports CUDA_HOME, but GeNN expects CUDA_PATH
+export CUDA_PATH=$CUDA_HOME
+
+# Generate code
+mpirun -np 2 ./build_mpi.sh
+
