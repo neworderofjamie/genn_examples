@@ -100,8 +100,8 @@ void modelDefinition(NNmodel &model)
                                                                       Parameters::probabilityConnection));
 
     // Configure spike variables so that they can be downloaded to host
-    e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_HOST);
-    i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_HOST);
+    e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     model.finalize();
 }
