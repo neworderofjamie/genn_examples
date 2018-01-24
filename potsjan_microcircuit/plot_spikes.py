@@ -34,14 +34,14 @@ def load_spikes(filename):
 
         return spike_times, spike_neuron_id, name, num
 
-pop_spikes = [load_spikes("23E.csv"),
-              load_spikes("23I.csv"),
-              load_spikes("4E.csv"),
-              load_spikes("4I.csv"),
-              load_spikes("5E.csv"),
-              load_spikes("5I.csv"),
+pop_spikes = [load_spikes("6I.csv"),
               load_spikes("6E.csv"),
-              load_spikes("6I.csv")]
+              load_spikes("5I.csv"),
+              load_spikes("5E.csv"),
+              load_spikes("4I.csv"),
+              load_spikes("4E.csv"),
+              load_spikes("23I.csv"),
+              load_spikes("23E.csv")]
 
 # Create plot
 figure, axes = plt.subplots(1, 2)
@@ -53,7 +53,7 @@ for t, i, name, num in pop_spikes:
     actor = axes[0].scatter(t, i + start_id, s=2, edgecolors="none")
 
     # Plot bar showing rate in matching colour
-    axes[1].barh(bar_y, len(t), align="center", color=actor.get_facecolor(), ecolor="black")
+    axes[1].barh(bar_y, len(t) / float(num), align="center", color=actor.get_facecolor(), ecolor="black")
 
     # Update offset
     start_id += num
