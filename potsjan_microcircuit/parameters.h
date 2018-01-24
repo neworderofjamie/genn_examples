@@ -1,3 +1,7 @@
+// Standard C includes
+#include <cmath>
+
+// Parameters
 namespace Parameters
 {
 // Layers of model
@@ -32,14 +36,9 @@ const char *populationNames[PopulationMax] = {
     "I",
 };
 
-std::string getPopulationName(unsigned int layer, unsigned int population)
-{
-    return std::string(layerNames[layer]) + std::string(populationNames[population]);
-}
 
 // Background rate per synapse
 const double backgroundRate = 8.0;  // spikes/s
-
 
 // Relative inhibitory synaptic weight
 const double g = -4.0;
@@ -86,11 +85,21 @@ const double connectionProbabilities[LayerMax * PopulationMax][LayerMax * Popula
 
 // In-degrees for external inputs
 //  PopulationE,    PopulationI
-const unsigned int externalInputDegrees[LayerMax][PopulationMax] = {
+const unsigned int numExternalInputs[LayerMax][PopulationMax] = {
     {1600,          1500},  // Layer23
     {2100,          1900},  // Layer4
     {2000,          1900},  // Layer5
-    {2900,          2100}};  // Layer6
+    {2900,          2100}}; // Layer6
+
+// Mean rates in the full-scale model, necessary for scaling
+// Precise values differ somewhat between network realizations
+//  PopulationE,    PopulationI
+const double meanFiringRates[LayerMax][PopulationMax] = {
+    {0.971,         2.868},     // Layer23
+    {4.746,         5.396},     // Layer4
+    {8.142,         9.078},     // Layer5
+    {0.991,         7.523}};    // Layer6
+
 
 // Means and standard deviations of delays from given source populations (ms)
 const double meanDelay[PopulationMax] = {
@@ -101,4 +110,72 @@ const double delaySD[PopulationMax] = {
     0.75,   // PopulationE
     0.375}; // PopulationI
 
+
+const double durationMs = 1000.0;
+
+const double neuronScalingFactor = 0.1;
+
+const double connectivityScalingFactor = 0.1;
+
+std::string getPopulationName(unsigned int layer, unsigned int population)
+{
+    return std::string(layerNames[layer]) + std::string(populationNames[population]);
+}
+
+unsigned int getNumNeurons(unsigned int layer, unsigned int pop)
+{
+    return (unsigned int)(neuronScalingFactor * (double)numNeurons[layer][pop]);
+}
+
+unsigned int getFullNumInputs(unsigned int srcLayer, unsigned int srcPop, unsigned int trgLayer, unsigned int trgPop)
+{
+    const unsigned numSrc = numNeurons[trgLayer][trgPop];
+    const unsigned numTrg = numNeurons[trgLayer][trgPop];
+    const double connectionProb = connectionProbabilities[(trgLayer * 2) + trgPop][(srcLayer * 2) + srcPop];
+
+    return round(log(1.0 - connectionProb) / log((double)(numTrg * numSrc - 1) / (double)(numTrg * numSrc))) / numTrg;
+}
+
+double getMeanWeight(unsigned int srcLayer, unsigned int srcPop, unsigned int trgLayer, unsigned int trgPop)
+{
+    // Determine mean weight
+    if(srcPop == PopulationE) {
+        if(srcLayer == Layer4 && trgLayer == Layer23 && trgPop == PopulationE) {
+            return layer234W;
+        }
+        else {
+            return Parameters::meanW;
+        }
+    }
+    else {
+        return g * meanW;
+    }
+}
+
+unsigned int getNumConnections(unsigned int srcLayer, unsigned int srcPop, unsigned int trgLayer, unsigned int trgPop)
+{
+    // Scale full number of inputs by scaling factor
+    const double numInputs = getFullNumInputs(srcLayer, srcPop, trgLayer, trgPop) * connectivityScalingFactor;
+
+    // Multiply this by number of postsynaptic neurons
+    return (unsigned int)(round(numInputs * (double)numNeurons[trgLayer][trgPop]));
+
+}
+
+double getMeanInputCurrent(unsigned int layer, unsigned int pop)
+{
+    // Loop through source populations
+    double meanInputCurrent = 0.0;
+    for(unsigned int srcLayer = 0; srcLayer < LayerMax; srcLayer++) {
+        for(unsigned int srcPop = 0; srcPop < PopulationMax; srcPop++) {
+            meanInputCurrent += (getMeanWeight(srcLayer, srcPop, layer, pop) *
+                                 getFullNumInputs(srcLayer, srcPop, layer, pop) *
+                                 meanFiringRates[srcLayer][srcPop]);
+        }
+    }
+
+    // Add mean external input current
+    meanInputCurrent += externalW * numExternalInputs[layer][pop] * backgroundRate;
+    return meanInputCurrent;
+}
 }   // Parameters

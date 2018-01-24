@@ -10,6 +10,67 @@
 // Model includes
 #include "parameters.h"
 
+
+//----------------------------------------------------------------------------
+// LIFPoisson
+//----------------------------------------------------------------------------
+//! Leaky integrate-and-fire neuron solved algebraically
+class LIFPoisson : public NeuronModels::Base
+{
+public:
+    DECLARE_MODEL(LIFPoisson, 10, 3);
+
+    SET_SIM_CODE(
+        "scalar p = 1.0f;\n"
+        "unsigned int numPoissonSpikes = 0;\n"
+        "do\n"
+        "{\n"
+        "    numPoissonSpikes++;\n"
+        "    p *= $(gennrand_uniform);\n"
+        "} while (p > $(PoissonExpMinusLambda));\n"
+        "$(Ipoisson) += $(IpoissonInit) * (scalar)(numPoissonSpikes - 1);\n"
+        "if ($(RefracTime) <= 0.0)\n"
+        "{\n"
+        "  scalar alpha = (($(Isyn) + $(Ioffset) + $(Ipoisson)) * $(Rmembrane)) + $(Vrest);\n"
+        "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
+        "}\n"
+        "else\n"
+        "{\n"
+        "  $(RefracTime) -= DT;\n"
+        "}\n"
+        "$(Ipoisson) *= $(IpoissonExpDecay);\n"
+    );
+
+    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
+
+    SET_RESET_CODE(
+        "$(V) = $(Vreset);\n"
+        "$(RefracTime) = $(TauRefrac);\n");
+
+    SET_PARAM_NAMES({
+        "C",                // Membrane capacitance
+        "TauM",             // Membrane time constant [ms]
+        "Vrest",            // Resting membrane potential [mV]
+        "Vreset",           // Reset voltage [mV]
+        "Vthresh",          // Spiking threshold [mV]
+        "Ioffset",          // Offset current
+        "TauRefrac",        // Refractory time [ms]
+        "PoissonRate",      // Poisson input rate [Hz]
+        "PoissonWeight",    // How much current each poisson spike adds [nA]
+        "IpoissonTau"});     // Time constant of poisson spike integration [ms]
+
+
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }},
+        {"PoissonExpMinusLambda", [](const vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
+        {"IpoissonExpDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
+        {"IpoissonInit", [](const vector<double> &pars, double dt){ return (pars[8] * (1.0 - std::exp(-dt / pars[9]))) * (1.0 / dt); }}});
+
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}});
+};
+IMPLEMENT_MODEL(LIFPoisson);
+
 //----------------------------------------------------------------------------
 // InitVarSnippet::Base
 //----------------------------------------------------------------------------
@@ -43,27 +104,11 @@ void modelDefinition(NNmodel &model)
         -58.0, // 0 - mean
         5.0);  // 1 - sd
 
-    // LIF model parameters
-    LIF::ParamValues lifParams(
-        0.25,    // 0 - C
-        10.0,   // 1 - TauM
-        -65.0,  // 2 - Vrest
-        -65.0,  // 3 - Vreset
-        -50.0,  // 4 - Vthresh
-        0.0,    // 5 - Ioffset
-        2.0);    // 6 - TauRefrac
-
     // LIF initial conditions
-    LIF::VarValues lifInit(
-        initVar<InitVarSnippet::Normal>(vDist),     // 0 - V
-        0.0);   // 1 - RefracTime
-
-    NeuronModels::PoissonNew::VarValues poissonInit(
-       0.0);     // 2 - SpikeTime
-
-    // Weight for external input synapses
-    WeightUpdateModels::StaticPulse::VarValues extStaticSynapseInit(
-        Parameters::externalW);    // 0 - Wij (nA)
+    LIFPoisson::VarValues lifInit(
+        initVar<InitVarSnippet::Normal>(vDist), // 0 - V
+        0.0,                                    // 1 - RefracTime
+        0.0);                                   // 2 - Ipoisson
 
     // Exponential current parameters
     ExpCurr::ParamValues excitatoryExpCurrParams(
@@ -73,62 +118,57 @@ void modelDefinition(NNmodel &model)
         0.5);  // 0 - TauSyn (ms)
 
     // Loop through populations and layers
+    unsigned int totalNeurons = 0;
     for(unsigned int layer = 0; layer < Parameters::LayerMax; layer++) {
         for(unsigned int pop = 0; pop < Parameters::PopulationMax; pop++) {
             // Determine name of population
             const std::string popName = Parameters::getPopulationName(layer, pop);
 
+            // Calculate external input rate, weight and current
+            const double extInputRate = (Parameters::numExternalInputs[layer][pop] *
+                                         Parameters::connectivityScalingFactor *
+                                         Parameters::backgroundRate);
+            const double extWeight = Parameters::externalW / sqrt(Parameters::connectivityScalingFactor);
+
+            const double extInputCurrent = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor) * Parameters::getMeanInputCurrent(layer, pop));
+
+            // LIF model parameters
+            LIFPoisson::ParamValues lifParams(
+                0.25,               // 0 - C
+                10.0,               // 1 - TauM
+                -65.0,              // 2 - Vrest
+                -65.0,              // 3 - Vreset
+                -50.0,              // 4 - Vthresh
+                extInputCurrent,    // 5 - Ioffset
+                2.0,                // 6 - TauRefrac
+                extInputRate,       // 7 - PoissonRate
+                extWeight,          // 8 - PoissonWeight
+                0.5);               // 9 - IpoissonTau
+
             // Create population
-            auto *neuronPop = model.addNeuronPopulation<LIF>(popName,
-                                                             Parameters::numNeurons[layer][pop],
-                                                             lifParams, lifInit);
+            const unsigned int popSize = Parameters::getNumNeurons(layer, pop);
+            auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(popName, popSize,
+                                                                    lifParams, lifInit);
 
             // Make recordable on host
             neuronPop->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
-            // Calculate poisson input rate
-            NeuronModels::PoissonNew::ParamValues poissonParams(
-                Parameters::externalInputDegrees[layer][pop] * Parameters::backgroundRate);     // 0 - Input rate
-
-            // Create poisson input source
-            model.addNeuronPopulation<NeuronModels::PoissonNew>(popName + "input",
-                                                                Parameters::numNeurons[layer][pop],
-                                                                poissonParams, poissonInit);
+            // Add number of neurons to total
+            totalNeurons += popSize;
         }
     }
 
     // Loop through target populations and layers
+    unsigned int totalSynapses = 0;
     for(unsigned int trgLayer = 0; trgLayer < Parameters::LayerMax; trgLayer++) {
         for(unsigned int trgPop = 0; trgPop < Parameters::PopulationMax; trgPop++) {
-            // Read target population size
-            const unsigned numTrg = Parameters::numNeurons[trgLayer][trgPop];
             const std::string trgName = Parameters::getPopulationName(trgLayer, trgPop);
-
             for(unsigned int srcLayer = 0; srcLayer < Parameters::LayerMax; srcLayer++) {
                 for(unsigned int srcPop = 0; srcPop < Parameters::PopulationMax; srcPop++) {
-                    // Read source population size
-                    const unsigned numSrc = Parameters::numNeurons[trgLayer][trgPop];
                     const std::string srcName = Parameters::getPopulationName(srcLayer, srcPop);
 
-                    const double connectionProb = Parameters::connectionProbabilities[(trgLayer * 2) + trgPop][(srcLayer * 2) + srcPop];
-                    const unsigned int k = round(log(1.0 - connectionProb) / log((double)(numTrg * numSrc - 1) / (double)(numTrg * numSrc))) / (double)numTrg;
-             /*
-              *
-                    K[target_index][source_index] = round(np.log(1. - conn_probs[target_index][source_index]) / np.log((n_target * n_source - 1.) / (n_target * n_source))) / n_target*/
-
                     // Determine mean weight
-                    float meanWeight;
-                    if(srcPop == Parameters::PopulationE) {
-                        if(srcLayer == Parameters::Layer4 && trgLayer == Parameters::Layer23 && trgPop == Parameters::PopulationE) {
-                            meanWeight = Parameters::layer234W;
-                        }
-                        else {
-                            meanWeight = Parameters::meanW;
-                        }
-                    }
-                    else {
-                        meanWeight = Parameters::g * Parameters::meanW;
-                    }
+                    const double meanWeight = Parameters::getMeanWeight(srcLayer, srcPop, trgLayer, trgPop) / sqrt(Parameters::connectivityScalingFactor);
 
                     // Determine weight standard deviation
                     double weightSD;
@@ -139,9 +179,13 @@ void modelDefinition(NNmodel &model)
                         weightSD = fabs(meanWeight * Parameters::relW);
                     }
 
-                    // If there are any connections
-                    if(k > 0) {
-                        std::cout << "Connection between '" << srcName << "' and '" << trgName << "': K=" << k << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << std::endl;
+                    // Calculate number of connections
+                    const unsigned int numConnections = Parameters::getNumConnections(srcLayer, srcPop, trgLayer, trgPop);
+
+                    if(numConnections > 0) {
+                        std::cout << "Connection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << std::endl;
+
+                        totalSynapses += numConnections;
 
                         // Build unique synapse name
                         const std::string synapseName = srcName + "_" + trgName;
@@ -153,14 +197,14 @@ void modelDefinition(NNmodel &model)
                                 meanWeight,                                 // 0 - mean
                                 weightSD,                                   // 1 - sd
                                 0.0,                                        // 2 - min
-                                std::numeric_limits<double>::infinity());   // 3 - max
+                                std::numeric_limits<float>::max());         // 3 - max
 
                             // Create weight parameters
                             WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
                                 initVar<NormalClipped>(wDist));    // 0 - Wij (nA)
 
                             // Add synapse population
-                            auto *synapsePop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+                            model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
                                 synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
@@ -172,7 +216,7 @@ void modelDefinition(NNmodel &model)
                             NormalClipped::ParamValues wDist(
                                 meanWeight,                                 // 0 - mean
                                 weightSD,                                   // 1 - sd
-                                -std::numeric_limits<double>::infinity(),   // 2 - min
+                                -std::numeric_limits<float>::max(),         // 2 - min
                                 0.0);                                       // 3 - max
 
                             // Create weight parameters
@@ -180,7 +224,7 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClipped>(wDist));    // 0 - Wij (nA)
 
                             // Add synapse population
-                            auto *synapsePop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+                            model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
                                 synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
@@ -192,6 +236,8 @@ void modelDefinition(NNmodel &model)
             }
         }
     }
+
+    std::cout << "Total neurons=" << totalNeurons << ", total synapses=" << totalSynapses << std::endl;
 
     // Finalise model
     model.finalize();
