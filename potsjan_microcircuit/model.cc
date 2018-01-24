@@ -132,7 +132,7 @@ void modelDefinition(NNmodel &model)
             const double extWeight = Parameters::externalW / sqrt(Parameters::connectivityScalingFactor);
 
             const double extInputCurrent = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getMeanInputCurrent(layer, pop);
-            assert(extInputCurrent > 0.0);
+            assert(extInputCurrent >= 0.0);
 
             // LIF model parameters
             LIFPoisson::ParamValues lifParams(
@@ -190,7 +190,7 @@ void modelDefinition(NNmodel &model)
                     const unsigned int numConnections = Parameters::getNumConnections(srcLayer, srcPop, trgLayer, trgPop);
 
                     if(numConnections > 0) {
-                        std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << std::endl;
+                        std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << ", meanDelay=" << meanDelay << std::endl;
 
                         totalSynapses += numConnections;
 
@@ -212,7 +212,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 excitatoryExpCurrParams, {});
@@ -232,7 +232,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 inhibitoryExpCurrParams, {});

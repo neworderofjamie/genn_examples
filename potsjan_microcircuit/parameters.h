@@ -36,6 +36,15 @@ const char *populationNames[PopulationMax] = {
     "I",
 };
 
+// Simulation timestep [ms]
+const double dtMs = 0.1;
+
+// Simulation duration [ms]
+const double durationMs = 1000.0;
+
+// Scaling factors for number of neurons and synapses
+const double neuronScalingFactor = 0.5;
+const double connectivityScalingFactor = 0.5;
 
 // Background rate per synapse
 const double backgroundRate = 8.0;  // spikes/s
@@ -110,13 +119,6 @@ const double delaySD[PopulationMax] = {
     0.75,   // PopulationE
     0.375}; // PopulationI
 
-const double dtMs = 0.1;
-
-const double durationMs = 1000.0;
-
-const double neuronScalingFactor = 0.1;
-
-const double connectivityScalingFactor = 0.1;
 
 std::string getPopulationName(unsigned int layer, unsigned int population)
 {

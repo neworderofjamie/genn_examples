@@ -13,7 +13,10 @@
 // Auto-generated model code
 #include "potjans_microcircuit_CODE/definitions.h"
 
-#define ADD_SPIKE_RECORDER(LAYER, POPULATION) spikeRecorders.emplace_back(#LAYER#POPULATION".csv",  glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION)
+#define ADD_SPIKE_RECORDER(LAYER, POPULATION) \
+    spikeRecorders.emplace_back(#LAYER#POPULATION".csv",  \
+    Parameters::getNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION), \
+    spkQuePtr##LAYER##POPULATION, glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION)
 
 #define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                            \
     buildFixedNumberTotalWithReplacementConnector(Parameters::getNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),                 \
@@ -110,7 +113,7 @@ int main()
 
     // Open CSV output files
     //SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
-    std::vector<SpikeCSVRecorder> spikeRecorders;
+    std::vector<SpikeCSVRecorderDelay> spikeRecorders;
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
     ADD_SPIKE_RECORDER(23, E);
     ADD_SPIKE_RECORDER(23, I);
