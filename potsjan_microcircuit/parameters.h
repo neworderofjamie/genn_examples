@@ -110,6 +110,7 @@ const double delaySD[PopulationMax] = {
     0.75,   // PopulationE
     0.375}; // PopulationI
 
+const double dtMs = 0.1;
 
 const double durationMs = 1000.0;
 
@@ -127,11 +128,11 @@ unsigned int getNumNeurons(unsigned int layer, unsigned int pop)
     return (unsigned int)(neuronScalingFactor * (double)numNeurons[layer][pop]);
 }
 
-unsigned int getFullNumInputs(unsigned int srcLayer, unsigned int srcPop, unsigned int trgLayer, unsigned int trgPop)
+double getFullNumInputs(unsigned int srcLayer, unsigned int srcPop, unsigned int trgLayer, unsigned int trgPop)
 {
-    const unsigned numSrc = numNeurons[trgLayer][trgPop];
+    const unsigned numSrc = numNeurons[srcLayer][srcPop];
     const unsigned numTrg = numNeurons[trgLayer][trgPop];
-    const double connectionProb = connectionProbabilities[(trgLayer * 2) + trgPop][(srcLayer * 2) + srcPop];
+    const double connectionProb = connectionProbabilities[(trgLayer * PopulationMax) + trgPop][(srcLayer * PopulationMax) + srcPop];
 
     return round(log(1.0 - connectionProb) / log((double)(numTrg * numSrc - 1) / (double)(numTrg * numSrc))) / numTrg;
 }
@@ -156,6 +157,7 @@ unsigned int getNumConnections(unsigned int srcLayer, unsigned int srcPop, unsig
 {
     // Scale full number of inputs by scaling factor
     const double numInputs = getFullNumInputs(srcLayer, srcPop, trgLayer, trgPop) * connectivityScalingFactor;
+    assert(numInputs >= 0.0);
 
     // Multiply this by number of postsynaptic neurons
     return (unsigned int)(round(numInputs * (double)numNeurons[trgLayer][trgPop]));
@@ -176,6 +178,7 @@ double getMeanInputCurrent(unsigned int layer, unsigned int pop)
 
     // Add mean external input current
     meanInputCurrent += externalW * numExternalInputs[layer][pop] * backgroundRate;
+    assert(meanInputCurrent >= 0.0);
     return meanInputCurrent;
 }
 }   // Parameters

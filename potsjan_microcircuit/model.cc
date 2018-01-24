@@ -94,7 +94,7 @@ IMPLEMENT_SNIPPET(NormalClipped);
 void modelDefinition(NNmodel &model)
 {
     initGeNN();
-    model.setDT(0.1);
+    model.setDT(Parameters::dtMs);
     model.setName("potjans_microcircuit");
 
     GENN_PREFERENCES::autoInitSparseVars = true;
@@ -118,6 +118,7 @@ void modelDefinition(NNmodel &model)
         0.5);  // 0 - TauSyn (ms)
 
     // Loop through populations and layers
+    std::cout << "Creating neuron populations:" << std::endl;
     unsigned int totalNeurons = 0;
     for(unsigned int layer = 0; layer < Parameters::LayerMax; layer++) {
         for(unsigned int pop = 0; pop < Parameters::PopulationMax; pop++) {
@@ -130,7 +131,8 @@ void modelDefinition(NNmodel &model)
                                          Parameters::backgroundRate);
             const double extWeight = Parameters::externalW / sqrt(Parameters::connectivityScalingFactor);
 
-            const double extInputCurrent = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor) * Parameters::getMeanInputCurrent(layer, pop));
+            const double extInputCurrent = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getMeanInputCurrent(layer, pop);
+            assert(extInputCurrent > 0.0);
 
             // LIF model parameters
             LIFPoisson::ParamValues lifParams(
@@ -153,12 +155,14 @@ void modelDefinition(NNmodel &model)
             // Make recordable on host
             neuronPop->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
+            std::cout << "\tPopulation " << popName << ": num neurons:" << popSize << ", external input rate:" << extInputRate << ", external weight:" << extWeight << ", external DC offset:" << extInputCurrent << std::endl;
             // Add number of neurons to total
             totalNeurons += popSize;
         }
     }
 
     // Loop through target populations and layers
+    std::cout << "Creating synapse populations:" << std::endl;
     unsigned int totalSynapses = 0;
     for(unsigned int trgLayer = 0; trgLayer < Parameters::LayerMax; trgLayer++) {
         for(unsigned int trgPop = 0; trgPop < Parameters::PopulationMax; trgPop++) {
@@ -166,6 +170,9 @@ void modelDefinition(NNmodel &model)
             for(unsigned int srcLayer = 0; srcLayer < Parameters::LayerMax; srcLayer++) {
                 for(unsigned int srcPop = 0; srcPop < Parameters::PopulationMax; srcPop++) {
                     const std::string srcName = Parameters::getPopulationName(srcLayer, srcPop);
+
+                    // Determine mean delay
+                    const unsigned int meanDelay = (unsigned int)round(Parameters::meanDelay[srcPop] / Parameters::dtMs);
 
                     // Determine mean weight
                     const double meanWeight = Parameters::getMeanWeight(srcLayer, srcPop, trgLayer, trgPop) / sqrt(Parameters::connectivityScalingFactor);
@@ -183,7 +190,7 @@ void modelDefinition(NNmodel &model)
                     const unsigned int numConnections = Parameters::getNumConnections(srcLayer, srcPop, trgLayer, trgPop);
 
                     if(numConnections > 0) {
-                        std::cout << "Connection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << std::endl;
+                        std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << " (" << Parameters::getFullNumInputs(srcLayer, srcPop, trgLayer, trgPop) << " inputs), meanWeight=" << meanWeight << ", weightSD=" << weightSD << std::endl;
 
                         totalSynapses += numConnections;
 
