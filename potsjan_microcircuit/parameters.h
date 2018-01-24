@@ -160,7 +160,7 @@ unsigned int getNumConnections(unsigned int srcLayer, unsigned int srcPop, unsig
     assert(numInputs >= 0.0);
 
     // Multiply this by number of postsynaptic neurons
-    return (unsigned int)(round(numInputs * (double)numNeurons[trgLayer][trgPop]));
+    return (unsigned int)(round(numInputs * (double)getNumNeurons(trgLayer, trgPop)));
 
 }
 

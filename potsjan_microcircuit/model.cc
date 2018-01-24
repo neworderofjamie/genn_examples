@@ -190,7 +190,7 @@ void modelDefinition(NNmodel &model)
                     const unsigned int numConnections = Parameters::getNumConnections(srcLayer, srcPop, trgLayer, trgPop);
 
                     if(numConnections > 0) {
-                        std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << " (" << Parameters::getFullNumInputs(srcLayer, srcPop, trgLayer, trgPop) << " inputs), meanWeight=" << meanWeight << ", weightSD=" << weightSD << std::endl;
+                        std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << std::endl;
 
                         totalSynapses += numConnections;
 
