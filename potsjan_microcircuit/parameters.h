@@ -125,7 +125,7 @@ std::string getPopulationName(unsigned int layer, unsigned int population)
     return std::string(layerNames[layer]) + std::string(populationNames[population]);
 }
 
-unsigned int getNumNeurons(unsigned int layer, unsigned int pop)
+unsigned int getScaledNumNeurons(unsigned int layer, unsigned int pop)
 {
     return (unsigned int)(neuronScalingFactor * (double)numNeurons[layer][pop]);
 }
@@ -155,18 +155,18 @@ double getMeanWeight(unsigned int srcLayer, unsigned int srcPop, unsigned int tr
     }
 }
 
-unsigned int getNumConnections(unsigned int srcLayer, unsigned int srcPop, unsigned int trgLayer, unsigned int trgPop)
+unsigned int getScaledNumConnections(unsigned int srcLayer, unsigned int srcPop, unsigned int trgLayer, unsigned int trgPop)
 {
     // Scale full number of inputs by scaling factor
     const double numInputs = getFullNumInputs(srcLayer, srcPop, trgLayer, trgPop) * connectivityScalingFactor;
     assert(numInputs >= 0.0);
 
     // Multiply this by number of postsynaptic neurons
-    return (unsigned int)(round(numInputs * (double)getNumNeurons(trgLayer, trgPop)));
+    return (unsigned int)(round(numInputs * (double)getScaledNumNeurons(trgLayer, trgPop)));
 
 }
 
-double getMeanInputCurrent(unsigned int layer, unsigned int pop)
+double getFullMeanInputCurrent(unsigned int layer, unsigned int pop)
 {
     // Loop through source populations
     double meanInputCurrent = 0.0;

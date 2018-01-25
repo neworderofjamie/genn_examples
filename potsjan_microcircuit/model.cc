@@ -131,7 +131,7 @@ void modelDefinition(NNmodel &model)
                                          Parameters::backgroundRate);
             const double extWeight = Parameters::externalW / sqrt(Parameters::connectivityScalingFactor);
 
-            const double extInputCurrent = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getMeanInputCurrent(layer, pop);
+            const double extInputCurrent = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getFullMeanInputCurrent(layer, pop);
             assert(extInputCurrent >= 0.0);
 
             // LIF model parameters
@@ -148,7 +148,7 @@ void modelDefinition(NNmodel &model)
                 0.5);               // 9 - IpoissonTau
 
             // Create population
-            const unsigned int popSize = Parameters::getNumNeurons(layer, pop);
+            const unsigned int popSize = Parameters::getScaledNumNeurons(layer, pop);
             auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(popName, popSize,
                                                                     lifParams, lifInit);
 
@@ -167,9 +167,13 @@ void modelDefinition(NNmodel &model)
     for(unsigned int trgLayer = 0; trgLayer < Parameters::LayerMax; trgLayer++) {
         for(unsigned int trgPop = 0; trgPop < Parameters::PopulationMax; trgPop++) {
             const std::string trgName = Parameters::getPopulationName(trgLayer, trgPop);
+            const unsigned int numTrg = Parameters::getScaledNumNeurons(trgLayer, trgPop);
+
+            // Loop through source populations and layers
             for(unsigned int srcLayer = 0; srcLayer < Parameters::LayerMax; srcLayer++) {
                 for(unsigned int srcPop = 0; srcPop < Parameters::PopulationMax; srcPop++) {
                     const std::string srcName = Parameters::getPopulationName(srcLayer, srcPop);
+                    const unsigned int numSrc = Parameters::getScaledNumNeurons(srcLayer, srcPop);
 
                     // Determine mean delay
                     const unsigned int meanDelay = (unsigned int)round(Parameters::meanDelay[srcPop] / Parameters::dtMs);
@@ -187,7 +191,7 @@ void modelDefinition(NNmodel &model)
                     }
 
                     // Calculate number of connections
-                    const unsigned int numConnections = Parameters::getNumConnections(srcLayer, srcPop, trgLayer, trgPop);
+                    const unsigned int numConnections = Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop);
 
                     if(numConnections > 0) {
                         std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << ", meanDelay=" << meanDelay << std::endl;
@@ -211,11 +215,15 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClipped>(wDist));    // 0 - Wij (nA)
 
                             // Add synapse population
-                            model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
                                 synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 excitatoryExpCurrParams, {});
+
+                            // Set max connections
+                            synPop->setMaxConnections(
+                                calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
                         }
                         // Inhibitory
                         else {
@@ -231,11 +239,15 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClipped>(wDist));    // 0 - Wij (nA)
 
                             // Add synapse population
-                            model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
                                 synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 inhibitoryExpCurrParams, {});
+
+                            // Set max connections
+                            synPop->setMaxConnections(
+                                calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
                         }
 
                     }

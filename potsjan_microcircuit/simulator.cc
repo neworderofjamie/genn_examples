@@ -13,15 +13,15 @@
 // Auto-generated model code
 #include "potjans_microcircuit_CODE/definitions.h"
 
-#define ADD_SPIKE_RECORDER(LAYER, POPULATION) \
-    spikeRecorders.emplace_back(#LAYER#POPULATION".csv",  \
-    Parameters::getNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION), \
+#define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                       \
+    spikeRecorders.emplace_back(#LAYER#POPULATION".csv",                                            \
+    Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION),  \
     spkQuePtr##LAYER##POPULATION, glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION)
 
 #define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                            \
-    buildFixedNumberTotalWithReplacementConnector(Parameters::getNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),                 \
-                                                  Parameters::getNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                 \
-                                                  Parameters::getNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,              \
+    buildFixedNumberTotalWithReplacementConnector(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),           \
+                                                  Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),           \
+                                                  Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,        \
                                                                                 Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),             \
                                                   C##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, &allocate##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
 int main()
@@ -111,8 +111,7 @@ int main()
         initpotjans_microcircuit();
     }
 
-    // Open CSV output files
-    //SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
+    // Create spike recorders
     std::vector<SpikeCSVRecorderDelay> spikeRecorders;
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
     ADD_SPIKE_RECORDER(23, E);
