@@ -29,8 +29,8 @@
         Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION),  \
         spkQuePtr##LAYER##POPULATION, glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
 #else
-#define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                            \
-    spikeRecorders.emplace_back(new SpikeCSVRecorder(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
+#define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                   \
+    spikeRecorders.emplace_back(new SpikeCSVRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
 #endif
 
 int main()
@@ -127,7 +127,7 @@ int main()
 #ifdef USE_DELAY
     std::vector<std::unique_ptr<SpikeCSVRecorderDelay>> spikeRecorders;
 #else
-    std::vector<std::unique_ptr<SpikeCSVRecorder>> spikeRecorders;
+    std::vector<std::unique_ptr<SpikeCSVRecorderCached>> spikeRecorders;
 #endif
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
     ADD_SPIKE_RECORDER(23, E);
@@ -179,6 +179,12 @@ int main()
             }
         }
     }
+
+    // Write spike recorder cache to disk
+    for(auto &s : spikeRecorders) {
+        s->writeCache();
+    }
+
 #ifdef MEASURE_TIMING
     std::cout << "Timing:" << std::endl;
     std::cout << "\tHost init:" << initHost_tme * 1000.0 << std::endl;
