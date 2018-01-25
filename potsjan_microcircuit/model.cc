@@ -96,6 +96,9 @@ void modelDefinition(NNmodel &model)
     initGeNN();
     model.setDT(Parameters::dtMs);
     model.setName("potjans_microcircuit");
+#ifdef MEASURE_TIMING
+    model.setTiming(true);
+#endif
 
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;

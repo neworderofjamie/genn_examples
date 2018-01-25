@@ -139,29 +139,24 @@ int main()
     ADD_SPIKE_RECORDER(6, E);
     ADD_SPIKE_RECORDER(6, I);
 
-    double simulationMs = 0.0;
-    double pullMs = 0.0;
     double recordMs = 0.0;
 
-    // Loop through timesteps
-    const unsigned int timesteps = round(Parameters::durationMs / DT);
-    const unsigned int tenPercentTimestep = timesteps / 10;
-    for(unsigned int i = 0; i < timesteps; i++)
     {
-        // Indicate every 10%
-        if((i % tenPercentTimestep) == 0) {
-            std::cout << i / 100 << "%" << std::endl;
-        }
+        Timer<> timer("Simulation:");
+        // Loop through timesteps
+        const unsigned int timesteps = round(Parameters::durationMs / DT);
+        const unsigned int tenPercentTimestep = timesteps / 10;
+        for(unsigned int i = 0; i < timesteps; i++)
+        {
+            // Indicate every 10%
+            if((i % tenPercentTimestep) == 0) {
+                std::cout << i / 100 << "%" << std::endl;
+            }
 
-        // Simulate
+            // Simulate
 #ifndef CPU_ONLY
-        {
-            TimerAccumulate<> timer(simulationMs);
             stepTimeGPU();
-        }
 
-        {
-            TimerAccumulate<> timer(pullMs);
             pull23ECurrentSpikesFromDevice();
             pull23ICurrentSpikesFromDevice();
             pull4ECurrentSpikesFromDevice();
@@ -170,26 +165,29 @@ int main()
             pull5ICurrentSpikesFromDevice();
             pull6ECurrentSpikesFromDevice();
             pull6ICurrentSpikesFromDevice();
-        }
 #else
-            {
-            TimerAccumulate<> timer(simulationMs);
             stepTimeCPU();
-        }
 #endif
 
-        {
-            TimerAccumulate<> timer(recordMs);
+            {
+                TimerAccumulate<> timer(recordMs);
 
-            // Record spikes
-            for(auto &s : spikeRecorders) {
-                s->record(t);
+                // Record spikes
+                for(auto &s : spikeRecorders) {
+                    s->record(t);
+                }
             }
         }
     }
-
-    std::cout << "Simulation:" << simulationMs << "ms" << std::endl;
-    std::cout << "Pull from device:" << pullMs << "ms" << std::endl;
+#ifdef MEASURE_TIMING
+    std::cout << "Timing:" << std::endl;
+    std::cout << "\tHost init:" << initHost_tme * 1000.0 << std::endl;
+    std::cout << "\tDevice init:" << initDevice_tme * 1000.0 << std::endl;
+    std::cout << "\tHost sparse init:" << sparseInitHost_tme * 1000.0 << std::endl;
+    std::cout << "\tDevice sparse init:" << sparseInitDevice_tme * 1000.0 << std::endl;
+    std::cout << "\tNeuron simulation:" << neuron_tme * 1000.0 << std::endl;
+    std::cout << "\tSynapse simulation:" << synapse_tme * 1000.0 << std::endl;
+#endif
     std::cout << "Record:" << recordMs << "ms" << std::endl;
 
     return 0;

@@ -2,6 +2,8 @@
 #include <cmath>
 
 //#define USE_DELAY
+#define MEASURE_TIMING
+
 // Parameters
 namespace Parameters
 {
