@@ -1,4 +1,5 @@
 // Standard C++ includes
+#include <memory>
 #include <random>
 #include <vector>
 
@@ -13,17 +14,25 @@
 // Auto-generated model code
 #include "potjans_microcircuit_CODE/definitions.h"
 
-#define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                       \
-    spikeRecorders.emplace_back(#LAYER#POPULATION".csv",                                            \
-    Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION),  \
-    spkQuePtr##LAYER##POPULATION, glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION)
-
+// Macro to build a connection between a pair of populations
 #define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                            \
     buildFixedNumberTotalWithReplacementConnector(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),           \
                                                   Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),           \
                                                   Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,        \
                                                                                 Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),             \
                                                   C##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, &allocate##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
+
+// Macro to record a population's output
+#ifdef USE_DELAY
+#define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                           \
+    spikeRecorders.emplace_back(new SpikeCSVRecorderDelay(#LAYER#POPULATION".csv",                      \
+        Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION),  \
+        spkQuePtr##LAYER##POPULATION, glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
+#else
+#define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                            \
+    spikeRecorders.emplace_back(new SpikeCSVRecorder(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
+#endif
+
 int main()
 {
     {
@@ -112,7 +121,14 @@ int main()
     }
 
     // Create spike recorders
-    std::vector<SpikeCSVRecorderDelay> spikeRecorders;
+    // **HACK** would be nicer to have arrays of objects rather than pointers but ofstreams
+    // aren't correctly moved in GCC 4.9.4 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54316) -
+    // the newest version that can be used with CUDA on Sussex HPC
+#ifdef USE_DELAY
+    std::vector<std::unique_ptr<SpikeCSVRecorderDelay>> spikeRecorders;
+#else
+    std::vector<std::unique_ptr<SpikeCSVRecorder>> spikeRecorders;
+#endif
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
     ADD_SPIKE_RECORDER(23, E);
     ADD_SPIKE_RECORDER(23, I);
@@ -154,7 +170,7 @@ int main()
 
             // Record spikes
             for(auto &s : spikeRecorders) {
-                s.record(t);
+                s->record(t);
             }
         }
     }

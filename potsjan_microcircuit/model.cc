@@ -176,8 +176,11 @@ void modelDefinition(NNmodel &model)
                     const unsigned int numSrc = Parameters::getScaledNumNeurons(srcLayer, srcPop);
 
                     // Determine mean delay
+#ifdef USE_DELAY
                     const unsigned int meanDelay = (unsigned int)round(Parameters::meanDelay[srcPop] / Parameters::dtMs);
-
+#else
+                    const unsigned int meanDelay = NO_DELAY;
+#endif
                     // Determine mean weight
                     const double meanWeight = Parameters::getMeanWeight(srcLayer, srcPop, trgLayer, trgPop) / sqrt(Parameters::connectivityScalingFactor);
 
