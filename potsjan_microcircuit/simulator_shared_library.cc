@@ -62,14 +62,7 @@ int main()
     }
 
     // Create spike recorders
-    // **HACK** would be nicer to have arrays of objects rather than pointers but ofstreams
-    // aren't correctly moved in GCC 4.9.4 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54316) -
-    // the newest version that can be used with CUDA on Sussex HPC
-#ifdef USE_DELAY
-    std::vector<std::unique_ptr<SpikeCSVRecorderDelay>> spikeRecorders;
-#else
-    std::vector<std::unique_ptr<SpikeCSVRecorderCached>> spikeRecorders;
-#endif
+    std::vector<std::unique_ptr<SpikeRecorder>> spikeRecorders;
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
 #ifndef CPU_ONLY
     std::vector<SharedLibraryModelFloat::VoidFunction> pullCurrentSpikesFunctions;
@@ -84,19 +77,23 @@ int main()
             pullCurrentSpikesFunctions.push_back(
                 (SharedLibraryModelFloat::VoidFunction)model.getSymbol("pull" + name + "CurrentSpikesFromDevice"));
 #endif
-            // Get spike count and spike arrays
+            // Get number of neurons in population, spike count and spike arrays
+            const unsigned int numNeurons = Parameters::getScaledNumNeurons(layer, pop);
             unsigned int **spikeCount = (unsigned int**)model.getSymbol("glbSpkCnt" + name);
             unsigned int **spikes = (unsigned int**)model.getSymbol("glbSpk" + name);
-#ifdef USE_DELAY
-            const unsigned int numNeurons = Parameters::getScaledNumNeurons(layer, pop);
-            unsigned int *spikeQueuePointer = (unsigned int*)model.getSymbol("spkQuePtr" + name);
-            spikeRecorders.emplace_back(
-                new SpikeCSVRecorderDelay((name + ".csv").c_str(), numNeurons,
-                                          *spikeQueuePointer, *spikeCount, *spikes));
-#else
-            spikeRecorders.emplace_back(
-                new SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
-#endif
+
+            // If there is a spike queue pointer associated with population, add delay recorder
+            unsigned int *spikeQueuePointer = (unsigned int*)model.getSymbol("spkQuePtr" + name, true);
+            if(spikeQueuePointer) {
+                spikeRecorders.emplace_back(
+                    new SpikeCSVRecorderDelay((name + ".csv").c_str(), numNeurons,
+                                              *spikeQueuePointer, *spikeCount, *spikes));
+            }
+            // Otherwise, cached recorder
+            else {
+                spikeRecorders.emplace_back(
+                    new SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
+            }
         }
     }
 
@@ -136,10 +133,6 @@ int main()
         }
     }
 
-    // Write spike recorder cache to disk
-    for(auto &s : spikeRecorders) {
-        s->writeCache();
-    }
 
 #ifdef MEASURE_TIMING
     std::cout << "Timing:" << std::endl;
