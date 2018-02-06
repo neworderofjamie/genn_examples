@@ -65,7 +65,7 @@ public:
         {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }},
         {"PoissonExpMinusLambda", [](const vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
         {"IpoissonExpDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
-        {"IpoissonInit", [](const vector<double> &pars, double dt){ return (pars[8] * (1.0 - std::exp(-dt / pars[9]))) * (1.0 / dt); }}});
+        {"IpoissonInit", [](const vector<double> &pars, double dt){ return pars[8] * (1.0 - std::exp(-dt / pars[9])) * (pars[9] / dt); }}});
 
     SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}});
 };
@@ -100,6 +100,7 @@ void modelDefinition(NNmodel &model)
     model.setTiming(true);
 #endif
 
+    GENN_PREFERENCES::buildSharedLibrary = true;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
