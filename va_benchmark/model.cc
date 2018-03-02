@@ -61,34 +61,34 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "EE", SynapseMatrixType::BITMASK_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "EI", SynapseMatrixType::BITMASK_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
     auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "II", SynapseMatrixType::BITMASK_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});
     auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "IE", SynapseMatrixType::BITMASK_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});
 
-    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
+    /*ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
                                                                       Parameters::probabilityConnection));
     ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
                                                                       Parameters::probabilityConnection));
     ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
                                                                       Parameters::probabilityConnection));
     ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                      Parameters::probabilityConnection));
+                                                                      Parameters::probabilityConnection));*/
 
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
