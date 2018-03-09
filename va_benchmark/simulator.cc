@@ -28,14 +28,14 @@ int main()
 #ifndef CPU_ONLY
         std::mt19937 rng;
 #endif
-        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
+        /*buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
                                        gpII, rng);
         buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
                                        gpIE, rng);
         buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::probabilityConnection,
                                        gpEE, rng);
         buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                       gpEI, rng);
+                                       gpEI, rng);*/
     }
 
     // Final setup

@@ -27,6 +27,9 @@ void modelDefinition(NNmodel &model)
         Parameters::resetVoltage,       // 0 - min
         Parameters::thresholdVoltage);  // 1 - max
 
+    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
+        Parameters::probabilityConnection); // 0 - prob
+
     // LIF model parameters
     LIF::ParamValues lifParams(
         1.0,    // 0 - C
@@ -61,34 +64,38 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EE", SynapseMatrixType::BITMASK_GLOBALG, NO_DELAY,
+        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {});
+        excitatoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EI", SynapseMatrixType::BITMASK_GLOBALG, NO_DELAY,
+        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {});
+        excitatoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "II", SynapseMatrixType::BITMASK_GLOBALG, NO_DELAY,
+        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {});
+        inhibitoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "IE", SynapseMatrixType::BITMASK_GLOBALG, NO_DELAY,
+        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {});
+        inhibitoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
-    /*ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
+    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
                                                                       Parameters::probabilityConnection));
     ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
                                                                       Parameters::probabilityConnection));
     ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
                                                                       Parameters::probabilityConnection));
     ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                      Parameters::probabilityConnection));*/
+                                                                      Parameters::probabilityConnection));
 
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
