@@ -18,7 +18,7 @@ void modelDefinition(NNmodel &model)
     model.setName("va_benchmark");
 
     GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    //GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
     //---------------------------------------------------------------------------
     // Build model
@@ -61,22 +61,22 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
     auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});
     auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "IE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});

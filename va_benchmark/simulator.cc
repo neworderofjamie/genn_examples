@@ -29,13 +29,13 @@ int main()
         std::mt19937 rng;
 #endif
         buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                       CII, &allocateII, rng);
+                                       CII, rng);
         buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
-                                       CIE, &allocateIE, rng);
+                                       CIE, rng);
         buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::probabilityConnection,
-                                       CEE, &allocateEE, rng);
+                                       CEE, rng);
         buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                       CEI, &allocateEI, rng);
+                                       CEI, rng);
     }
 
     // Final setup
