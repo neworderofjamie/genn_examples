@@ -1,70 +1,80 @@
-#include <algorithm>
-#include <chrono>
+// Standard C++ includes
 #include <numeric>
 #include <random>
 
-#include "../common/connectors.h"
-#include "../common/spike_csv_recorder.h"
+// GeNN robotics includes
+#include "connectors.h"
+#include "spike_csv_recorder.h"
+#include "timer.h"
 
+// Auto-generated model code
 #include "vogels_2011_CODE/definitions.h"
 
 int main()
 {
-  auto  allocStart = chrono::steady_clock::now();
-  allocateMem();
-  auto  allocEnd = chrono::steady_clock::now();
-  printf("Allocation %ldms\n", chrono::duration_cast<chrono::milliseconds>(allocEnd - allocStart).count());
+    {
+        Timer<> t("Allocation:");
+        allocateMem();
+    }
+    {
+        Timer<> t("Initialization:");
+        initialize();
+    }
 
-  auto  initStart = chrono::steady_clock::now(); 
-  initialize();
-
-  buildFixedProbabilityConnector(500, 500, 0.02f,
-                                 CII, &allocateII, rng);
-  buildFixedProbabilityConnector(500, 2000, 0.02f,
-                                 CIE, &allocateIE, rng);
-  buildFixedProbabilityConnector(2000, 2000, 0.02f,
-                                 CEE, &allocateEE, rng);
-  buildFixedProbabilityConnector(2000, 500, 0.02f,
-                                 CEI, &allocateEI, rng);
-
-  // Setup reverse connection indices for STDP
-  initvogels_2011();
-
-  auto  initEnd = chrono::steady_clock::now();
-  printf("Init %ldms\n", chrono::duration_cast<chrono::milliseconds>(initEnd - initStart).count());
-
-  // Open CSV output files
-  SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
-
-  FILE *weights = fopen("weights.csv", "w");
-  fprintf(weights, "Time(ms), Weight (nA)\n");
-  auto simStart = chrono::steady_clock::now();
-  // Loop through timesteps
-  for(unsigned int t = 0; t < 10000; t++)
-  {
-    // Simulate
+    {
+        Timer<> t("Building connectivity:");
 #ifndef CPU_ONLY
-    stepTimeGPU();
+        std::mt19937 rng;
+#endif
+        buildFixedProbabilityConnector(500, 500, 0.02f,
+                                    CII, &allocateII, rng);
+        buildFixedProbabilityConnector(500, 2000, 0.02f,
+                                    CIE, &allocateIE, rng);
+        buildFixedProbabilityConnector(2000, 2000, 0.02f,
+                                    CEE, &allocateEE, rng);
+        buildFixedProbabilityConnector(2000, 500, 0.02f,
+                                    CEI, &allocateEI, rng);
+    }
 
-    pullECurrentSpikesFromDevice();
-    //pullIEStateFromDevice();
+    // Final setup
+    {
+        Timer<> t("Sparse init:");
+        initvogels_2011();
+    }
+
+    // Open CSV output files
+    SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
+
+    FILE *weights = fopen("weights.csv", "w");
+    fprintf(weights, "Time(ms), Weight (nA)\n");
+
+    {
+        Timer<> t("Simulation:");
+        // Loop through timesteps
+        for(unsigned int t = 0; t < 10000; t++)
+        {
+            // Simulate
+#ifndef CPU_ONLY
+            stepTimeGPU();
+
+            pullECurrentSpikesFromDevice();
+            //pullIEStateFromDevice();
 #else
-    stepTimeCPU();
+            stepTimeCPU();
 #endif
 
-    spikes.record(t);
+            spikes.record(t);
 
 
-    // Calculate mean IE weights
-    float totalWeight = std::accumulate(&gIE[0], &gIE[CIE.connN], 0.0f);
-    fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)CIE.connN);
+            // Calculate mean IE weights
+            float totalWeight = std::accumulate(&gIE[0], &gIE[CIE.connN], 0.0f);
+            fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)CIE.connN);
 
-  }
-  auto simEnd = chrono::steady_clock::now();
-  printf("Simulation %ldms\n", chrono::duration_cast<chrono::milliseconds>(simEnd - simStart).count());
+        }
+    }
 
-  // Close files
-  fclose(weights);
+    // Close files
+    fclose(weights);
 
-  return 0;
+    return 0;
 }

@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 
 #include "modelSpec.h"
@@ -20,6 +21,14 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
+    // If the SGE grid engine has already allocated us a GPU we should use it!
+    if(const char *sgeGPU = std::getenv("SGE_HGR_gpu"))
+    {
+        GENN_PREFERENCES::autoChooseDevice = 0;
+        GENN_PREFERENCES::defaultDevice = atoi(sgeGPU);
+
+        printf("SGE selected GPU:%u\n", GENN_PREFERENCES::defaultDevice);
+    }
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
@@ -57,8 +66,8 @@ void modelDefinition(NNmodel &model)
         10.0);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
-    auto *e = model.addNeuronPopulation<LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
-    auto *i = model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
+    auto *e = model.addNeuronPopulation<LIF>("E", Parameters::numExcitatory, lifParams, lifInit, 0);
+    auto *i = model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit, 1);
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,

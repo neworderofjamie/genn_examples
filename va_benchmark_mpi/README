@@ -1,0 +1,6 @@
+# README
+
+
+qsub -l gpu=1 -q all.q -pe openmpi 2 build_mpi_sge.job
+
+qsub -l gpu=1 -q all.q -pe openmpi 2 run_mpi_sge.job
