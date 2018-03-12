@@ -223,7 +223,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, meanDelay,
+                                synapseName, SynapseMatrixType::RAGGED_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 excitatoryExpCurrParams, {});
@@ -247,7 +247,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, meanDelay,
+                                synapseName, SynapseMatrixType::RAGGED_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 inhibitoryExpCurrParams, {});
