@@ -18,7 +18,7 @@ void modelDefinition(NNmodel &model)
     model.setName("va_benchmark");
 
     GENN_PREFERENCES::autoInitSparseVars = true;
-    //GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
     //---------------------------------------------------------------------------
     // Build model
