@@ -11,13 +11,14 @@
 
 void modelDefinition(NNmodel &model)
 {
-    initGeNN();
-    model.setDT(1.0);
-    model.setName("vogels_2011");
-
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
+    initGeNN();
+    model.setDT(1.0);
+    model.setName("vogels_2011");
+    model.setTiming(true);
+    
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
@@ -98,9 +99,16 @@ void modelDefinition(NNmodel &model)
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 2000, 0.02));
+    ee->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(2000, 2000, 0.02));
+    
     ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 500, 0.02));
+    ei->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(2000, 500, 0.02));
+    
     ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 500, 0.02));
+    ii->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(500, 500, 0.02));
+    
     ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 2000, 0.02));
+    ie->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(500, 2000, 0.02));
 
     model.finalize();
 }
