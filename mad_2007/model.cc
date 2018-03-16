@@ -11,6 +11,50 @@
 #include "parameters.h"
 
 //----------------------------------------------------------------------------
+// STDPPower
+//----------------------------------------------------------------------------
+class STDPPower : public WeightUpdateModels::Base
+{
+public:
+    DECLARE_MODEL(STDPPower, 6, 1);
+
+    SET_PARAM_NAMES({
+      "tauPlus",    // 0 - Potentiation time constant (ms)
+      "tauMinus",   // 1 - Depression time constant (ms)
+      "lambda",     // 2 - Learning rate
+      "alpha",      // 3 - Relative strength of depression and potentiation
+      "mu",         // 4 - Power of potentiation weight update
+      "weight0"});  // 5 - Reference weight
+
+
+    SET_VARS({{"g", "scalar"}});
+    SET_DERIVED_PARAMS({{"weight0Mu", [](const vector<double> &pars, double){ return std::pow(pars[5], 1.0 - pars[4]); }}});
+
+    SET_SIM_CODE(
+        "$(addtoinSyn) = $(g);\n"
+        "$(updatelinsyn);\n"
+        "const scalar dt = $(t) - $(sT_post); \n"
+        "if (dt > 0)\n"
+        "{\n"
+        "    const scalar timing = exp(-dt / $(tauMinus));\n"
+        "    const scalar deltaG = -$(lambda) * $(alpha) * $(g) * timing;\n"
+        "    $(g) += deltaG;\n"
+        "}\n");
+    SET_LEARN_POST_CODE(
+        "const scalar dt = $(t) - $(sT_pre);\n"
+        "if (dt > 0)\n"
+        "{\n"
+        "    const scalar timing = exp(-dt / $(tauPlus));\n"
+        "    const scalar deltaG = $(lambda) * $(weight0Mu) * pow($(g), $(mu)) * timing;\n"
+        "    $(g) += deltaG;\n"
+        "}\n");
+
+    SET_NEEDS_PRE_SPIKE_TIME(true);
+    SET_NEEDS_POST_SPIKE_TIME(true);
+};
+IMPLEMENT_MODEL(STDPPower);
+
+//----------------------------------------------------------------------------
 // LIFPoisson
 //----------------------------------------------------------------------------
 //! Leaky integrate-and-fire neuron solved algebraically with direct, alpha-shaped Poisson input
@@ -107,11 +151,20 @@ void modelDefinition(NNmodel &model)
         0.0,                                    // 2 - Ipoisson
         0.0);                                   // 3 - Ipoisson2
 
-    // Static synapse parameters
-    WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
+    // STDP parameters
+    STDPPower::ParamValues stdpParams(
+        20.0,           // 0 - tauPlus
+        20.0,           // 1 - tauMinus
+        0.116,          // 2 - lambda
+        1.057 * 0.1,    // 3 - alpha
+        0.4,            // 4 - mu
+        0.001);         // 5 - weight 0
+
+    // Synapse initial conditions
+    WeightUpdateModels::StaticPulse::VarValues excitatorySynapseInit(
         Parameters::excitatoryPeakWeight);    // 0 - Wij (nA)
 
-    WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
+    WeightUpdateModels::StaticPulse::VarValues inhibitorySynapseInit(
         Parameters::excitatoryPeakWeight * Parameters::excitatoryInhibitoryRatio);    // 0 - Wij (nA)
 
     // Alpha current parameters
@@ -124,25 +177,25 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<LIFPoisson>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<LIFPoisson>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
+    auto *ee = model.addSynapsePopulation<STDPPower, AlphaCurr>(
         "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "E", "E",
-        {}, excitatoryStaticSynapseInit,
+        stdpParams, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "EI", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "E", "I",
-        {}, excitatoryStaticSynapseInit,
+        {}, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "II", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "I", "I",
-        {}, inhibitoryStaticSynapseInit,
+        {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "IE", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "I", "E",
-        {}, inhibitoryStaticSynapseInit,
+        {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit);
 
     ee->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
