@@ -13,11 +13,11 @@
 //----------------------------------------------------------------------------
 // LIFPoisson
 //----------------------------------------------------------------------------
-//! Leaky integrate-and-fire neuron solved algebraically
+//! Leaky integrate-and-fire neuron solved algebraically with direct, alpha-shaped Poisson input
 class LIFPoisson : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(LIFPoisson, 10, 3);
+    DECLARE_MODEL(LIFPoisson, 10, 4);
 
     SET_SIM_CODE(
         "scalar p = 1.0f;\n"
@@ -30,13 +30,14 @@ public:
         "$(Ipoisson) += $(IpoissonInit) * (scalar)(numPoissonSpikes - 1);\n"
         "if ($(RefracTime) <= 0.0)\n"
         "{\n"
-        "  scalar alpha = (($(Isyn) + $(Ioffset) + $(Ipoisson)) * $(Rmembrane)) + $(Vrest);\n"
+        "  scalar alpha = (($(Isyn) + $(Ioffset) + $(Ipoisson2)) * $(Rmembrane)) + $(Vrest);\n"
         "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
         "}\n"
         "else\n"
         "{\n"
         "  $(RefracTime) -= DT;\n"
         "}\n"
+        "$(Ipoisson2) = (DT * $(IpoissonExpDecay) * $(Ipoisson)) + ($(IpoissonExpDecay) * $(Ipoisson2));\n"
         "$(Ipoisson) *= $(IpoissonExpDecay);\n"
     );
 
@@ -64,9 +65,9 @@ public:
         {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }},
         {"PoissonExpMinusLambda", [](const vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
         {"IpoissonExpDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
-        {"IpoissonInit", [](const vector<double> &pars, double dt){ return pars[8] * (1.0 - std::exp(-dt / pars[9])) * (pars[9] / dt); }}});
+        {"IpoissonInit", [](const vector<double> &pars, double){ return (std::exp(1) / pars[9]); }}});
 
-    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}});
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}, {"Ipoisson2", "scalar"}});
 };
 IMPLEMENT_MODEL(LIFPoisson);
 
@@ -97,13 +98,14 @@ void modelDefinition(NNmodel &model)
         0.5,                                // 6 - TauRefrac
         Parameters::externalInputRate,      // 7 - PoissonRate
         Parameters::excitatoryPeakWeight,   // 8 - PoissonWeight
-        0.5);                               // 9 - IpoissonTau
+        0.33);                               // 9 - IpoissonTau
 
     // LIF initial conditions
     LIFPoisson::VarValues lifInit(
         initVar<InitVarSnippet::Normal>(vDist), // 0 - V
         0.0,                                    // 1 - RefracTime
-        0.0);                                   // 2 - Ipoisson
+        0.0,                                    // 2 - Ipoisson
+        0.0);                                   // 3 - Ipoisson2
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
