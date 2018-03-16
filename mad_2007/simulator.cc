@@ -15,16 +15,16 @@
 int main()
 {
     {
-        Timer<> t("Allocation:");
+        Timer<> tim("Allocation:");
         allocateMem();
     }
     {
-        Timer<> t("Initialization:");
+        Timer<> tim("Initialization:");
         initialize();
     }
 
     {
-        Timer<> t("Building connectivity:");
+        Timer<> tim("Building connectivity:");
 #ifndef CPU_ONLY
         std::mt19937 rng;
 #endif
@@ -40,7 +40,7 @@ int main()
 
     // Final setup
     {
-        Timer<> t("Sparse init:");
+        Timer<> tim("Sparse init:");
         initmad_2007();
     }
 
@@ -49,7 +49,7 @@ int main()
         SpikeCSVRecorderCached spikes("spikes.csv", glbSpkCntE, glbSpkE);
 
         {
-            Timer<> t("Simulation:");
+            Timer<> tim("Simulation:");
             // Loop through timesteps
             for(unsigned int i = 0; i < 10000; i++)
             {
