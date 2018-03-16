@@ -183,17 +183,17 @@ void modelDefinition(NNmodel &model)
         stdpParams, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "EI", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
+        "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "E", "I",
         {}, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "II", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
+        "II", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "I", "I",
         {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "IE", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
+        "IE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "I", "E",
         {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit);
@@ -201,12 +201,6 @@ void modelDefinition(NNmodel &model)
     // Set maximum connections
     ee->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
                                                                                      Parameters::numEEConnections));
-    ei->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
-                                                                                     Parameters::numEIConnections));
-    ii->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
-                                                                                     Parameters::numIIConnections));
-    ie->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                                     Parameters::numIEConnections));
 
     // Also set max
     ee->setMaxSourceConnections(calcFixedNumberTotalWithReplacementConnectorMaxSourceConnections(Parameters::numExcitatory, Parameters::numExcitatory,

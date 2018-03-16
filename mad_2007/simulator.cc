@@ -30,13 +30,13 @@ int main()
         std::mt19937 rng;
 #endif
         buildFixedNumberTotalWithReplacementConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::numIIConnections,
-                                                      CII, rng);
+                                                      gpII, rng);
         buildFixedNumberTotalWithReplacementConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::numIEConnections,
-                                                      CIE, rng);
+                                                      gpIE, rng);
+        buildFixedNumberTotalWithReplacementConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::numEIConnections,
+                                                      gpEI, rng);
         buildFixedNumberTotalWithReplacementConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::numEEConnections,
                                                       CEE, rng);
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::numEIConnections,
-                                                      CEI, rng);
     }
 
     // Final setup
