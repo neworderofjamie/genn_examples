@@ -145,14 +145,14 @@ void modelDefinition(NNmodel &model)
         {}, inhibitoryStaticSynapseInit,
         alphaCurrParams, alphaCurrInit);
 
-    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
-                                                                      Parameters::probabilityConnection));
-    ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
-                                                                      Parameters::probabilityConnection));
-    ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
-                                                                      Parameters::probabilityConnection));
-    ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                      Parameters::probabilityConnection));
+    ee->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
+                                                                                     Parameters::numEEConnections));
+    ei->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
+                                                                                     Parameters::numEIConnections));
+    ii->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
+                                                                                     Parameters::numIIConnections));
+    ie->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
+                                                                                     Parameters::numIEConnections));
 
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
