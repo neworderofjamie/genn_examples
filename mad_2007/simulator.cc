@@ -1,4 +1,5 @@
 // Standard C++ includes
+#include <fstream>
 #include <random>
 
 // GeNN robotics includes
@@ -64,6 +65,18 @@ int main()
 
                 spikes.record(t);
             }
+        }
+    }
+    {
+        Timer<> tim("Weight analysis:");
+
+        // Download weights
+        pullEEStateFromDevice();
+
+        // Write row weights to file
+        std::ofstream weights("weights.bin", std::ios::binary);
+        for(unsigned int i = 0; i < Parameters::numInhibitory; i++) {
+            weights.write(reinterpret_cast<char*>(&gEE[i * CEE.maxRowLength]), sizeof(scalar) * CEE.rowLength[i]);
         }
     }
 

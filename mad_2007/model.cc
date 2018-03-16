@@ -177,10 +177,10 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<LIFPoisson>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<LIFPoisson>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    auto *ee = model.addSynapsePopulation<STDPPower, AlphaCurr>(
+    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "E", "E",
-        stdpParams, excitatorySynapseInit,
+        {}, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "EI", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
@@ -198,6 +198,7 @@ void modelDefinition(NNmodel &model)
         {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit);
 
+    // Set maximum connections
     ee->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
                                                                                      Parameters::numEEConnections));
     ei->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
@@ -210,6 +211,9 @@ void modelDefinition(NNmodel &model)
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+
+    // Configure plastic synaptic weights so that they can be downloaded to host
+    ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     model.finalize();
 }
