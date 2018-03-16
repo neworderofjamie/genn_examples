@@ -71,12 +71,12 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<LIF>("I", 500, lifParams, lifInit);
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
@@ -86,7 +86,7 @@ void modelDefinition(NNmodel &model)
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});
     auto *ie = model.addSynapsePopulation<Vogels2011, ExpCurr>(
-        "IE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+        "IE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "I", "E",
         vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
         inhibitoryExpCurrParams, {});

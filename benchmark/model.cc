@@ -51,8 +51,8 @@ void modelDefinition(NNmodel &model)
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
-        //initVar<InitVarSnippet::Normal>(gDist));    // 0 - Wij (nA)
-        0.0);
+        initVar<InitVarSnippet::Normal>(gDist));    // 0 - Wij (nA)
+        //.0);
 
     // Exponential current parameters
     ExpCurr::ParamValues expCurrParams(

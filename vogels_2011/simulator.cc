@@ -27,13 +27,13 @@ int main()
         std::mt19937 rng;
 #endif
         buildFixedProbabilityConnector(500, 500, 0.02f,
-                                       CII, &allocateII, rng);
+                                    CII, rng);
         buildFixedProbabilityConnector(500, 2000, 0.02f,
-                                       CIE, &allocateIE, rng);
+                                    CIE, rng);
         buildFixedProbabilityConnector(2000, 2000, 0.02f,
-                                       CEE, &allocateEE, rng);
+                                    CEE, rng);
         buildFixedProbabilityConnector(2000, 500, 0.02f,
-                                       CEI, &allocateEI, rng);
+                                    CEI, rng);
     }
 
     // Final setup
@@ -72,15 +72,7 @@ int main()
 
         }
     }
-    
-    std::cout << "Timing:" << std::endl;
-    std::cout << "\tHost init:" << initHost_tme * 1000.0 << std::endl;
-    std::cout << "\tDevice init:" << initDevice_tme * 1000.0 << std::endl;
-    std::cout << "\tHost sparse init:" << sparseInitHost_tme * 1000.0 << std::endl;
-    std::cout << "\tDevice sparse init:" << sparseInitDevice_tme * 1000.0 << std::endl;
-    std::cout << "\tNeuron simulation:" << neuron_tme * 1000.0 << std::endl;
-    std::cout << "\tSynapse simulation:" << synapse_tme * 1000.0 << std::endl;
-    std::cout << "\tPost learning similation:" << learning_tme * 1000.0 << std::endl;
+
     // Close files
     fclose(weights);
 

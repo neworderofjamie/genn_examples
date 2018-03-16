@@ -80,7 +80,7 @@ public:
     DECLARE_SNIPPET(NormalClipped, 4);
 
     SET_CODE(
-        "scalar normal;"
+        "scalar normal;\n"
         "do\n"
         "{\n"
         "   normal = $(mean) + ($(gennrand_normal) * $(sd));\n"
@@ -100,7 +100,7 @@ void modelDefinition(NNmodel &model)
     model.setTiming(true);
 #endif
 
-    GENN_PREFERENCES::buildSharedLibrary = true;
+    GENN_PREFERENCES::buildSharedLibrary = false;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 

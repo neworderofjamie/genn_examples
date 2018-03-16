@@ -1,4 +1,3 @@
-#include "model.cc"
 #include "stdp_curve_CODE/definitions.h"
 
 #define NUM_NEURONS 14

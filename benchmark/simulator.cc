@@ -41,8 +41,12 @@ int main()
         initbenchmark();
 
         // Synchronise to make sure any copy operations are included in the scoped timer
+#ifndef CPU_ONLY
         cudaDeviceSynchronize();
+#endif
     }
+    std::cout << "\tHost:" << sparseInitHost_tme * 1000.0 << std::endl;
+    std::cout << "\tDevice:" << sparseInitDevice_tme * 1000.0 << std::endl;
 
     {
         Timer<> t("Sim:");

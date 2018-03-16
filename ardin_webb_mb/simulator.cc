@@ -122,7 +122,6 @@ int main()
 #else
             IextPN = d_stimuliCurrent;
 #endif
-
         }
         catch(...)
         {
@@ -216,10 +215,6 @@ int main()
             // Simulate on CPU
             stepTimeCPU();
 #endif
-            //for(unsigned int i = 0; i < Parameters::numKC; i++) {
-            //    kcStateStream << t << "," << i << "," << VKC[i] << "," << UKC[i] << std::endl;
-            //}
-
             // If a dopamine spike has been injected this timestep
             if(t == rewardTimestep) {
                 const scalar tMs =  (scalar)t * DT;
