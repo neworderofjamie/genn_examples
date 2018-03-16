@@ -33,8 +33,8 @@ with open("spikes.csv", "rb") as spikes_csv_file:
     axes[0].set_title("Spikes")
     axes[1].set_title("Firing rates")
 
-    axes[0].set_xlim((0, 10000))
-    axes[0].set_ylim((0, 900))
+    axes[0].set_xlim((0, duration_ms))
+    axes[0].set_ylim((0, num_excitatory))
 
     axes[0].set_ylabel("Neuron number")
     axes[1].set_ylabel("Mean firing rate [Hz]")
