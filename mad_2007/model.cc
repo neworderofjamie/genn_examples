@@ -74,7 +74,7 @@ IMPLEMENT_MODEL(LIFPoisson);
 void modelDefinition(NNmodel &model)
 {
     initGeNN();
-    model.setDT(1.0);
+    model.setDT(0.1);
     model.setName("mad_2007");
 
     GENN_PREFERENCES::autoInitSparseVars = true;
