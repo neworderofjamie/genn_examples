@@ -65,7 +65,7 @@ public:
         {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }},
         {"PoissonExpMinusLambda", [](const vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
         {"IpoissonExpDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
-        {"IpoissonInit", [](const vector<double> &pars, double){ return (std::exp(1) / pars[9]); }}});
+        {"IpoissonInit", [](const vector<double> &pars, double){ return pars[8] * (std::exp(1) / pars[9]); }}});
 
     SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}, {"Ipoisson2", "scalar"}});
 };
