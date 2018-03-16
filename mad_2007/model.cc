@@ -95,7 +95,7 @@ void modelDefinition(NNmodel &model)
         20.0,                               // 4 - Vthresh
         0.0,                                // 5 - Ioffset
         0.5,                                // 6 - TauRefrac
-        (9000.0 * 2.32),                    // 7 - PoissonRate
+        Parameters::externalInputRate,      // 7 - PoissonRate
         Parameters::excitatoryPeakWeight,   // 8 - PoissonWeight
         0.5);                               // 9 - IpoissonTau
 
@@ -128,17 +128,17 @@ void modelDefinition(NNmodel &model)
         {}, excitatoryStaticSynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "EI", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "II", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "IE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "IE", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
         alphaCurrParams, alphaCurrInit);
