@@ -23,7 +23,7 @@ with open("spikes.csv", "rb") as spikes_csv_file:
 
     # Plot rates
     num_excitatory = 90000
-    duration_ms = 10000
+    duration_ms = 1000
     bin_ms = 10
 
     bins = np.arange(0, duration_ms + 1, bin_ms)
