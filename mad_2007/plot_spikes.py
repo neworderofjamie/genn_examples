@@ -22,8 +22,12 @@ with open("spikes.csv", "rb") as spikes_csv_file:
     axes[0].scatter(spike_times, spike_neuron_id, s=2, edgecolors="none")
 
     # Plot rates
-    bins = np.arange(0, 10000 + 1, 10)
-    rate = np.histogram(spike_times, bins=bins)[0] *  (1000.0 / 10.0) * (1.0 / 3200.0)
+    num_excitatory = 90000
+    duration_ms = 10000
+    bin_ms = 10
+
+    bins = np.arange(0, duration_ms + 1, bin_ms)
+    rate = np.histogram(spike_times, bins=bins)[0] * (1000.0 / float(bin_ms)) * (1.0 / float(num_excitatory))
     axes[1].plot(bins[0:-1], rate)
 
     axes[0].set_title("Spikes")

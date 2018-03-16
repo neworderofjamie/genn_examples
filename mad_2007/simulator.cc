@@ -51,7 +51,7 @@ int main()
         {
             Timer<> t("Simulation:");
             // Loop through timesteps
-            for(unsigned int t = 0; t < 10000; t++)
+            for(unsigned int i = 0; i < 10000; i++)
             {
                 // Simulate
 #ifndef CPU_ONLY
