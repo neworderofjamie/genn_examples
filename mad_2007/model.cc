@@ -177,10 +177,10 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<LIFPoisson>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<LIFPoisson>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    auto *ee = model.addSynapsePopulation<STDPPower, AlphaCurr>(
+    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "E", "E",
-        stdpParams, excitatorySynapseInit,
+        {}, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit);
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
