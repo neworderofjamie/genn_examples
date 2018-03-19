@@ -29,14 +29,14 @@ int main()
 #ifndef CPU_ONLY
         std::mt19937 rng;
 #endif
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::numIIConnections,
-                                                      gpII, rng);
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::numIEConnections,
-                                                      gpIE, rng);
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::numEIConnections,
-                                                      gpEI, rng);
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::numEEConnections,
-                                                      CEE, rng);
+        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
+                                       gpII, rng);
+        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
+                                       gpIE, rng);
+        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::probabilityConnection,
+                                       gpEI, rng);
+        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::probabilityConnection,
+                                       CEE, rng);
     }
 
     // Final setup
@@ -67,7 +67,7 @@ int main()
             }
         }
     }
-    {
+    /*{
         Timer<> tim("Weight analysis:");
 
         // Download weights
@@ -78,7 +78,7 @@ int main()
         for(unsigned int i = 0; i < Parameters::numInhibitory; i++) {
             weights.write(reinterpret_cast<char*>(&gEE[i * CEE.maxRowLength]), sizeof(scalar) * CEE.rowLength[i]);
         }
-    }
+    }*/
 
     return 0;
 }
