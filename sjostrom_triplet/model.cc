@@ -11,6 +11,9 @@
 
 void modelDefinition(NNmodel &model)
 {
+    GENN_PREFERENCES::autoInitSparseVars = true;
+    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
+
     initGeNN();
     model.setDT(1.0);
     model.setName("sjostrom_triplet");
@@ -99,7 +102,7 @@ void modelDefinition(NNmodel &model)
     auto preToPost = model.addSynapsePopulation<PfisterTriplet, ExpCurr>(
             "PreToPost", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
             "Pre", "Post",
-            pfisterParams,  pfisterInit, pfisterPreInit, pfisterPostInit,
+            pfisterParams, pfisterInit, pfisterPreInit, pfisterPostInit,
             expCurrParams, {});
 
     preStimToPre->setMaxConnections(1);
