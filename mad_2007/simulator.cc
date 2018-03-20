@@ -52,8 +52,11 @@ int main()
         {
             Timer<> tim("Simulation:");
             // Loop through timesteps
-            for(unsigned int i = 0; i < 10000; i++)
-            {
+            while(t < Parameters::durationMs) {
+                if((iT % 1000) == 0) {
+                    std::cout << (t / Parameters::durationMs) * 100.0 << "%" << std::endl;
+                }
+
                 // Simulate
 #ifndef CPU_ONLY
                 stepTimeGPU();
@@ -67,7 +70,7 @@ int main()
             }
         }
     }
-    /*{
+    {
         Timer<> tim("Weight analysis:");
 
         // Download weights
@@ -78,7 +81,7 @@ int main()
         for(unsigned int i = 0; i < Parameters::numInhibitory; i++) {
             weights.write(reinterpret_cast<char*>(&gEE[i * CEE.maxRowLength]), sizeof(scalar) * CEE.rowLength[i]);
         }
-    }*/
+    }
 
     return 0;
 }
