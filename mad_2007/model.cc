@@ -16,7 +16,7 @@
 class STDPPower : public WeightUpdateModels::Base
 {
 public:
-    DECLARE_MODEL(STDPPower, 6, 1);
+    DECLARE_WEIGHT_UPDATE_MODEL(STDPPower, 6, 1, 1, 1);
 
     SET_PARAM_NAMES({
       "tauPlus",    // 0 - Potentiation time constant (ms)
@@ -28,7 +28,17 @@ public:
 
 
     SET_VARS({{"g", "scalar"}});
+    SET_PRE_VARS({{"preTrace", "scalar"}});
+    SET_POST_VARS({{"postTrace", "scalar"}});
+
     SET_DERIVED_PARAMS({{"weight0Mu", [](const vector<double> &pars, double){ return std::pow(pars[5], 1.0 - pars[4]); }}});
+
+    SET_PRE_SPIKE_CODE(
+        "scalar dt = $(t) - $(sT_pre);\n"
+        "$(preTrace) = ($(preTrace) * exp(-dt / $(tauPlus))) + 1.0;\n");
+    SET_POST_SPIKE_CODE(
+        "scalar dt = $(t) - $(sT_post);\n"
+        "$(postTrace) = ($(postTrace) * exp(-dt / $(tauMinus))) + 1.0;\n");
 
     SET_SIM_CODE(
         "$(addtoinSyn) = $(g);\n"
@@ -36,7 +46,7 @@ public:
         "const scalar dt = $(t) - $(sT_post); \n"
         "if (dt > 0)\n"
         "{\n"
-        "    const scalar timing = exp(-dt / $(tauMinus));\n"
+        "    const scalar timing = $(postTrace) * exp(-dt / $(tauMinus));\n"
         "    const scalar deltaG = -$(lambda) * $(alpha) * $(g) * timing;\n"
         "    $(g) += deltaG;\n"
         "}\n");
@@ -44,7 +54,7 @@ public:
         "const scalar dt = $(t) - $(sT_pre);\n"
         "if (dt > 0)\n"
         "{\n"
-        "    const scalar timing = exp(-dt / $(tauPlus));\n"
+        "    const scalar timing = $(preTrace) * exp(-dt / $(tauPlus));\n"
         "    const scalar deltaG = $(lambda) * $(weight0Mu) * pow($(g), $(mu)) * timing;\n"
         "    $(g) += deltaG;\n"
         "}\n");
@@ -160,6 +170,12 @@ void modelDefinition(NNmodel &model)
         0.4,            // 4 - mu
         0.001);         // 5 - weight 0
 
+    STDPPower::PreVarValues stdpPreInit(
+        0.0);   // 0 - pre trace
+
+    STDPPower::PostVarValues stdpPostInit(
+        0.0);   // 1 - post trace
+
     // Synapse initial conditions
     WeightUpdateModels::StaticPulse::VarValues excitatorySynapseInit(
         Parameters::excitatoryPeakWeight);    // 0 - Wij (nA)
@@ -180,7 +196,7 @@ void modelDefinition(NNmodel &model)
     auto *ee = model.addSynapsePopulation<STDPPower, AlphaCurr>(
         "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "E", "E",
-        stdpParams, excitatorySynapseInit,
+        stdpParams, excitatorySynapseInit, stdpPreInit, stdpPostInit,
         alphaCurrParams, alphaCurrInit);
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
