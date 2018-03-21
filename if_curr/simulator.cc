@@ -33,7 +33,7 @@ int main()
 
     // Calculate simulation time
     const double time = 1.0 * (double)t;
-    fprintf(membraneVoltage, "%f, %f\n", time, VExcitatory[0]);
+    fprintf(membraneVoltage, "%f, %f, %f\n", time, VExcitatory[0], inSynStimToExcitatory[0]);
 
   }
 

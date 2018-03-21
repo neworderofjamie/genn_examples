@@ -42,11 +42,10 @@ int main()
                         const unsigned int numSrc = Parameters::getScaledNumNeurons(srcLayer, srcPop);
 
                         // Find sparse projection structure and allocate function associated with projection
-                        SparseProjection *sparseProjection = (SparseProjection*)model.getSymbol("C" + srcName + "_" + trgName, true);
-                        AllocateFn allocateFn = (AllocateFn)model.getSymbol("allocate" + srcName + "_" + trgName, true);
-                        if(sparseProjection && allocateFn) {
+                        RaggedProjection<unsigned int> *raggedProjection = (RaggedProjection<unsigned int>*)model.getSymbol("C" + srcName + "_" + trgName, true);
+                        if(raggedProjection) {
                             buildFixedNumberTotalWithReplacementConnector(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
-                                                                          *sparseProjection, allocateFn, rng);
+                                                                          *raggedProjection, rng);
                         }
                     }
                 }

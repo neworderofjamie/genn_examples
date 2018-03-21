@@ -20,7 +20,7 @@
                                                   Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),           \
                                                   Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,        \
                                                                                 Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),             \
-                                                  C##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, &allocate##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
+                                                  C##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
 
 // Macro to record a population's output
 #ifdef USE_DELAY

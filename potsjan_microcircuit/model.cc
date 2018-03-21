@@ -80,7 +80,7 @@ public:
     DECLARE_SNIPPET(NormalClipped, 4);
 
     SET_CODE(
-        "scalar normal;"
+        "scalar normal;\n"
         "do\n"
         "{\n"
         "   normal = $(mean) + ($(gennrand_normal) * $(sd));\n"
@@ -100,7 +100,7 @@ void modelDefinition(NNmodel &model)
     model.setTiming(true);
 #endif
 
-    GENN_PREFERENCES::buildSharedLibrary = true;
+    GENN_PREFERENCES::buildSharedLibrary = false;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
@@ -223,7 +223,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, meanDelay,
+                                synapseName, SynapseMatrixType::RAGGED_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 excitatoryExpCurrParams, {});
@@ -247,7 +247,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, meanDelay,
+                                synapseName, SynapseMatrixType::RAGGED_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 inhibitoryExpCurrParams, {});

@@ -3,38 +3,23 @@
 #include "sjostrom_triplet_CODE/definitions.h"
 #include "parameters.h"
 
+#include "connectors.h"
+
 int main()
 {
     std::cout << "Num neurons:" << Parameters::numNeurons << std::endl;
     allocateMem();
 
-    // 1-1 connecting stimuli to neurons
-    allocatePreStimToPre(Parameters::numNeurons);
-    allocatePostStimToPost(Parameters::numNeurons);
-    allocatePreToPost(Parameters::numNeurons);
-
     initialize();
 
-    // Loop through connections
-    for(unsigned int i = 0; i < Parameters::numNeurons; i++)
-    {
-        // Each presynaptic neuron only has
-        // one postsynaptic neuron connected to it
-        CPreStimToPre.indInG[i] = i;
-        CPostStimToPost.indInG[i] = i;
-        CPreToPost.indInG[i] = i;
+    // 1-1 connecting stimuli to neurons
+    buildOneToOneConnector(Parameters::numNeurons, Parameters::numNeurons,
+                           CPreStimToPre, &allocatePreStimToPre);
+    buildOneToOneConnector(Parameters::numNeurons, Parameters::numNeurons,
+                           CPostStimToPost, &allocatePostStimToPost);
+    buildOneToOneConnector(Parameters::numNeurons, Parameters::numNeurons,
+                           CPreToPost, &allocatePreToPost);
 
-        // And this postsynaptic neuron has the same number
-        CPreStimToPre.ind[i] = i;
-        CPostStimToPost.ind[i] = i;
-        CPreToPost.ind[i] = i;
-
-        gPreToPost[i] = 0.5;
-    }
-
-    CPreStimToPre.indInG[Parameters::numNeurons] = Parameters::numNeurons;
-    CPostStimToPost.indInG[Parameters::numNeurons] = Parameters::numNeurons;
-    CPreToPost.indInG[Parameters::numNeurons] = Parameters::numNeurons;
 
     // Setup reverse connection indices for STDP
     initsjostrom_triplet();

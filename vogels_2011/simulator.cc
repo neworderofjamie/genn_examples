@@ -27,13 +27,13 @@ int main()
         std::mt19937 rng;
 #endif
         buildFixedProbabilityConnector(500, 500, 0.02f,
-                                    CII, &allocateII, rng);
+                                    CII, rng);
         buildFixedProbabilityConnector(500, 2000, 0.02f,
-                                    CIE, &allocateIE, rng);
+                                    CIE, rng);
         buildFixedProbabilityConnector(2000, 2000, 0.02f,
-                                    CEE, &allocateEE, rng);
+                                    CEE, rng);
         buildFixedProbabilityConnector(2000, 500, 0.02f,
-                                    CEI, &allocateEI, rng);
+                                    CEI, rng);
     }
 
     // Final setup

@@ -11,13 +11,14 @@
 
 void modelDefinition(NNmodel &model)
 {
-    initGeNN();
-    model.setDT(1.0);
-    model.setName("vogels_2011");
-
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
+    initGeNN();
+    model.setDT(1.0);
+    model.setName("vogels_2011");
+    model.setTiming(true);
+    
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
@@ -70,12 +71,12 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<LIF>("I", 500, lifParams, lifInit);
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
@@ -85,7 +86,7 @@ void modelDefinition(NNmodel &model)
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});
     auto *ie = model.addSynapsePopulation<Vogels2011, ExpCurr>(
-        "IE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+        "IE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "I", "E",
         vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
         inhibitoryExpCurrParams, {});
@@ -98,9 +99,16 @@ void modelDefinition(NNmodel &model)
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 2000, 0.02));
+    ee->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(2000, 2000, 0.02));
+    
     ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 500, 0.02));
+    ei->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(2000, 500, 0.02));
+    
     ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 500, 0.02));
+    ii->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(500, 500, 0.02));
+    
     ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 2000, 0.02));
+    ie->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(500, 2000, 0.02));
 
     model.finalize();
 }
