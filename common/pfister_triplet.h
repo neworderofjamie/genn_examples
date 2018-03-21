@@ -31,12 +31,12 @@ public:
     SET_PRE_SPIKE_CODE(
         "scalar dt = $(t) - $(sT_pre);\n"
         "$(r1) = ($(r1) * exp(-dt / $(tauPlus))) + 1.0;\n"
-        "$(r2) =  ($(sT_pre) == 0.0) ? 0.0 : ($(r2) + 1.0) * exp(-dt / $(tauX));\n");
+        "$(r2) =  ($(sT_pre) < 0.0) ? 0.0 : ($(r2) + 1.0) * exp(-dt / $(tauX));\n");
 
     SET_POST_SPIKE_CODE(
         "scalar dt = $(t) - $(sT_post);\n"
-        "$(o1) = ($(o1) * exp(-dt / $(tauPlus))) + 1.0;\n"
-        "$(o2) = ($(sT_post) == 0.0) ? 0.0 : ($(o2) + 1.0) * exp(-dt / $(tauY));\n");
+        "$(o1) = ($(o1) * exp(-dt / $(tauMinus))) + 1.0;\n"
+        "$(o2) = ($(sT_post) < 0.0) ? 0.0 : ($(o2) + 1.0) * exp(-dt / $(tauY));\n");
 
     SET_SIM_CODE(
         "$(addtoinSyn) = $(g);\n"
