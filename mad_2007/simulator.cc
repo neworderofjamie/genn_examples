@@ -29,14 +29,14 @@ int main()
 #ifndef CPU_ONLY
         std::mt19937 rng;
 #endif
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::numIIConnections,
-                                                      gpII, rng);
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::numIEConnections,
-                                                      gpIE, rng);
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::numEIConnections,
-                                                      gpEI, rng);
-        buildFixedNumberTotalWithReplacementConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::numEEConnections,
-                                                      CEE, rng);
+        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
+                                       gpII, rng);
+        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
+                                       gpIE, rng);
+        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::probabilityConnection,
+                                       gpEI, rng);
+        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::probabilityConnection,
+                                       CEE, rng);
     }
 
     // Final setup
@@ -52,8 +52,11 @@ int main()
         {
             Timer<> tim("Simulation:");
             // Loop through timesteps
-            for(unsigned int i = 0; i < 10000; i++)
-            {
+            while(t < Parameters::durationMs) {
+                if((iT % 10000) == 0) {
+                    std::cout << (t / Parameters::durationMs) * 100.0 << "%" << std::endl;
+                }
+
                 // Simulate
 #ifndef CPU_ONLY
                 stepTimeGPU();

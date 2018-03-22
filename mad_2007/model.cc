@@ -133,6 +133,8 @@ void modelDefinition(NNmodel &model)
 
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::autoChooseDevice = false;
+    GENN_PREFERENCES::defaultDevice = 0;
 
     //---------------------------------------------------------------------------
     // Build model
@@ -215,13 +217,12 @@ void modelDefinition(NNmodel &model)
         alphaCurrParams, alphaCurrInit);
 
     // Set maximum connections
-    ee->setMaxConnections(calcFixedNumberTotalWithReplacementConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
-                                                                                     Parameters::numEEConnections));
+    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
+                                                                      Parameters::probabilityConnection));
 
-    // Also set max
-    ee->setMaxSourceConnections(calcFixedNumberTotalWithReplacementConnectorMaxSourceConnections(Parameters::numExcitatory, Parameters::numExcitatory,
-                                                                                                 Parameters::numEEConnections));
-
+    // Also set maximum source connections for postsynaptic feedback
+    ee->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(Parameters::numExcitatory, Parameters::numExcitatory,
+                                                                                  Parameters::probabilityConnection));
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
