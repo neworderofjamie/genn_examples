@@ -10,6 +10,8 @@ namespace Parameters
 {
     const double timestep = 0.1;
 
+    const double durationMs = 200.0 * 1000.0;
+
     // number of cells
     const unsigned int numExcitatory = 90000;
     const unsigned int numInhibitory = 22500;
