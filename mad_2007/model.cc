@@ -133,6 +133,7 @@ void modelDefinition(NNmodel &model)
 
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
     GENN_PREFERENCES::autoChooseDevice = false;
     GENN_PREFERENCES::defaultDevice = 0;
 
@@ -142,6 +143,9 @@ void modelDefinition(NNmodel &model)
     InitVarSnippet::Normal::ParamValues vDist(
         5.7,    // 0 - mean
         7.2);   // 1 - standard deviation
+
+    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
+        Parameters::probabilityConnection); // 0 - prob
 
     // LIF model parameters
     LIFPoisson::ParamValues lifParams(
@@ -199,22 +203,26 @@ void modelDefinition(NNmodel &model)
         "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "E", "E",
         stdpParams, excitatorySynapseInit, stdpPreInit, stdpPostInit,
-        alphaCurrParams, alphaCurrInit);
+        alphaCurrParams, alphaCurrInit,
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "E", "I",
         {}, excitatorySynapseInit,
-        alphaCurrParams, alphaCurrInit);
+        alphaCurrParams, alphaCurrInit,
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "II", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "I", "I",
         {}, inhibitorySynapseInit,
-        alphaCurrParams, alphaCurrInit);
+        alphaCurrParams, alphaCurrInit,
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "IE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
         "I", "E",
         {}, inhibitorySynapseInit,
-        alphaCurrParams, alphaCurrInit);
+        alphaCurrParams, alphaCurrInit,
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Set maximum connections
     ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,

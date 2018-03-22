@@ -24,21 +24,6 @@ int main()
         initialize();
     }
 
-    {
-        Timer<> tim("Building connectivity:");
-#ifndef CPU_ONLY
-        std::mt19937 rng;
-#endif
-        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                       gpII, rng);
-        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
-                                       gpIE, rng);
-        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                       gpEI, rng);
-        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::probabilityConnection,
-                                       CEE, rng);
-    }
-
     // Final setup
     {
         Timer<> tim("Sparse init:");
