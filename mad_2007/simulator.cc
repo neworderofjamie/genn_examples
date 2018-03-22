@@ -53,7 +53,7 @@ int main()
             Timer<> tim("Simulation:");
             // Loop through timesteps
             while(t < Parameters::durationMs) {
-                if((iT % 1000) == 0) {
+                if((iT % 10000) == 0) {
                     std::cout << (t / Parameters::durationMs) * 100.0 << "%" << std::endl;
                 }
 
