@@ -60,6 +60,10 @@ int main()
 
         // Download weights
         pullEEStateFromDevice();
+        
+        // **HACK** Download row lengths
+        extern unsigned int *d_rowLengthEE;
+        CHECK_CUDA_ERRORS(cudaMemcpy(CEE.rowLength, d_rowLengthEE, Parameters::numExcitatory * sizeof(unsigned int), cudaMemcpyDeviceToHost));
 
         // Write row weights to file
         std::ofstream weights("weights.bin", std::ios::binary);

@@ -131,6 +131,7 @@ void modelDefinition(NNmodel &model)
     model.setDT(0.1);
     model.setName("mad_2007");
 
+    GENN_PREFERENCES::optimizeCode = true;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
     GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
@@ -237,6 +238,7 @@ void modelDefinition(NNmodel &model)
 
     // Configure plastic synaptic weights so that they can be downloaded to host
     ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    ee->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     model.finalize();
 }
