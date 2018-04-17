@@ -4,11 +4,11 @@
 // GeNN includes
 #include "modelSpec.h"
 
-// Common example includes
-#include "../common/exp_curr.h"
-#include "../common/lif.h"
+// GeNN robotics includes
+#include "exp_curr.h"
+#include "lif.h"
 
-// LGMD includes
+// Model includes
 #include "parameters.h"
 
 
@@ -88,7 +88,7 @@ void modelDefinition(NNmodel &model)
         {}, macroPixelOutputInhibitoryWeightUpdateInit,
         outputInhibitoryPostSynParams, {});
 
-    // Use zero-copy for spikes and weights as we want to record them every timestep
+    // Use zero-copy for input and output spikes as we want to access them every timestep
     dvs->setSpikeZeroCopyEnabled(true);
     output->setSpikeZeroCopyEnabled(true);
 
