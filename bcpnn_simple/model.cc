@@ -48,9 +48,9 @@ void modelDefinition(NNmodel &model)
         true);  // 6 - Should weights be updated
 
     BCPNNTwoTrace::VarValues bcpnnInit(
-        0.0,    // 0 - g
-        0.0,    // 1 - PijStar
-        0.0);   // 2 - lastUpdateTime
+        0.0,                                    // 0 - g
+        0.0,                                    // 1 - PijStar
+        std::numeric_limits<float>::lowest());  // 2 - lastUpdateTime
 
     BCPNNTwoTrace::PreVarValues bcpnnPreInit(
         0.0,    // 0 - ZiStar
