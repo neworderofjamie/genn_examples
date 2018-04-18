@@ -59,7 +59,6 @@ std::vector<bool> createSpikeVector(const std::vector<bool> (&data)[N], float fm
 {
     // Reserve spike vector
     std::vector<bool> spikes;
-    //spikes.reserve(delayTimesteps + (p.size() * patternTimesteps));
 
     // Add delay to start
     spikes.insert(spikes.end(), delayTimesteps, false);
@@ -125,27 +124,26 @@ int main()
     // Load spike vectors
     std::cout << "Sim timesteps:" << preSpikeVector.size() << std::endl;
 
-    SpikeCSVRecorder preSpikes("pre_spikes.csv", glbSpkCntPreStim, glbSpkPreStim);
-    SpikeCSVRecorder postSpikes("post_spikes.csv", glbSpkCntPostStim, glbSpkPostStim);
+    SpikeCSVRecorder preSpikes("pre_spikes.csv", glbSpkCntPre, glbSpkPre);
+    SpikeCSVRecorder postSpikes("post_spikes.csv", glbSpkCntPost, glbSpkPost);
 
     FILE *preTrace = fopen("pre_trace.csv", "w");
     FILE *postTrace = fopen("post_trace.csv", "w");
+
     // Loop through timesteps
+    bool recordPreTrace = false;
+    bool recordPostTrace = false;
     for(unsigned int i = 0; i < preSpikeVector.size(); i++)
     {
+        // Apply input specified by spike vector
         glbSpkCntPreStim[0] = 0;
         glbSpkCntPostStim[0] = 0;
-
         if(preSpikeVector[i]) {
             glbSpkPreStim[glbSpkCntPreStim[0]++] = 0;
         }
-
         if(postSpikeVector[i]) {
             glbSpkPostStim[glbSpkCntPostStim[0]++] = 0;
         }
-
-        preSpikes.record(t);
-        postSpikes.record(t);
 
         // Simulate
 #ifndef CPU_ONLY
@@ -155,18 +153,26 @@ int main()
         stepTimeGPU();
 
         pullPreToPostStateFromDevice();
+        pullCurrentPreSpikesFromDevice();
+        pullCurrentPostSpikesFromDevice();
 #else
         stepTimeCPU();
 #endif
+        // Record spikes
+        preSpikes.record(t);
+        postSpikes.record(t);
 
-        if(preSpikeVector[i]) {
+        if (recordPreTrace) {
             fprintf(preTrace, "%f, %f, %f, %f\n", t, ZiStarPreToPost[0], PiStarPreToPost[0], gPreToPost[0]);
         }
 
-        if(postSpikeVector[i]) {
+        if (recordPostTrace) {
             fprintf(postTrace, "%f, %f, %f, %f\n", t, ZjStarPreToPost[0], PjStarPreToPost[0], gPreToPost[0]);
         }
 
+        // Record pre and post traces next timestep if there was a spike this timestep
+        recordPreTrace = (glbSpkCntPre[0] > 0);
+        recordPostTrace = (glbSpkCntPost[0] > 0);
     }
 
     fclose(preTrace);
