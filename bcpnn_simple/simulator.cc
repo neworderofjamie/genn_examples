@@ -6,6 +6,7 @@
 #include <cstdint>
 
 #include "connectors.h"
+#include "spike_csv_recorder.h"
 
 #include "bcpnn_simple_CODE/definitions.h"
 
@@ -84,7 +85,7 @@ std::vector<bool> createSpikeVector(const std::vector<bool> (&data)[N], float fm
 
 int main()
 {
-    constexpr size_t numPatterns = 10;
+    const size_t numPatterns = 10;
     std::default_random_engine generator;
 
     // Create patterns
@@ -124,6 +125,9 @@ int main()
     // Load spike vectors
     std::cout << "Sim timesteps:" << preSpikeVector.size() << std::endl;
 
+    SpikeCSVRecorder preSpikes("pre_spikes.csv", glbSpkCntPreStim, glbSpkPreStim);
+    SpikeCSVRecorder postSpikes("post_spikes.csv", glbSpkCntPostStim, glbSpkPostStim);
+
     FILE *preTrace = fopen("pre_trace.csv", "w");
     FILE *postTrace = fopen("post_trace.csv", "w");
     // Loop through timesteps
@@ -139,6 +143,9 @@ int main()
         if(postSpikeVector[i]) {
             glbSpkPostStim[glbSpkCntPostStim[0]++] = 0;
         }
+
+        preSpikes.record(t);
+        postSpikes.record(t);
 
         // Simulate
 #ifndef CPU_ONLY
