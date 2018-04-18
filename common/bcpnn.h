@@ -31,12 +31,12 @@ public:
         {"Epsilon", [](const vector<double> &pars, double){ return 1000.0 / (pars[3] * pars[2]); }}});
 
     SET_PRE_SPIKE_CODE(
-        "scalar dt = $(t) - $(sT_pre);\n"
+        "const scalar dt = $(t) - $(sT_pre);\n"
         "$(ZiStar) = ($(ZiStar) * exp(-dt / $(tauZi))) + 1.0;\n"
         "$(PiStar) = ($(PiStar) * exp(-dt / $(tauP))) + 1.0;\n");
 
     SET_POST_SPIKE_CODE(
-        "scalar dt = $(t) - $(sT_post);\n"
+        "const scalar dt = $(t) - $(sT_post);\n"
         "$(ZjStar) = ($(ZjStar) * exp(-dt / $(tauZj))) + 1.0;\n"
         "$(PjStar) = ($(PjStar) * exp(-dt / $(tauP))) + 1.0;\n");
 
@@ -46,30 +46,32 @@ public:
         "   $(updatelinsyn);\n"
         "}\n"
         "if($(plasticityEnabled)) {\n"
-        "   scalar timeSinceLastUpdate = $(t) - $(lastUpdateTime);\n"
-        "   scalar timeSinceLastPost = $(t) - $(sT_post);\n"
-        "   scalar newZjStar = $(ZjStar) * exp(-timeSinceLastPost / $(tauZj));\n"
+        "   const scalar timeSinceLastUpdate = $(t) - $(lastUpdateTime);\n"
+        "   const scalar timeSinceLastPost = $(t) - $(sT_post);\n"
+        "   const scalar newZjStar = $(ZjStar) * exp(-timeSinceLastPost / $(tauZj));\n"
+        "   const scalar newPjStar = $(PjStar) * exp(-timeSinceLastPost / $(tauP));\n"
         "   $(PijStar) = ($(PijStar) * exp(-timeSinceLastUpdate / $(tauP))) + newZjStar;\n"
-        "   scalar Pi = $(Ai) * ($(ZiStar) - $(PiStar));\n"
-        "   scalar Pj = $(Aj) * (newZjStar - $(PjStar));\n"
-        "   scalar Pij = $(Aij) * (($(ZiStar) * newZjStar) - $(PijStar));\n"
-        "   scalar logPij = log(Pij + ($(Epsilon) * $(Epsilon)));\n"
-        "   scalar logPiPj = log((Pi + $(Epsilon)) * (Pj + $(Epsilon)));\n"
+        "   const scalar Pi = $(Ai) * ($(ZiStar) - $(PiStar));\n"
+        "   const scalar Pj = $(Aj) * (newZjStar - newPjStar);\n"
+        "   const scalar Pij = $(Aij) * (($(ZiStar) * newZjStar) - $(PijStar));\n"
+        "   const scalar logPij = log(Pij + ($(Epsilon) * $(Epsilon)));\n"
+        "   const scalar logPiPj = log((Pi + $(Epsilon)) * (Pj + $(Epsilon)));\n"
         "   $(g) = logPij - logPiPj;\n"
         "   $(lastUpdateTime) = $(t);\n"
         "}\n");
 
     SET_LEARN_POST_CODE(
         "if($(plasticityEnabled)) {\n"
-        "   scalar timeSinceLastUpdate = $(t) - $(lastUpdateTime);\n"
-        "   scalar timeSinceLastPre = $(t) - $(sT_pre);\n"
-        "   scalar newZiStar = $(ZiStar) * exp(-timeSinceLastPre / $(tauZi));\n"
+        "   const scalar timeSinceLastUpdate = $(t) - $(lastUpdateTime);\n"
+        "   const scalar timeSinceLastPre = $(t) - $(sT_pre);\n"
+        "   const scalar newZiStar = $(ZiStar) * exp(-timeSinceLastPre / $(tauZi));\n"
+        "   const scalar newPiStar = $(PiStar) * exp(-timeSinceLastPre / $(tauP));\n"
         "   $(PijStar) = ($(PijStar) * exp(-timeSinceLastUpdate / $(tauP))) + newZiStar;\n"
-        "   scalar Pi = $(Ai) * (newZiStar - $(PiStar));\n"
-        "   scalar Pj = $(Aj) * ($(ZjStar) - $(PjStar));\n"
-        "   scalar Pij = $(Aij) * ((newZiStar * $(ZjStar)) - $(PijStar));\n"
-        "   scalar logPij = log(Pij + ($(Epsilon) * $(Epsilon)));\n"
-        "   scalar logPiPj = log((Pi + $(Epsilon)) * (Pj + $(Epsilon)));\n"
+        "   const scalar Pi = $(Ai) * (newZiStar - newPiStar);\n"
+        "   const scalar Pj = $(Aj) * ($(ZjStar) - $(PjStar));\n"
+        "   const scalar Pij = $(Aij) * ((newZiStar * $(ZjStar)) - $(PijStar));\n"
+        "   const scalar logPij = log(Pij + ($(Epsilon) * $(Epsilon)));\n"
+        "   const scalar logPiPj = log((Pi + $(Epsilon)) * (Pj + $(Epsilon)));\n"
         "   $(g) = logPij - logPiPj;\n"
         "   $(lastUpdateTime) = $(t);\n"
         "}\n");
