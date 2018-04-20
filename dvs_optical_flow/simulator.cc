@@ -2,13 +2,9 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <limits>
 #include <mutex>
 #include <random>
-#include <set>
-#include <sstream>
 #include <thread>
-#include <vector>
 
 // Standard C includes
 #include <cassert>
@@ -16,12 +12,12 @@
 #include <cstdlib>
 
 // OpenCV includes
-#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/opencv.hpp>
 
-// Common example includes
-#include "../common/spike_image_renderer.h"
-#include "../common/timer.h"
+// GeNN robotics includes
+#include "timer.h"
 
+// Common includes
 #ifdef DVS
     #include "../common/dvs_128.h"
 #elif CSV
@@ -30,8 +26,7 @@
     #include "../common/dvs_pre_recorded_ms.h"
 #endif
 
-
-// Optical flow includes
+// Model includes
 #include "parameters.h"
 
 // Auto-generated simulation code
@@ -51,26 +46,9 @@ void signalHandler(int status)
     g_SignalStatus = status;
 }
 
-
 unsigned int getNeuronIndex(unsigned int resolution, unsigned int x, unsigned int y)
 {
     return x + (y * resolution);
-}
-
-void print_sparse_matrix(unsigned int pre_resolution, const SparseProjection &projection)
-{
-    const unsigned int pre_size = pre_resolution * pre_resolution;
-    for(unsigned int i = 0; i < pre_size; i++)
-    {
-        std::cout << i << ":";
-
-        for(unsigned int j = projection.indInG[i]; j < projection.indInG[i + 1]; j++)
-        {
-            std::cout << projection.ind[j] << ",";
-        }
-
-        std::cout << std::endl;
-    }
 }
 
 void buildCentreToMacroConnection(SparseProjection &projection, allocateFn allocate)
@@ -328,7 +306,7 @@ int main(int argc, char *argv[])
     buildCentreToMacroConnection(CDVS_MacroPixel, &allocateDVS_MacroPixel);
     buildDetectors(CMacroPixel_Output_Excitatory, CMacroPixel_Output_Inhibitory,
                    &allocateMacroPixel_Output_Excitatory, &allocateMacroPixel_Output_Inhibitory);
-    //print_sparse_matrix(Parameters::inputSize, CDVS_MacroPixel);
+
     initoptical_flow();
 
 #ifdef DVS
@@ -383,10 +361,22 @@ int main(int argc, char *argv[])
 
         {
             TimerAccumulate<std::milli> timer(render);
+            std::lock_guard<std::mutex> lock(inputMutex);
+
             {
-                std::lock_guard<std::mutex> lock(inputMutex);
-                renderSpikeImage(spikeCount_DVS, spike_DVS, Parameters::inputSize,
-                                 Parameters::spikePersistence, inputImage);
+                // Loop through spikes
+                for(unsigned int s = 0; s < spikeCount_DVS; s++)
+                {
+                    // Convert spike ID to x, y
+                    const unsigned int spike = spike_DVS[s];
+                    const auto spikeCoord = std::div((int)spike, (int)Parameters::inputSize);
+
+                    // Set pixel to be white
+                    inputImage.at<float>(spikeCoord.quot, spikeCoord.rem) += 1.0f;
+                }
+
+                // Decay image
+                inputImage *= Parameters::spikePersistence;
             }
         }
 

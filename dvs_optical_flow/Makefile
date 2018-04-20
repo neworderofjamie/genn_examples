@@ -1,11 +1,8 @@
 EXECUTABLE      := simulator
-SOURCES         := simulator.cu
-
-LINK_FLAGS      += -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc
-
-ifndef CPU_ONLY
-    LINK_FLAGS += -lopencv_gpu
-endif
+SOURCES         := simulator.cc
+INCLUDE_FLAGS   := -I$(GENN_ROBOTICS_PATH)/common
+LINK_FLAGS      := `pkg-config --libs opencv`
+CXXFLAGS       := -pthread `pkg-config --cflags opencv` 
     
 ifdef DVS
     LINK_FLAGS  += -lcaer
