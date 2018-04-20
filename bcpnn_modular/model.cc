@@ -225,9 +225,11 @@ void modelDefinition(NNmodel &model)
                 nmdaExpCurrParams, {},
                 initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
-            // Configure synaptic weights so they are allocated on host and device, allowing them to be downloaded
+            // Configure synaptic weights and connectivity so they are allocated on host and device, allowing them to be downloaded
             eeAMPA->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
             eeNMDA->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+            eeAMPA->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+            eeNMDA->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
             // Set max connections
             const unsigned int maxConnections = calcFixedProbabilityConnectorMaxConnections(Parameters::numHCExcitatoryNeurons, Parameters::numHCExcitatoryNeurons,
