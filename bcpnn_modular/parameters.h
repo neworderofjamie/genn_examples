@@ -13,6 +13,9 @@ namespace Parameters
     // Numbers of neurosn in each minicolumn (MC)
     const unsigned int numMCNeurons = 100;
 
+    // Calculate number of MC per hypercolumn
+    const unsigned int numMCPerHC = numHCExcitatoryNeurons / numMCNeurons;
+
     // Connection probability
     const double probabilityConnection = 0.1;
 
