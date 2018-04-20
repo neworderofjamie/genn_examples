@@ -153,8 +153,8 @@ int main()
         stepTimeGPU();
 
         pullPreToPostStateFromDevice();
-        pullCurrentPreSpikesFromDevice();
-        pullCurrentPostSpikesFromDevice();
+        pullPreCurrentSpikesFromDevice();
+        pullPostCurrentSpikesFromDevice();
 #else
         stepTimeCPU();
 #endif
