@@ -6,7 +6,11 @@
 #include <cassert>
 
 // CUDA includes
+#ifndef CPU_ONLY
 #include <cuda_runtime.h>
+#endif
+
+#include "sparseProjection.h"
 
 // GeNN robotics includes
 #include "spike_csv_recorder.h"
@@ -26,6 +30,31 @@
         exit(EXIT_FAILURE);\
     }\
 }
+
+namespace
+{
+void downloadWeights(SharedLibraryModelFloat &model, const std::string &synapsePopName)
+{
+#ifndef CPU_ONLY
+    // **TODO** download weight, row length and indices
+    assert(false);
+#endif
+    
+    RaggedProjection<unsigned int> *projection = (RaggedProjection<unsigned int>*)model.getSymbol("C" + synapsePopName);
+    float *weights = *(float**)model.getSymbol("g" + synapsePopName);
+    
+    // Write row weights to file
+    std::ofstream out(synapsePopName + ".csv");
+    out << "i, j, weight" << std::endl;
+    for(unsigned int i = 0; i < Parameters::numHCExcitatoryNeurons; i++) {
+        for(unsigned int s = 0; s < projection->rowLength[i]; s++) {
+            const size_t index = (i * projection->maxRowLength) + s;
+            
+            out << i << ", " << projection->ind[index] << ", " << weights[index] << std::endl;
+        }
+    }
+}
+}   // Anonymous namepspace
 
 int main()
 {
@@ -124,7 +153,11 @@ int main()
 
                 // Loop through HCUs and assign correct input pointer
                 for(float **pointer : hcuStimPoissonExpMinusLambdaPointers) {
+#ifndef CPU_ONLY
                     *pointer = &d_stimPoissonExpMinusLambda[activeMC * Parameters::numMCPerHC];
+#else
+                    *pointer = &stimPoissonExpMinusLambda[activeMC * Parameters::numMCPerHC];
+#endif
                 }
 
             }
@@ -146,6 +179,18 @@ int main()
         }
     }
 
+    // Loop through hypercolumns
+    for(unsigned int i = 0; i < Parameters::numHC; i++) {
+        const std::string preName = "E_" + std::to_string(i);
+        for(unsigned int j = 0; j < Parameters::numHC; j++) {
+            const std::string postName = "E_" + std::to_string(j);
+            
+            const std::string synapseName = preName + "_" + postName;
+            downloadWeights(model, synapseName + "_AMPA");
+            downloadWeights(model, synapseName + "_NMDA");
+        }
+    }
+    
     // Free memory
 #ifndef CPU_ONLY
     CHECK_CUDA_ERRORS(cudaFree(d_stimPoissonExpMinusLambda));
