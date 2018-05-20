@@ -4,7 +4,6 @@
 #include "modelSpec.h"
 
 // GeNN robotics includes
-#include "connectors.h"
 #include "exp_curr.h"
 #include "lif.h"
 
@@ -63,39 +62,30 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "IE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-
-    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
-                                                                      Parameters::probabilityConnection));
-    ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
-                                                                      Parameters::probabilityConnection));
-    ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
-                                                                      Parameters::probabilityConnection));
-    ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                      Parameters::probabilityConnection));
 
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);

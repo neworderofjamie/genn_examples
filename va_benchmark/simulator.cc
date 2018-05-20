@@ -2,7 +2,6 @@
 #include <random>
 
 // GeNN robotics includes
-#include "connectors.h"
 #include "spike_csv_recorder.h"
 #include "timer.h"
 

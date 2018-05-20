@@ -3,7 +3,6 @@
 
 #include "modelSpec.h"
 
-#include "connectors.h"
 #include "exp_curr.h"
 #include "lif.h"
 #include "../common/vogels_2011.h"
@@ -26,6 +25,9 @@ void modelDefinition(NNmodel &model)
         -60.0,  // 0 - min
         -50.0); // 1 - max
 
+    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
+        0.02); // 0 - prob
+    
     // LIF model parameters
     LIF::ParamValues lifParams(
         0.2,    // 0 - C
@@ -70,26 +72,30 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<LIF>("E", 2000, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<LIF>("I", 500, lifParams, lifInit);
 
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {});
-    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+        excitatoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
         "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {});
-    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        excitatoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {});
+        inhibitoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ie = model.addSynapsePopulation<Vogels2011, ExpCurr>(
         "IE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "I", "E",
         vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
-        inhibitoryExpCurrParams, {});
+        inhibitoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Configure plastic weight variables they can be downloaded to host
     ie->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
@@ -97,18 +103,6 @@ void modelDefinition(NNmodel &model)
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
-    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 2000, 0.02));
-    ee->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(2000, 2000, 0.02));
-    
-    ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 500, 0.02));
-    ei->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(2000, 500, 0.02));
-    
-    ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 500, 0.02));
-    ii->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(500, 500, 0.02));
-    
-    ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 2000, 0.02));
-    ie->setMaxSourceConnections(calcFixedProbabilityConnectorMaxSourceConnections(500, 2000, 0.02));
 
     model.finalize();
 }
