@@ -175,32 +175,9 @@ void modelDefinition(NNmodel &model)
 
         // Create population of excutatory neurons for hypercolumn
         auto *e = model.addNeuronPopulation<LIFPoisson>(name, Parameters::numHCExcitatoryNeurons, lifParams, lifInit);
-        //auto *i = model.addNeuronPopulation<LIFPoisson>("I", Parameters::numInhibitory, lifParams, lifInit);
-
-
-        /*
-        auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-            "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
-            "I", "I",
-            {}, inhibitoryStaticSynapseInit,
-            inhibitoryExpCurrParams, {});
-        auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-            "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
-            "I", "E",
-            {}, inhibitoryStaticSynapseInit,
-            inhibitoryExpCurrParams, {});*/
-
-        /*
-        ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
-                                                                        Parameters::probabilityConnection));
-        ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
-                                                                        Parameters::probabilityConnection));
-        ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                        Parameters::probabilityConnection));*/
-
+       
         // Configure spike variables so that they can be downloaded to host
         e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-        //i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
     }
 
     // Loop through connections between hypercolumns
