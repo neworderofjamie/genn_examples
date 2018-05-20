@@ -17,7 +17,7 @@ int main()
 
     // Calculate simulation time
     const double time = 1.0 * (double)t;
-    fprintf(membraneVoltage, "%f, %f, %f\n", time, vNeurons[0], wNeurons[0]);
+    fprintf(membraneVoltage, "%f, %f, %f\n", time, VNeurons[0], WNeurons[0]);
 
   }
 
