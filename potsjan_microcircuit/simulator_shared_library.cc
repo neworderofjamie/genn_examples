@@ -4,15 +4,17 @@
 #include <vector>
 
 // GeNN robotics includes
-#include "connectors.h"
-#include "spike_csv_recorder.h"
-#include "timer.h"
+#include "common/timer.h"
+#include "genn_utils/connectors.h"
+#include "genn_utils/spike_csv_recorder.h"
 
 // Common includes
 #include "../common/shared_library_model.h"
 
 // Model parameters
 #include "parameters.h"
+
+using namespace GeNNRobotics;
 
 int main()
 {
@@ -43,10 +45,10 @@ int main()
 
                         // Find sparse projection structure and allocate function associated with projection
                         SparseProjection *sparseProjection = (SparseProjection*)model.getSymbol("C" + srcName + "_" + trgName, true);
-                        AllocateFn allocateFn = (AllocateFn)model.getSymbol("allocate" + srcName + "_" + trgName, true);
+                        GeNNUtils::AllocateFn allocateFn = (GeNNUtils::AllocateFn)model.getSymbol("allocate" + srcName + "_" + trgName, true);
                         if(sparseProjection && allocateFn) {
-                            buildFixedNumberTotalWithReplacementConnector(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
-                                                                          *sparseProjection, allocateFn, rng);
+                            GeNNUtils::buildFixedNumberTotalWithReplacementConnector(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
+                                                                                     *sparseProjection, allocateFn, rng);
                         }
                     }
                 }
@@ -62,7 +64,7 @@ int main()
     }
 
     // Create spike recorders
-    std::vector<std::unique_ptr<SpikeRecorder>> spikeRecorders;
+    std::vector<std::unique_ptr<GeNNUtils::SpikeRecorder>> spikeRecorders;
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
 #ifndef CPU_ONLY
     std::vector<SharedLibraryModelFloat::VoidFunction> pullCurrentSpikesFunctions;
@@ -86,13 +88,13 @@ int main()
             unsigned int *spikeQueuePointer = (unsigned int*)model.getSymbol("spkQuePtr" + name, true);
             if(spikeQueuePointer) {
                 spikeRecorders.emplace_back(
-                    new SpikeCSVRecorderDelay((name + ".csv").c_str(), numNeurons,
-                                              *spikeQueuePointer, *spikeCount, *spikes));
+                    new GeNNUtils::SpikeCSVRecorderDelay((name + ".csv").c_str(), numNeurons,
+                                                         *spikeQueuePointer, *spikeCount, *spikes));
             }
             // Otherwise, cached recorder
             else {
                 spikeRecorders.emplace_back(
-                    new SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
+                    new GeNNUtils::SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
             }
         }
     }

@@ -1,4 +1,3 @@
-#include "model.cc"
 #include "adexp_curr_CODE/definitions.h"
 
 int main()

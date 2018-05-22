@@ -3,11 +3,14 @@
 
 #include "modelSpec.h"
 
-#include "connectors.h"
-#include "exp_curr.h"
-#include "lif.h"
+// GeNN robotics includes
+#include "genn_utils/connectors.h"
+#include "genn_models/exp_curr.h"
+#include "genn_models/lif.h"
+
 #include "../common/vogels_2011.h"
 
+using namespace GeNNRobotics;
 
 void modelDefinition(NNmodel &model)
 {
@@ -26,7 +29,7 @@ void modelDefinition(NNmodel &model)
         -50.0); // 1 - max
 
     // LIF model parameters
-    LIF::ParamValues lifParams(
+    GeNNModels::LIF::ParamValues lifParams(
         0.2,    // 0 - C
         20.0,   // 1 - TauM
         -60.0,  // 2 - Vrest
@@ -36,7 +39,7 @@ void modelDefinition(NNmodel &model)
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
-    LIF::VarValues lifInit(
+    GeNNModels::LIF::VarValues lifInit(
         initVar<InitVarSnippet::Uniform>(vDist),    // 0 - V
         0.0);                                       // 1 - RefracTime
 
@@ -59,32 +62,32 @@ void modelDefinition(NNmodel &model)
         0.0);  // 0 - g
 
     // Exponential current parameters
-    ExpCurr::ParamValues excitatoryExpCurrParams(
+    GeNNModels::ExpCurr::ParamValues excitatoryExpCurrParams(
         5.0);  // 0 - TauSyn (ms)
 
-    ExpCurr::ParamValues inhibitoryExpCurrParams(
+    GeNNModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
         10.0);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
-    auto *e = model.addNeuronPopulation<LIF>("E", 2000, lifParams, lifInit);
-    auto *i = model.addNeuronPopulation<LIF>("I", 500, lifParams, lifInit);
+    auto *e = model.addNeuronPopulation<GeNNModels::LIF>("E", 2000, lifParams, lifInit);
+    auto *i = model.addNeuronPopulation<GeNNModels::LIF>("I", 500, lifParams, lifInit);
 
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
-    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
         "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {});
-    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
         "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {});
-    auto *ie = model.addSynapsePopulation<Vogels2011, ExpCurr>(
+    auto *ie = model.addSynapsePopulation<Vogels2011, GeNNModels::ExpCurr>(
         "IE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "I", "E",
         vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
@@ -97,10 +100,10 @@ void modelDefinition(NNmodel &model)
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
-    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 2000, 0.02));
-    ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(2000, 500, 0.02));
-    ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 500, 0.02));
-    ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(500, 2000, 0.02));
+    ee->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(2000, 2000, 0.02));
+    ei->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(2000, 500, 0.02));
+    ii->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(500, 500, 0.02));
+    ie->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(500, 2000, 0.02));
 
     model.finalize();
 }

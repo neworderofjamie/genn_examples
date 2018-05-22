@@ -3,12 +3,14 @@
 #include <random>
 
 // GeNN robotics includes
-#include "connectors.h"
-#include "spike_csv_recorder.h"
-#include "timer.h"
+#include "common/timer.h"
+#include "genn_utils/connectors.h"
+#include "genn_utils/spike_csv_recorder.h"
 
 // Auto-generated model code
 #include "vogels_2011_CODE/definitions.h"
+
+using namespace GeNNRobotics;
 
 int main()
 {
@@ -26,14 +28,14 @@ int main()
 #ifndef CPU_ONLY
         std::mt19937 rng;
 #endif
-        buildFixedProbabilityConnector(500, 500, 0.02f,
-                                    CII, &allocateII, rng);
-        buildFixedProbabilityConnector(500, 2000, 0.02f,
-                                    CIE, &allocateIE, rng);
-        buildFixedProbabilityConnector(2000, 2000, 0.02f,
-                                    CEE, &allocateEE, rng);
-        buildFixedProbabilityConnector(2000, 500, 0.02f,
-                                    CEI, &allocateEI, rng);
+        GeNNUtils::buildFixedProbabilityConnector(500, 500, 0.02f,
+                                                  CII, &allocateII, rng);
+        GeNNUtils::buildFixedProbabilityConnector(500, 2000, 0.02f,
+                                                  CIE, &allocateIE, rng);
+        GeNNUtils::buildFixedProbabilityConnector(2000, 2000, 0.02f,
+                                                  CEE, &allocateEE, rng);
+        GeNNUtils::buildFixedProbabilityConnector(2000, 500, 0.02f,
+                                                  CEI, &allocateEI, rng);
     }
 
     // Final setup
@@ -43,7 +45,7 @@ int main()
     }
 
     // Open CSV output files
-    SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
+    GeNNUtils::SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
 
     FILE *weights = fopen("weights.csv", "w");
     fprintf(weights, "Time(ms), Weight (nA)\n");

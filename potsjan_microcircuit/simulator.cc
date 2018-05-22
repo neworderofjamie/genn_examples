@@ -4,9 +4,9 @@
 #include <vector>
 
 // GeNN robotics includes
-#include "connectors.h"
-#include "spike_csv_recorder.h"
-#include "timer.h"
+#include "common/timer.h"
+#include "genn_utils/connectors.h"
+#include "genn_utils/spike_csv_recorder.h"
 
 // Model parameters
 #include "parameters.h"
@@ -25,13 +25,15 @@
 // Macro to record a population's output
 #ifdef USE_DELAY
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                           \
-    spikeRecorders.emplace_back(new SpikeCSVRecorderDelay(#LAYER#POPULATION".csv",                      \
+    spikeRecorders.emplace_back(new GeNNUtils::SpikeCSVRecorderDelay(#LAYER#POPULATION".csv",                      \
         Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION),  \
         spkQuePtr##LAYER##POPULATION, glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
 #else
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                   \
-    spikeRecorders.emplace_back(new SpikeCSVRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
+    spikeRecorders.emplace_back(new GeNNUtils::SpikeCSVRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
 #endif
+
+    using namespace GeNNRobotics;
 
 int main()
 {
@@ -125,9 +127,9 @@ int main()
     // aren't correctly moved in GCC 4.9.4 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54316) -
     // the newest version that can be used with CUDA on Sussex HPC
 #ifdef USE_DELAY
-    std::vector<std::unique_ptr<SpikeCSVRecorderDelay>> spikeRecorders;
+    std::vector<std::unique_ptr<GeNNUtils::SpikeCSVRecorderDelay>> spikeRecorders;
 #else
-    std::vector<std::unique_ptr<SpikeCSVRecorderCached>> spikeRecorders;
+    std::vector<std::unique_ptr<GeNNUtils::SpikeCSVRecorderCached>> spikeRecorders;
 #endif
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
     ADD_SPIKE_RECORDER(23, E);
