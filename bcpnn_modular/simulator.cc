@@ -13,8 +13,8 @@
 #include "sparseProjection.h"
 
 // GeNN robotics includes
-#include "spike_csv_recorder.h"
-#include "timer.h"
+#include "common/timer.h"
+#include "genn_utils/spike_csv_recorder.h"
 
 // Common includes
 #include "../common/shared_library_model.h"
@@ -30,6 +30,8 @@
         exit(EXIT_FAILURE);\
     }\
 }
+
+using namespace GeNNRobotics;
 
 namespace
 {
@@ -103,7 +105,7 @@ int main()
 
 
     //
-    std::vector<std::unique_ptr<SpikeCSVRecorderCached>> spikeRecorders;
+    std::vector<std::unique_ptr<GeNNUtils::SpikeCSVRecorderCached>> spikeRecorders;
     spikeRecorders.reserve(Parameters::numHC);
 
 #ifndef CPU_ONLY
@@ -132,7 +134,7 @@ int main()
         unsigned int **spikes = (unsigned int**)model.getSymbol("glbSpk" + name);
 
         // Add spike recorder
-        spikeRecorders.emplace_back(new SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
+        spikeRecorders.emplace_back(new GeNNUtils::SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
     }
 
     {

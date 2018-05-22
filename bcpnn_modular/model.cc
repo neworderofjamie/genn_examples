@@ -6,14 +6,16 @@
 #include "modelSpec.h"
 
 // GeNN robotics includes
-#include "connectors.h"
-#include "exp_curr.h"
+#include "genn_utils/connectors.h"
+#include "genn_models/exp_curr.h"
 
 // Examples common includes
 #include "../common/bcpnn.h"
 
 // Model includes
 #include "parameters.h"
+
+using namespace GeNNRobotics;
 
 //----------------------------------------------------------------------------
 // LIFPoisson
@@ -163,10 +165,10 @@ void modelDefinition(NNmodel &model)
         0.0);   // 1 - PjStar
 
     // Exponential current parameters
-    ExpCurr::ParamValues ampaGABAExpCurrParams(
+    GeNNModels::ExpCurr::ParamValues ampaGABAExpCurrParams(
         Parameters::tauSynAMPAGABA);  // 0 - TauSyn (ms)
 
-    ExpCurr::ParamValues nmdaExpCurrParams(
+    GeNNModels::ExpCurr::ParamValues nmdaExpCurrParams(
         Parameters::tauSynNMDA);  // 0 - TauSyn (ms)
 
     // Loop through hypercolumns
@@ -188,14 +190,14 @@ void modelDefinition(NNmodel &model)
 
             // Create AMPA and NMDA connections between hypercolumns
             const std::string synapseName = preName + "_" + postName;
-            auto *eeAMPA = model.addSynapsePopulation<BCPNNTwoTrace, ExpCurr>(
+            auto *eeAMPA = model.addSynapsePopulation<BCPNNTwoTrace, GeNNModels::ExpCurr>(
                 synapseName + "_AMPA", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
                 preName, postName,
                 bcpnnAMPAParams, bcpnnInit, bcpnnPreInit, bcpnnPostInit,
                 ampaGABAExpCurrParams, {},
                 initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
-            auto *eeNMDA = model.addSynapsePopulation<BCPNNTwoTrace, ExpCurr>(
+            auto *eeNMDA = model.addSynapsePopulation<BCPNNTwoTrace, GeNNModels::ExpCurr>(
                 synapseName + "_NMDA", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
                 preName, postName,
                 bcpnnNMDAParams, bcpnnInit, bcpnnPreInit, bcpnnPostInit,
@@ -207,12 +209,6 @@ void modelDefinition(NNmodel &model)
             eeNMDA->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
             eeAMPA->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
             eeNMDA->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
-            // Set max connections
-            const unsigned int maxConnections = calcFixedProbabilityConnectorMaxConnections(Parameters::numHCExcitatoryNeurons, Parameters::numHCExcitatoryNeurons,
-                                                                                            Parameters::probabilityConnection);
-            eeAMPA->setMaxConnections(maxConnections);
-            eeNMDA->setMaxConnections(maxConnections);
         }
     }
 
