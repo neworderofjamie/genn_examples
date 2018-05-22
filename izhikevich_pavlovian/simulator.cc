@@ -5,15 +5,17 @@
 #include <random>
 
 // GeNN robotics includes
-#include "connectors.h"
-#include "spike_csv_recorder.h"
-#include "timer.h"
+#include "common/timer.h"
+#include "genn_utils/connectors.h"
+#include "genn_utils/spike_csv_recorder.h"
 
 // GeNN generated code includes
 #include "izhikevich_pavlovian_CODE/definitions.h"
 
 // Model includes
 #include "parameters.h"
+
+using namespace GeNNRobotics;
 
 //------------------------------------------------------------------------
 // Anonymous namespace
@@ -74,14 +76,14 @@ int main()
 
     {
         Timer<> t("Building connectivity:");
-        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory,
-                                    Parameters::probabilityConnection, CII, &allocateII, gen);
-        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory,
-                                    Parameters::probabilityConnection, CIE, &allocateIE, gen);
-        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory,
-                                    Parameters::probabilityConnection, CEE, &allocateEE, gen);
-        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory,
-                                    Parameters::probabilityConnection, CEI, &allocateEI, gen);
+        GeNNUtils::buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory,
+                                                  Parameters::probabilityConnection, CII, &allocateII, gen);
+        GeNNUtils::buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory,
+                                                  Parameters::probabilityConnection, CIE, &allocateIE, gen);
+        GeNNUtils::buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory,
+                                                  Parameters::probabilityConnection, CEE, &allocateEE, gen);
+        GeNNUtils::buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory,
+                                                  Parameters::probabilityConnection, CEI, &allocateEI, gen);
     }
 
     // Final setup
@@ -122,8 +124,8 @@ int main()
     }
 
     // Open CSV output files
-    SpikeCSVRecorder e_spikes("e_spikes.csv", glbSpkCntE, glbSpkE);
-    SpikeCSVRecorder i_spikes("i_spikes.csv", glbSpkCntI, glbSpkI);
+    GeNNUtils::SpikeCSVRecorder e_spikes("e_spikes.csv", glbSpkCntE, glbSpkE);
+    GeNNUtils::SpikeCSVRecorder i_spikes("i_spikes.csv", glbSpkCntI, glbSpkI);
 
     std::ofstream stimulusStream("stimulus_times.csv");
     std::ofstream rewardStream("reward_times.csv");

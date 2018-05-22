@@ -1,12 +1,14 @@
 // GeNN includes
 #include "modelSpec.h"
 
-// Common includes
-#include "connectors.h"
-#include "../common/stdp_dopamine.h"
+// GeNN robotics includes
+#include "genn_models/stdp_dopamine.h"
+#include "genn_utils/connectors.h"
 
 // Model includes
 #include "parameters.h"
+
+using namespace GeNNRobotics;
 
 // Standard Izhikevich model with variable input current
 class Izhikevich : public NeuronModels::Base
@@ -67,7 +69,7 @@ void modelDefinition(NNmodel &model)
         -13.0,    // U
         0.0);   // Iext
 
-    STDPDopamine::ParamValues dopeParams(
+    GeNNModels::STDPDopamine::ParamValues dopeParams(
         20.0,                       // 0 - Potentiation time constant (ms)
         20.0,                       // 1 - Depression time constant (ms)
         1000.0,                     // 2 - Synaptic tag time constant (ms)
@@ -77,7 +79,7 @@ void modelDefinition(NNmodel &model)
         0.0,                        // 6 - Minimum weight
         Parameters::maxExcWeight);  // 7 - Maximum weight
 
-    STDPDopamine::VarValues dopeInitVars(
+    GeNNModels::STDPDopamine::VarValues dopeInitVars(
         Parameters::initExcWeight,  // Synaptic weight
         0.0,                        // Synaptic tag
         0.0);                       // Time of last synaptic tag update
@@ -90,12 +92,12 @@ void modelDefinition(NNmodel &model)
     auto e = model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
     auto i = model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
 
-    auto ee = model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
+    auto ee = model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "E",
         dopeParams, dopeInitVars,
         {}, {});
-    auto ei = model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
+    auto ei = model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EI", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "I",
         dopeParams, dopeInitVars,
@@ -124,14 +126,14 @@ void modelDefinition(NNmodel &model)
     ei->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     // Calculate max connections
-    ee->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
-                                                                      Parameters::probabilityConnection));
-    ei->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
-                                                                      Parameters::probabilityConnection));
-    ii->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
-                                                                      Parameters::probabilityConnection));
-    ie->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                      Parameters::probabilityConnection));
+    ee->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
+                                                                                 Parameters::probabilityConnection));
+    ei->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
+                                                                                 Parameters::probabilityConnection));
+    ii->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
+                                                                                 Parameters::probabilityConnection));
+    ie->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
+                                                                                 Parameters::probabilityConnection));
 
     // **TODO** set max connections
     model.finalize();

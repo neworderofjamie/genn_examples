@@ -3,13 +3,14 @@
 #include "modelSpec.h"
 
 // GeNN robotics includes
-#include "connectors.h"
-#include "exp_curr.h"
-#include "lif.h"
+#include "genn_models/exp_curr.h"
+#include "genn_models/lif.h"
+#include "genn_utils/connectors.h"
 
 // Model includes
 #include "parameters.h"
 
+using namespace GeNNRobotics;
 
 //----------------------------------------------------------------------------
 // LIFPoisson
@@ -115,10 +116,10 @@ void modelDefinition(NNmodel &model)
         0.0);                                   // 2 - Ipoisson
 
     // Exponential current parameters
-    ExpCurr::ParamValues excitatoryExpCurrParams(
+    GeNNModels::ExpCurr::ParamValues excitatoryExpCurrParams(
         0.5);  // 0 - TauSyn (ms)
 
-    ExpCurr::ParamValues inhibitoryExpCurrParams(
+    GeNNModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
         0.5);  // 0 - TauSyn (ms)
 
     // Loop through populations and layers
@@ -222,7 +223,7 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClipped>(wDist));    // 0 - Wij (nA)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
                                 synapseName, SynapseMatrixType::RAGGED_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
@@ -230,7 +231,7 @@ void modelDefinition(NNmodel &model)
 
                             // Set max connections
                             synPop->setMaxConnections(
-                                calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
+                                GeNNUtils::calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
                         }
                         // Inhibitory
                         else {
@@ -246,7 +247,7 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClipped>(wDist));    // 0 - Wij (nA)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
                                 synapseName, SynapseMatrixType::RAGGED_INDIVIDUALG, meanDelay,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
@@ -254,7 +255,7 @@ void modelDefinition(NNmodel &model)
 
                             // Set max connections
                             synPop->setMaxConnections(
-                                calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
+                                GeNNUtils::calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
                         }
 
                     }
