@@ -3,11 +3,14 @@
 
 #include "modelSpec.h"
 
-#include "connectors.h"
-#include "exp_curr.h"
-#include "lif.h"
+// GeNN robotics includes
+#include "genn_utils/connectors.h"
+#include "genn_models/exp_curr.h"
+#include "genn_models/lif.h"
 
 #include "parameters.h"
+
+using namespace GeNNRobotics;
 
 void modelDefinition(NNmodel &model)
 {
@@ -28,7 +31,7 @@ void modelDefinition(NNmodel &model)
         0.1);   // 1 - sd
 
     // LIF model parameters
-    LIF::ParamValues lifParams(
+    GeNNModels::LIF::ParamValues lifParams(
         0.2,    // 0 - C
         20.0,   // 1 - TauM
         -60.0,  // 2 - Vrest
@@ -39,7 +42,7 @@ void modelDefinition(NNmodel &model)
 
     // LIF initial conditions
     // **TODO** uniform random
-    LIF::VarValues lifInit(
+    GeNNModels::LIF::VarValues lifInit(
         -55.0,  // 0 - V
         0.0);    // 1 - RefracTime
 
@@ -55,22 +58,22 @@ void modelDefinition(NNmodel &model)
         0.0);
 
     // Exponential current parameters
-    ExpCurr::ParamValues expCurrParams(
+    GeNNModels::ExpCurr::ParamValues expCurrParams(
         5.0);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
     model.addNeuronPopulation<NeuronModels::PoissonNew>("Stim", Parameters::numPre,
-                                poissonParams, poissonInit);
-    model.addNeuronPopulation<LIF>("Neurons", Parameters::numPost,
-                                   lifParams, lifInit);
+                                                        poissonParams, poissonInit);
+    model.addNeuronPopulation<GeNNModels::LIF>("Neurons", Parameters::numPost,
+                                               lifParams, lifInit);
 
-    auto *syn = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>("Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
-                                                                                     "Stim", "Neurons",
-                                                                                     {}, staticSynapseInit,
-                                                                                     expCurrParams, {});
-#ifdef SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
-    syn->setMaxConnections(calcFixedProbabilityConnectorMaxConnections(Parameters::numPre, Parameters::numPost,
-                                                                       Parameters::connectionProbability));
+    auto *syn = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>("Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
+                                                                                                 "Stim", "Neurons",
+                                                                                                 {}, staticSynapseInit,
+                                                                                                 expCurrParams, {});
+#if defined(SYNAPSE_MATRIX_CONNECTIVITY_SPARSE) || defined(SYNAPSE_MATRIX_CONNECTIVITY_RAGGED)
+    syn->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numPre, Parameters::numPost,
+                                                                                  Parameters::connectionProbability));
 #endif  // SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
 
     model.finalize();

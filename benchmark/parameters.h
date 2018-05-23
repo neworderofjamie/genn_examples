@@ -1,5 +1,5 @@
-#define SYNAPSE_MATRIX_CONNECTIVITY_BITMASK
-#define SYNAPSE_MATRIX_WEIGHT_GLOBAL
+#define SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
+#define SYNAPSE_MATRIX_WEIGHT_INDIVIDUAL
 
 #ifdef SYNAPSE_MATRIX_CONNECTIVITY_DENSE
     #ifdef SYNAPSE_MATRIX_WEIGHT_INDIVIDUAL
@@ -17,6 +17,14 @@
     #endif
 #endif  // SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
 
+#ifdef SYNAPSE_MATRIX_CONNECTIVITY_RAGGED
+    #ifdef SYNAPSE_MATRIX_WEIGHT_INDIVIDUAL
+        #define SYNAPSE_MATRIX_TYPE SynapseMatrixType::RAGGED_INDIVIDUALG
+    #else
+        #define SYNAPSE_MATRIX_TYPE SynapseMatrixType::RAGGED_GLOBALG
+    #endif
+#endif  // SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
+
 #ifdef SYNAPSE_MATRIX_CONNECTIVITY_BITMASK
     #ifdef SYNAPSE_MATRIX_WEIGHT_INDIVIDUAL
         #error Bitmask connectivity only supported with global weights
@@ -28,7 +36,7 @@
 
 namespace Parameters
 {
-    constexpr unsigned int numPre = 20000;
-    constexpr unsigned int numPost = 20000;
+    constexpr unsigned int numPre = 10000;
+    constexpr unsigned int numPost = 10000;
     constexpr double connectionProbability = 0.1;
 }
