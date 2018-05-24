@@ -4,6 +4,7 @@
 //#define USE_DELAY
 //#define MEASURE_TIMING
 //#define USE_ZERO_COPY
+//#define JETSON_POWER
 
 // Parameters
 namespace Parameters

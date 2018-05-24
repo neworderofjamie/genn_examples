@@ -34,7 +34,7 @@ public:
         const int leftBorder = 50;
         const int bottomBorder = 20;
         const int verticalSpacing = 5;
-        const int verticalSpacingLayer = 10;
+        const int verticalSpacingLayer = 5;
         const int neuronWidth = (outputRes.width - leftBorder) / scale;
 
         // Reserve array for populations
@@ -115,10 +115,19 @@ public:
         cv::rectangle(m_OutputImage, cv::Point(0, m_OutputImage.rows - 20),
                       cv::Point(m_OutputImage.cols, m_OutputImage.rows),
                       CV_RGB(0, 0, 0), CV_FILLED);
-
+        
         // Render status text
         char status[255];
-        sprintf(status, "Power:%umW, Speed:%.2fx realtime", 7000, simMs / realMs.count());
+#ifdef JETSON_POWER
+        // Read power from device
+        std::ifstream powerStream("/sys/devices/3160000.i2c/i2c-0/0-0041/iio_device/in_power0_input");
+        unsigned int power;
+        powerStream >> power;
+        sprintf(status, "Power:%.1fW, Speed:%.2fx realtime", (float)power / 1000.0f, simMs / realMs.count());
+#else
+        sprintf(status, "Speed:%.2fx realtime", simMs / realMs.count());
+#endif  // JETSON_POWER
+        
         cv::putText(m_OutputImage, status, cv::Point(0, m_OutputImage.rows - 5),
                     cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(255, 255, 255));
 
