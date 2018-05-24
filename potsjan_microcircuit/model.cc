@@ -158,8 +158,11 @@ void modelDefinition(NNmodel &model)
                                                                     lifParams, lifInit);
 
             // Make recordable on host
+#ifdef USE_ZERO_COPY
+            neuronPop->setSpikeVarMode(VarMode::LOC_ZERO_COPY_INIT_DEVICE);
+#else
             neuronPop->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
+#endif
             std::cout << "\tPopulation " << popName << ": num neurons:" << popSize << ", external input rate:" << extInputRate << ", external weight:" << extWeight << ", external DC offset:" << extInputCurrent << std::endl;
             // Add number of neurons to total
             totalNeurons += popSize;

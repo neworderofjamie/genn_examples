@@ -3,6 +3,7 @@
 
 //#define USE_DELAY
 //#define MEASURE_TIMING
+//#define USE_ZERO_COPY
 
 // Parameters
 namespace Parameters
@@ -46,8 +47,8 @@ const double dtMs = 0.1;
 const double durationMs = 1000.0;
 
 // Scaling factors for number of neurons and synapses
-const double neuronScalingFactor = 0.5;
-const double connectivityScalingFactor = 0.5;
+const double neuronScalingFactor = 1.0;
+const double connectivityScalingFactor = 1.0;
 
 // Background rate per synapse
 const double backgroundRate = 8.0;  // spikes/s
