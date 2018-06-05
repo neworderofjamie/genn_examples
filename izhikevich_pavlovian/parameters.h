@@ -1,5 +1,7 @@
 #pragma once
 
+//#define MEASURE_TIMING
+
 //------------------------------------------------------------------------
 // Parameters
 //------------------------------------------------------------------------
@@ -16,7 +18,7 @@ namespace Parameters
     const double recordEndMs = 40.0 * 1000.0;
 
     // How often should outgoing weights from each synapse be recorded
-    const double weightRecordIntervalMs = 10.0 * 1000.0;
+    const double weightRecordIntervalMs = durationMs;//10.0 * 1000.0;
 
     // STDP params
     const double tauD = 200.0;

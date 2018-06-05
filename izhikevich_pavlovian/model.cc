@@ -43,7 +43,11 @@ void modelDefinition(NNmodel &model)
     initGeNN();
     model.setDT(Parameters::timestepMs);
     model.setName("izhikevich_pavlovian");
-
+    
+#ifdef MEASURE_TIMING
+    model.setTiming(true);
+#endif
+    
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------

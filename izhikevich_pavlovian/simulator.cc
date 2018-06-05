@@ -277,6 +277,15 @@ int main()
     // Write spike data to disk
     e_spikes.writeCache();
     i_spikes.writeCache();
-
+#ifdef MEASURE_TIMING
+    std::cout << "Timing:" << std::endl;
+    std::cout << "\tHost init:" << initHost_tme * 1000.0 << std::endl;
+    std::cout << "\tDevice init:" << initDevice_tme * 1000.0 << std::endl;
+    std::cout << "\tHost sparse init:" << sparseInitHost_tme * 1000.0 << std::endl;
+    std::cout << "\tDevice sparse init:" << sparseInitDevice_tme * 1000.0 << std::endl;
+    std::cout << "\tNeuron simulation:" << neuron_tme * 1000.0 << std::endl;
+    std::cout << "\tSynapse simulation:" << synapse_tme * 1000.0 << std::endl;
+    std::cout << "\tPostsynaptic simulation:" << learning_tme * 1000.0 << std::endl;
+#endif
     return 0;
 }
