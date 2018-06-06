@@ -33,9 +33,9 @@ int main()
 
     {
         // Open CSV output files
-        GeNNUtils::SpikeCSVRecorderDelay spikes("spikes.csv", Parameters::numExcitatory,
-                                                spkQuePtrE, glbSpkCntE, glbSpkE);
-
+        //GeNNUtils::SpikeCSVRecorderDelay spikes("spikes.csv", Parameters::numExcitatory,
+        //                                        spkQuePtrE, glbSpkCntE, glbSpkE);
+        GeNNUtils::SpikeCSVRecorderCached spikes("spikes.csv", glbSpkCntE, glbSpkE);
         {
             Timer<> tim("Simulation:");
             // Loop through timesteps

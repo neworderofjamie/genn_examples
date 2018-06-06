@@ -231,8 +231,8 @@ void modelDefinition(NNmodel &model)
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     // Configure plastic synaptic weights so that they can be downloaded to host
-    //ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    //ee->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    ee->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     model.finalize();
 }
