@@ -4,11 +4,11 @@
 #include "modelSpec.h"
 
 // GeNN robotics includes
-#include "alpha_curr.h"
-#include "connectors.h"
-#include "lif.h"
+#include "genn_models/alpha_curr.h"
 
 #include "parameters.h"
+
+using namespace GeNNRobotics;
 
 //----------------------------------------------------------------------------
 // STDPPower
@@ -191,41 +191,36 @@ void modelDefinition(NNmodel &model)
         Parameters::excitatoryPeakWeight * Parameters::excitatoryInhibitoryRatio);    // 0 - Wij (nA)
 
     // Alpha current parameters
-    AlphaCurr::ParamValues alphaCurrParams(
+    GeNNModels::AlphaCurr::ParamValues alphaCurrParams(
         0.33);  // 0 - TauSyn (ms)
-    AlphaCurr::VarValues alphaCurrInit(
+    GeNNModels::AlphaCurr::VarValues alphaCurrInit(
         0.0);   // 0 - x
 
     // Create IF_curr neuron
     auto *e = model.addNeuronPopulation<LIFPoisson>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<LIFPoisson>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    /*auto *ee = model.addSynapsePopulation<STDPPower, AlphaCurr>(
-        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
+    auto *ee = model.addSynapsePopulation<STDPPower, GeNNModels::AlphaCurr>(
+        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, Parameters::delayTimestep,
         "E", "E",
         stdpParams, excitatorySynapseInit, stdpPreInit, stdpPostInit,
         alphaCurrParams, alphaCurrInit,
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));*/
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "EE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
-        "E", "E",
-        {}, excitatorySynapseInit,
-        alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
+
+    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
+        "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
         "E", "I",
         {}, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "II", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
+    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
+        "II", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
         "I", "I",
         {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
-        "IE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, NO_DELAY,
+    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
+        "IE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
         "I", "E",
         {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit,

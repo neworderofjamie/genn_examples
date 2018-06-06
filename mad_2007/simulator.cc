@@ -3,15 +3,16 @@
 #include <random>
 
 // GeNN robotics includes
-#include "connectors.h"
-#include "spike_csv_recorder.h"
-#include "timer.h"
+#include "common/timer.h"
+#include "genn_utils/spike_csv_recorder.h"
 
 // Model parameters
 #include "parameters.h"
 
 // Auto-generated model code
 #include "mad_2007_CODE/definitions.h"
+
+using namespace GeNNRobotics;
 
 int main()
 {
@@ -32,13 +33,14 @@ int main()
 
     {
         // Open CSV output files
-        SpikeCSVRecorderCached spikes("spikes.csv", glbSpkCntE, glbSpkE);
+        GeNNUtils::SpikeCSVRecorderDelay spikes("spikes.csv", Parameters::numExcitatory,
+                                                spkQuePtrE, glbSpkCntE, glbSpkE);
 
         {
             Timer<> tim("Simulation:");
             // Loop through timesteps
             while(t < Parameters::durationMs) {
-                if((iT % 10000) == 0) {
+                if((iT % 1000) == 0) {
                     std::cout << (t / Parameters::durationMs) * 100.0 << "%" << std::endl;
                 }
 
