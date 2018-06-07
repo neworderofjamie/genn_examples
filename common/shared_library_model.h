@@ -76,6 +76,7 @@ public:
             m_StepTimeGPU = (VoidFunction)getSymbol("stepTimeGPU", true);
 
             m_T = (scalar*)getSymbol("t");
+            m_Timestep = (unsigned long long*)getSymbol("iT");
             return true;
         }
         else {
@@ -135,6 +136,11 @@ public:
         return *m_T;
     }
 
+    unsigned long long getTimestep() const
+    {
+        return *m_Timestep;
+    }
+
 private:
     //----------------------------------------------------------------------------
     // Members
@@ -152,6 +158,7 @@ private:
     VoidFunction m_StepTimeCPU;
 
     scalar *m_T;
+    unsigned long long *m_Timestep;
 };
 
 //----------------------------------------------------------------------------
