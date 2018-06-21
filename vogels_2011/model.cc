@@ -9,7 +9,7 @@
 
 #include "../common/vogels_2011.h"
 
-using namespace GeNNRobotics;
+using namespace BoBRobotics;
 
 void modelDefinition(NNmodel &model)
 {

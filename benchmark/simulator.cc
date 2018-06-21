@@ -1,11 +1,14 @@
 #include <random>
 
-#include "connectors.h"
-#include "timer.h"
+// GeNN robotics includes
+#include "common/timer.h"
+#include "genn_utils/connectors.h"
 
 #include "parameters.h"
 
 #include "benchmark_CODE/definitions.h"
+
+using namespace BoBRobotics;
 
 int main()
 {
@@ -26,11 +29,14 @@ int main()
         std::mt19937 gen(rd());
 
 #ifdef SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
-        buildFixedProbabilityConnector(Parameters::numPre, Parameters::numPost, Parameters::connectionProbability,
-                                       CSyn, &allocateSyn, gen);
+        GeNNUtils::buildFixedProbabilityConnector(Parameters::numPre, Parameters::numPost, Parameters::connectionProbability,
+                                                  CSyn, &allocateSyn, gen);
+#elif defined(SYNAPSE_MATRIX_CONNECTIVITY_RAGGED)
+        GeNNUtils::buildFixedProbabilityConnector(Parameters::numPre, Parameters::numPost, Parameters::connectionProbability,
+                                                  CSyn, gen);
 #elif defined(SYNAPSE_MATRIX_CONNECTIVITY_BITMASK)
-        buildFixedProbabilityConnector((Parameters::numPre * Parameters::numPre) / 32 + 1, Parameters::connectionProbability,
-                                       gpSyn, gen);
+        GeNNUtils::buildFixedProbabilityConnector((Parameters::numPre * Parameters::numPre) / 32 + 1, Parameters::connectionProbability,
+                                                  gpSyn, gen);
 #endif  // SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
     }
 
@@ -39,11 +45,6 @@ int main()
         Timer<> t("Sparse init:");
         // Perform sparse initialisation
         initbenchmark();
-
-        // Synchronise to make sure any copy operations are included in the scoped timer
-#ifndef CPU_ONLY
-        cudaDeviceSynchronize();
-#endif
     }
     std::cout << "\tHost:" << sparseInitHost_tme * 1000.0 << std::endl;
     std::cout << "\tDevice:" << sparseInitDevice_tme * 1000.0 << std::endl;
