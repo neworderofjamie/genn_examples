@@ -10,7 +10,7 @@
 // Auto-generated model code
 #include "vogels_2011_CODE/definitions.h"
 
-using namespace GeNNRobotics;
+using namespace BoBRobotics;
 
 int main()
 {

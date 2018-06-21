@@ -4,7 +4,7 @@
 #include "genn_models/exp_curr.h"
 #include "genn_models/adexp.h"
 
-using namespace GeNNRobotics;
+using namespace BoBRobotics;
 
 void modelDefinition(NNmodel &model)
 {

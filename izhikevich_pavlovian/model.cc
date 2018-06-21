@@ -8,7 +8,7 @@
 // Model includes
 #include "parameters.h"
 
-using namespace GeNNRobotics;
+using namespace BoBRobotics;
 
 // Standard Izhikevich model with variable input current
 class Izhikevich : public NeuronModels::Base

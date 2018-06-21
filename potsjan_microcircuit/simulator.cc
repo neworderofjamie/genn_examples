@@ -33,7 +33,7 @@
     spikeRecorders.emplace_back(new GeNNUtils::SpikeCSVRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
 #endif
 
-    using namespace GeNNRobotics;
+    using namespace BoBRobotics;
 
 int main()
 {

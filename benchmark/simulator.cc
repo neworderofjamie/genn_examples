@@ -8,7 +8,7 @@
 
 #include "benchmark_CODE/definitions.h"
 
-using namespace GeNNRobotics;
+using namespace BoBRobotics;
 
 int main()
 {
