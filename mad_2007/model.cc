@@ -8,7 +8,7 @@
 
 #include "parameters.h"
 
-using namespace GeNNRobotics;
+using namespace BoBRobotics;
 
 //----------------------------------------------------------------------------
 // STDPPower

@@ -12,7 +12,7 @@
 // Auto-generated model code
 #include "mad_2007_CODE/definitions.h"
 
-using namespace GeNNRobotics;
+using namespace BoBRobotics;
 
 int main()
 {

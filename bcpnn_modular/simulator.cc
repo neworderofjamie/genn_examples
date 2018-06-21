@@ -31,7 +31,7 @@
     }\
 }
 
-using namespace GeNNRobotics;
+using namespace BoBRobotics;
 
 namespace
 {
