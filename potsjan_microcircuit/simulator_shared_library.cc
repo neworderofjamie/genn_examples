@@ -83,18 +83,9 @@ int main()
             unsigned int **spikeCount = (unsigned int**)model.getSymbol("glbSpkCnt" + name);
             unsigned int **spikes = (unsigned int**)model.getSymbol("glbSpk" + name);
 
-            // If there is a spike queue pointer associated with population, add delay recorder
-            unsigned int *spikeQueuePointer = (unsigned int*)model.getSymbol("spkQuePtr" + name, true);
-            if(spikeQueuePointer) {
-                spikeRecorders.emplace_back(
-                    new GeNNUtils::SpikeCSVRecorderDelay((name + ".csv").c_str(), numNeurons,
-                                                         *spikeQueuePointer, *spikeCount, *spikes));
-            }
-            // Otherwise, cached recorder
-            else {
-                spikeRecorders.emplace_back(
-                    new GeNNUtils::SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
-            }
+            // Add cached recorder
+            spikeRecorders.emplace_back(
+                new GeNNUtils::SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
         }
     }
 

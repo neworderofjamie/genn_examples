@@ -23,15 +23,9 @@
                                                              C##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
 
 // Macro to record a population's output
-#ifdef USE_DELAY
-#define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                           \
-    spikeRecorders.emplace_back(new GeNNUtils::SpikeCSVRecorderDelay(#LAYER#POPULATION".csv",           \
-        Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION),  \
-        spkQuePtr##LAYER##POPULATION, glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
-#else
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                               \
     spikeRecorders.emplace_back(new GeNNUtils::SpikeCSVRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
-#endif
+
 
     using namespace BoBRobotics;
 
@@ -126,11 +120,7 @@ int main()
     // **HACK** would be nicer to have arrays of objects rather than pointers but ofstreams
     // aren't correctly moved in GCC 4.9.4 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54316) -
     // the newest version that can be used with CUDA on Sussex HPC
-#ifdef USE_DELAY
-    std::vector<std::unique_ptr<GeNNUtils::SpikeCSVRecorderDelay>> spikeRecorders;
-#else
     std::vector<std::unique_ptr<GeNNUtils::SpikeCSVRecorderCached>> spikeRecorders;
-#endif
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
     ADD_SPIKE_RECORDER(23, E);
     ADD_SPIKE_RECORDER(23, I);
