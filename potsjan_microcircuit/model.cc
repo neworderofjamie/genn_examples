@@ -127,6 +127,7 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::buildSharedLibrary = false;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::optimizeCode = true;
 
     InitVarSnippet::Normal::ParamValues vDist(
         -58.0, // 0 - mean
