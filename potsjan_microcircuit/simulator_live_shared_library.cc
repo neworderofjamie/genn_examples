@@ -1,4 +1,5 @@
 // Standard C++ includes
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -29,7 +30,8 @@ class LiveVisualiser
 {
 public:
     LiveVisualiser(SharedLibraryModelFloat &model, const cv::Size outputRes, int scale)
-    :   m_Model(model), m_OutputImage(outputRes, CV_8UC3)
+    :   m_Model(model), m_OutputImage(outputRes, CV_8UC3)/*, 
+        m_VideoWriter("test.avi", cv::VideoWriter::fourcc('H', '2', '6', '4'), 33.0, outputRes, true)*/
     {
         const int leftBorder = 50;
         const int bottomBorder = 20;
@@ -155,6 +157,9 @@ public:
 
         // Render output image to window`
         cv::imshow(windowName, m_OutputImage);
+        
+        // Write frame
+        //m_VideoWriter.write(m_OutputImage);
 
     }
 
@@ -164,7 +169,8 @@ private:
     //------------------------------------------------------------------------
     SharedLibraryModelFloat &m_Model;
     cv::Mat m_OutputImage;
-
+    //cv::VideoWriter m_VideoWriter;
+    
     // Times used for tracking real vs simulated time
     std::chrono::time_point<std::chrono::high_resolution_clock> m_LastRealTime;
     unsigned long long m_LastSimTimestep;
@@ -173,7 +179,7 @@ private:
     std::vector<std::tuple<cv::Mat, cv::Rect, cv::Vec3b, unsigned int*, unsigned int*>> m_Populations;
 };
 
-void displayThreadHandler(LiveVisualiser &visualiser, std::mutex &mutex)
+void displayThreadHandler(LiveVisualiser &visualiser, std::mutex &mutex, std::atomic<bool> &run)
 {
     cv::namedWindow("Output", CV_WINDOW_NORMAL);
     cv::resizeWindow("Output", 480, 800);
@@ -184,8 +190,13 @@ void displayThreadHandler(LiveVisualiser &visualiser, std::mutex &mutex)
             visualiser.render("Output");
         }
 
-        cv::waitKey(33);
+        if(cv::waitKey(33) == 27) {
+            break;
+        }
     }
+    
+    // Clear run flag
+    run = false;
 }
 
 int main()
@@ -216,12 +227,20 @@ int main()
                         const unsigned int numSrc = Parameters::getScaledNumNeurons(srcLayer, srcPop);
 
                         // Find sparse projection structure and allocate function associated with projection
+#ifdef RAGGED_CONNECTIVITY
+                        RaggedProjection<unsigned int> *raggedProjection = (RaggedProjection<unsigned int>*)model.getSymbol("C" + srcName + "_" + trgName, true);
+                        if(raggedProjection) {
+                            GeNNUtils::buildFixedNumberTotalWithReplacementConnector(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
+                                                                                     *raggedProjection, rng);
+                        }
+#else
                         SparseProjection *sparseProjection = (SparseProjection*)model.getSymbol("C" + srcName + "_" + trgName, true);
                         GeNNUtils::AllocateFn allocateFn = (GeNNUtils::AllocateFn)model.getSymbol("allocate" + srcName + "_" + trgName, true);
                         if(sparseProjection && allocateFn) {
                             GeNNUtils::buildFixedNumberTotalWithReplacementConnector(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
                                                                                      *sparseProjection, allocateFn, rng);
                         }
+#endif
                     }
                 }
             }
@@ -250,16 +269,19 @@ int main()
         }
     }
 #endif
-
+    std::atomic<bool> run{true};
+    
     std::mutex mutex;
     LiveVisualiser visualiser(model, cv::Size(480, 800), 2);
-    std::thread displayThread(displayThreadHandler, std::ref(visualiser), std::ref(mutex));
+    std::thread displayThread(displayThreadHandler, std::ref(visualiser), std::ref(mutex), std::ref(run));
 
+    
+    
     double applyMs = 0.0;
     {
         Timer<> timer("Simulation:");
         // Loop through timesteps
-        while(true)
+        while(run)
         {
             // Simulate
 #ifndef CPU_ONLY

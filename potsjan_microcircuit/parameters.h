@@ -4,6 +4,13 @@
 #define MEASURE_TIMING
 //#define USE_ZERO_COPY
 //#define JETSON_POWER
+#define RAGGED_CONNECTIVITY
+
+#ifdef RAGGED_CONNECTIVITY
+    #define SYNAPSE_MATRIX_TYPE SynapseMatrixType::RAGGED_INDIVIDUALG
+#else
+    #define SYNAPSE_MATRIX_TYPE SynapseMatrixType::SPARSE_INDIVIDUALG
+#endif  // RAGGED_CONNECTIVITY
 
 // Parameters
 namespace Parameters
