@@ -10,7 +10,7 @@ N_full = {
   '6' : {'E': 14395, 'I': 2948}
 }
 
-N_scaling = 0.5
+N_scaling = 0.1
 
 def load_spikes(filename):
     # Parse filename and use to get population name and size

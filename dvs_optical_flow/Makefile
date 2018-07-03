@@ -1,6 +1,6 @@
 EXECUTABLE      := simulator
 SOURCES         := simulator.cc
-INCLUDE_FLAGS   := -I$(GENN_ROBOTICS_PATH)/common
+INCLUDE_FLAGS   := -I$(BOB_ROBOTICS_PATH)/common
 LINK_FLAGS      := `pkg-config --libs opencv`
 CXXFLAGS       := -pthread `pkg-config --cflags opencv` 
     

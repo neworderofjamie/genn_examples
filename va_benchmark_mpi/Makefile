@@ -1,6 +1,6 @@
 EXECUTABLE      := simulator
 SOURCES         := simulator.cc
-INCLUDE_FLAGS   := -I$(GENN_ROBOTICS_PATH)/common
+INCLUDE_FLAGS   := -I$(BOB_ROBOTICS_PATH)/common
 
 ifdef MPI_ENABLE
     SIM_CODE := va_benchmark_${OMPI_COMM_WORLD_RANK}_CODE
