@@ -147,10 +147,15 @@ void modelDefinition(NNmodel &model)
         0.5);  // 0 - TauSyn (ms)
 
     const double quantile = 0.9999;
-    const double maxDelay[Parameters::PopulationMax] = {
+    const double maxDelayMs[Parameters::PopulationMax] = {
         Parameters::meanDelay[Parameters::PopulationE] + (Parameters::delaySD[Parameters::PopulationE] * normalCDFInverse(quantile)),
         Parameters::meanDelay[Parameters::PopulationI] + (Parameters::delaySD[Parameters::PopulationI] * normalCDFInverse(quantile))};
-    std::cout << "Max excitatory delay: " << maxDelay[Parameters::PopulationE] << "ms, max inhibitory delay: " << maxDelay[Parameters::PopulationI] << "ms" << std::endl;
+    std::cout << "Max excitatory delay: " << maxDelayMs[Parameters::PopulationE] << "ms, max inhibitory delay: " << maxDelayMs[Parameters::PopulationI] << "ms" << std::endl;
+
+    // Calculate maximum dendritic delay slots
+    // **NOTE** it seems inefficient using maximum for all but this allows more aggressive merging of postsynaptic models
+    const unsigned int maxDendriticDelaySlots = (unsigned int)std::rint(std::max(maxDelayMs[Parameters::PopulationE], maxDelayMs[Parameters::PopulationI])  / Parameters::dtMs);
+    std::cout << "Max dendritic delay slots:" << maxDendriticDelaySlots << std::endl;
 
     // Loop through populations and layers
     std::cout << "Creating neuron populations:" << std::endl;
@@ -250,7 +255,7 @@ void modelDefinition(NNmodel &model)
                                 Parameters::meanDelay[srcPop],              // 0 - mean
                                 Parameters::delaySD[srcPop],                // 1 - sd
                                 0.0,                                        // 2 - min
-                                maxDelay[srcPop]);                          // 3 - max
+                                maxDelayMs[srcPop]);                        // 3 - max
 
                             // Create weight parameters
                             WeightUpdateModels::StaticPulseDendriticDelay::VarValues staticSynapseInit(
@@ -268,7 +273,7 @@ void modelDefinition(NNmodel &model)
                             synPop->setMaxConnections(
                                 GeNNUtils::calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
 
-                            synPop->setMaxDendriticDelaySlots((unsigned int)std::rint(maxDelay[srcPop] / Parameters::dtMs));
+                            synPop->setMaxDendriticDelaySlots(maxDendriticDelaySlots);
                         }
                         // Inhibitory
                         else {
@@ -284,7 +289,7 @@ void modelDefinition(NNmodel &model)
                                 Parameters::meanDelay[srcPop],              // 0 - mean
                                 Parameters::delaySD[srcPop],                // 1 - sd
                                 0.0,                                        // 2 - min
-                                maxDelay[srcPop]);                          // 3 - max
+                                maxDelayMs[srcPop]);                        // 3 - max
 
                             // Create weight parameters
                             WeightUpdateModels::StaticPulseDendriticDelay::VarValues staticSynapseInit(
@@ -301,7 +306,7 @@ void modelDefinition(NNmodel &model)
                             // Set max connections
                             synPop->setMaxConnections(
                                 GeNNUtils::calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
-                            synPop->setMaxDendriticDelaySlots((unsigned int)std::rint(maxDelay[srcPop] / Parameters::dtMs));
+                            synPop->setMaxDendriticDelaySlots(maxDendriticDelaySlots);
                         }
 
                     }
