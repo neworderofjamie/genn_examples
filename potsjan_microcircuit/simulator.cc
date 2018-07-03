@@ -16,11 +16,11 @@
 
 // Macro to build a connection between a pair of populations
 #define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                            \
-    buildFixedNumberTotalWithReplacementConnector(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),           \
-                                                  Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),           \
-                                                  Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,        \
-                                                                                Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),             \
-                                                  C##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, &allocate##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
+    GeNNUtils::buildFixedNumberTotalWithReplacementConnector(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),           \
+                                                             Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),           \
+                                                             Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,        \
+                                                                                                 Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),             \
+                                                             C##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, &allocate##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
 
 // Macro to record a population's output
 #ifdef USE_DELAY
@@ -33,7 +33,7 @@
     spikeRecorders.emplace_back(new GeNNUtils::SpikeCSVRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
 #endif
 
-    using namespace BoBRobotics;
+using namespace BoBRobotics;
 
 int main()
 {
