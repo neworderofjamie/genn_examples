@@ -273,7 +273,7 @@ void modelDefinition(NNmodel &model)
                             synPop->setMaxConnections(
                                 GeNNUtils::calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
 
-                            synPop->setNumDendriticDelaySlots(maxDendriticDelaySlots);
+                            synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
                         }
                         // Inhibitory
                         else {
@@ -306,7 +306,7 @@ void modelDefinition(NNmodel &model)
                             // Set max connections
                             synPop->setMaxConnections(
                                 GeNNUtils::calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
-                            synPop->setNumDendriticDelaySlots(maxDendriticDelaySlots);
+                            synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
                         }
 
                     }
