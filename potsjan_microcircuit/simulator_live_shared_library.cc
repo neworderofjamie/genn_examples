@@ -29,15 +29,15 @@ using namespace BoBRobotics;
 class LiveVisualiser
 {
 public:
-    LiveVisualiser(SharedLibraryModelFloat &model, const cv::Size outputRes, int scale)
-    :   m_Model(model), m_OutputImage(outputRes, CV_8UC3)/*, 
+    LiveVisualiser(SharedLibraryModelFloat &model, const cv::Size outputRes, double scale)
+    :   m_Model(model), m_OutputImage(outputRes, CV_8UC3), m_RotatedOutput(outputRes.width, outputRes.height, CV_8UC3)/*, t
         m_VideoWriter("test.avi", cv::VideoWriter::fourcc('H', '2', '6', '4'), 33.0, outputRes, true)*/
     {
         const int leftBorder = 50;
         const int bottomBorder = 20;
         const int verticalSpacing = 5;
         const int verticalSpacingLayer = 5;
-        const int neuronWidth = (outputRes.width - leftBorder) / scale;
+        const int neuronWidth = (int)std::round((double)(outputRes.width - leftBorder) / scale);
 
         // Reserve array for populations
         m_Populations.reserve(Parameters::LayerMax * Parameters::PopulationMax);
@@ -67,7 +67,8 @@ public:
                 unsigned int **spikes = (unsigned int**)m_Model.getSymbol("glbSpk" + name);
 
                 // Create Rectangle of Interest where population activity will be rendered
-                cv::Rect roi(leftBorder, populationY, neuronWidth * scale, neuronHeight * scale);
+                cv::Rect roi(leftBorder, populationY, (int)std::round((double)neuronWidth * scale), 
+                             (int)std::round((double)neuronHeight * scale));
 
                 const auto textSize = cv::getTextSize(name.c_str(), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, 1, nullptr);
                 cv::putText(m_OutputImage, name.c_str(), cv::Point(0, populationY + (roi.height / 2) + (textSize.height / 2)),
@@ -102,7 +103,7 @@ public:
         }
     }
 
-    void render(const char *windowName)
+    void render(const char *windowName, bool rotate=false)
     {
         unsigned long long simTimestep = m_Model.getTimestep();
         auto realTime = std::chrono::high_resolution_clock::now();
@@ -154,9 +155,17 @@ public:
             cv::resize(spikeImage, roi, roi.size(), 0.0, 0.0, cv::INTER_NEAREST);
 
         }
-
-        // Render output image to window`
-        cv::imshow(windowName, m_OutputImage);
+        
+        
+        if(rotate) {
+            cv::transpose(m_OutputImage, m_RotatedOutput);
+            cv::flip(m_RotatedOutput, m_RotatedOutput, 0);
+            cv::imshow(windowName, m_RotatedOutput);
+        }
+        // Otherwise, Render output image directly to window`
+        else {
+            cv::imshow(windowName, m_OutputImage);
+        }
         
         // Write frame
         //m_VideoWriter.write(m_OutputImage);
@@ -169,6 +178,7 @@ private:
     //------------------------------------------------------------------------
     SharedLibraryModelFloat &m_Model;
     cv::Mat m_OutputImage;
+    cv::Mat m_RotatedOutput;
     //cv::VideoWriter m_VideoWriter;
     
     // Times used for tracking real vs simulated time
@@ -184,13 +194,29 @@ void displayThreadHandler(LiveVisualiser &visualiser, std::mutex &mutex, std::at
     cv::namedWindow("Output", CV_WINDOW_NORMAL);
     cv::resizeWindow("Output", 480, 800);
 
+    bool rotated = false;
     while(true) {
         {
             std::lock_guard<std::mutex> lock(mutex);
-            visualiser.render("Output");
+            visualiser.render("Output", rotated);
         }
 
-        if(cv::waitKey(33) == 27) {
+        const auto key = cv::waitKey(33);
+        if(key == 'f') {
+            const auto currentFullscreen = cv::getWindowProperty("Output", cv::WND_PROP_FULLSCREEN);
+            cv::setWindowProperty("Output", cv::WND_PROP_FULLSCREEN, 
+                                  (currentFullscreen == cv::WINDOW_NORMAL) ? cv::WINDOW_FULLSCREEN : cv::WINDOW_NORMAL);
+        }
+        else if(key == 'r') {
+            rotated = !rotated;
+            if(rotated) {
+                cv::resizeWindow("Output", 800, 480);
+            }
+            else {
+                cv::resizeWindow("Output", 480, 800);
+            }
+        }
+        else if(key == 27) {
             break;
         }
     }
@@ -272,10 +298,9 @@ int main()
     std::atomic<bool> run{true};
     
     std::mutex mutex;
-    LiveVisualiser visualiser(model, cv::Size(480, 800), 2);
+    LiveVisualiser visualiser(model, cv::Size(480, 800), 2.75);
     std::thread displayThread(displayThreadHandler, std::ref(visualiser), std::ref(mutex), std::ref(run));
 
-    
     
     double applyMs = 0.0;
     {
@@ -306,16 +331,6 @@ int main()
         }
     }
 
-
-#ifdef MEASURE_TIMING
-    std::cout << "Timing:" << std::endl;
-    std::cout << "\tHost init:" << initHost_tme * 1000.0 << std::endl;
-    std::cout << "\tDevice init:" << initDevice_tme * 1000.0 << std::endl;
-    std::cout << "\tHost sparse init:" << sparseInitHost_tme * 1000.0 << std::endl;
-    std::cout << "\tDevice sparse init:" << sparseInitDevice_tme * 1000.0 << std::endl;
-    std::cout << "\tNeuron simulation:" << neuron_tme * 1000.0 << std::endl;
-    std::cout << "\tSynapse simulation:" << synapse_tme * 1000.0 << std::endl;
-#endif
     std::cout << "Apply:" << applyMs << "ms" << std::endl;
 
     return 0;
