@@ -10,16 +10,15 @@
 
 using namespace BoBRobotics;
 
-// Standard Izhikevich model with variable input current
+// Standard Izhikevich model with external input current
 class Izhikevich : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Izhikevich, 5, 3);
+    DECLARE_MODEL(Izhikevich, 4, 3);
 
     SET_SIM_CODE(
-        "scalar noise = ($(gennrand_uniform) * $(n) * 2.0) - $(n);\n"
-        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext)+noise)*DT; //at two times for numerical stability\n"
-        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext)+noise)*DT;\n"
+        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT; //at two times for numerical stability\n"
+        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT;\n"
         "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n");
 
     SET_THRESHOLD_CONDITION_CODE("$(V) >= 30.0");
@@ -27,10 +26,21 @@ public:
         "$(V)=$(c);\n"
         "$(U)+=$(d);\n");
 
-    SET_PARAM_NAMES({"a", "b", "c", "d", "n"});
+    SET_PARAM_NAMES({"a", "b", "c", "d"});
     SET_VARS({{"V","scalar"}, {"U", "scalar"}, {"Iext", "scalar"}});
 };
 IMPLEMENT_MODEL(Izhikevich);
+
+// Uniformly distributed input current
+class UniformNoise : public CurrentSourceModels::Base
+{
+public:
+    DECLARE_MODEL(UniformNoise, 1, 0);
+
+    SET_INJECTION_CODE("$(injectCurrent, ($(gennrand_uniform) * $(n) * 2.0) - $(n));\n");
+    SET_PARAM_NAMES({"n"});
+};
+IMPLEMENT_MODEL(UniformNoise);
 
 void modelDefinition(NNmodel &model)
 {
@@ -38,7 +48,6 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::optimizeCode = true;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-
 
     initGeNN();
     model.setDT(Parameters::timestepMs);
@@ -59,22 +68,23 @@ void modelDefinition(NNmodel &model)
         0.02,   // a
         0.2,    // b
         -65.0,  // c
-        8.0,    // d
-        6.5);   // n
+        8.0);   // d
 
     // Inhibitory model parameters
     Izhikevich::ParamValues inhParams(
         0.1,   // a
         0.2,    // b
         -65.0,  // c
-        2.0,    // d
-        6.5);   // n
+        2.0);   // d
 
     // LIF initial conditions
     Izhikevich::VarValues izkInit(
         -65.0,  // V
         -13.0,    // U
         0.0);   // Iext
+
+    UniformNoise::ParamValues currSourceParams(
+        6.5);
 
     GeNNModels::STDPDopamine::ParamValues dopeParams(
         20.0,                       // 0 - Potentiation time constant (ms)
@@ -91,13 +101,15 @@ void modelDefinition(NNmodel &model)
         0.0,                        // Synaptic tag
         0.0);                       // Time of last synaptic tag update
 
-
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(Parameters::inhWeight);
 
     // Create IF_curr neuron
     auto e = model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
     auto i = model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
+
+    auto eCurrSource = model.addCurrentSource<UniformNoise>("ECurr", "E", currSourceParams, {});
+    auto iCurrSource = model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceParams, {});
 
     auto ee = model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
