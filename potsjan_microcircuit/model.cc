@@ -69,6 +69,7 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
     GENN_PREFERENCES::optimizeCode = true;
+    GENN_PREFERENCES::mergePostsynapticModels = true;
 
     InitVarSnippet::Normal::ParamValues vDist(
         -58.0, // 0 - mean
