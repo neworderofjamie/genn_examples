@@ -101,6 +101,7 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::mergePostsynapticModels = true;
 
     //---------------------------------------------------------------------------
     // Build model

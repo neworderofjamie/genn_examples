@@ -15,6 +15,7 @@ void modelDefinition(NNmodel &model)
 {
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
     initGeNN();
     model.setDT(1.0);
@@ -102,6 +103,7 @@ void modelDefinition(NNmodel &model)
 
     // Configure plastic weight variables they can be downloaded to host
     ie->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    ie->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
