@@ -137,6 +137,9 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
     GENN_PREFERENCES::autoChooseDevice = false;
     GENN_PREFERENCES::defaultDevice = 0;
+#ifdef MEASURE_TIMING
+    model.setTiming(true);
+#endif
 
     //---------------------------------------------------------------------------
     // Build model
