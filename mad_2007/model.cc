@@ -203,13 +203,21 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<LIFPoisson>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<LIFPoisson>("I", Parameters::numInhibitory, lifParams, lifInit);
 
+#ifdef STATIC
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
+        "EE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
+        "E", "E",
+        {}, excitatorySynapseInit,
+        alphaCurrParams, alphaCurrInit,
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+#else
     auto *ee = model.addSynapsePopulation<STDPPower, GeNNModels::AlphaCurr>(
         "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, Parameters::delayTimestep,
         "E", "E",
         stdpParams, excitatorySynapseInit, stdpPreInit, stdpPostInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-
+#endif
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
         "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
         "E", "I",
@@ -234,8 +242,9 @@ void modelDefinition(NNmodel &model)
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     // Configure plastic synaptic weights so that they can be downloaded to host
+#ifndef STATIC
     ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
     ee->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
+#endif
     model.finalize();
 }

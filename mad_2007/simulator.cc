@@ -71,8 +71,11 @@ int main(int argc, char** argv)
     std::cout << "\tDevice sparse init:" << sparseInitDevice_tme * 1000.0 << std::endl;
     std::cout << "\tNeuron simulation:" << neuron_tme * 1000.0 << std::endl;
     std::cout << "\tSynapse simulation:" << synapse_tme * 1000.0 << std::endl;
+#ifndef STATIC
     std::cout << "\tPostsynaptic learning:" << learning_tme * 1000.0 << std::endl;
 #endif
+#endif
+#ifndef STATIC
     {
         Timer<> tim("Weight analysis:");
 
@@ -89,6 +92,6 @@ int main(int argc, char** argv)
             weights.write(reinterpret_cast<char*>(&gEE[i * CEE.maxRowLength]), sizeof(scalar) * CEE.rowLength[i]);
         }
     }
-
+#endif // !STATIC
     return 0;
 }

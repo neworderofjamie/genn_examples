@@ -4,6 +4,7 @@
 #include <cmath>
 
 #define MEASURE_TIMING
+//#define STATIC
 
 //------------------------------------------------------------------------
 // Parameters
