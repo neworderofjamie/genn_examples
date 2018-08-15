@@ -9,12 +9,71 @@
 
 // Genn examples includes
 #include "../common/normal_distribution.h"
-#include "../common/poisson_current_source.h"
 
 // Model includes
 #include "parameters.h"
 
 using namespace BoBRobotics;
+
+//----------------------------------------------------------------------------
+// LIFPoisson
+//----------------------------------------------------------------------------
+//! Leaky integrate-and-fire neuron solved algebraically
+class LIFPoisson : public NeuronModels::Base
+{
+public:
+    DECLARE_MODEL(LIFPoisson, 10, 3);
+
+    SET_SIM_CODE(
+        "scalar p = 1.0f;\n"
+        "unsigned int numPoissonSpikes = 0;\n"
+        "do\n"
+        "{\n"
+        "    numPoissonSpikes++;\n"
+        "    p *= $(gennrand_uniform);\n"
+        "} while (p > $(PoissonExpMinusLambda));\n"
+        "$(Ipoisson) += $(IpoissonInit) * (scalar)(numPoissonSpikes - 1);\n"
+        "if ($(RefracTime) <= 0.0)\n"
+        "{\n"
+        "  scalar alpha = (($(Isyn) + $(Ioffset) + $(Ipoisson)) * $(Rmembrane)) + $(Vrest);\n"
+        "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
+        "}\n"
+        "else\n"
+        "{\n"
+        "  $(RefracTime) -= DT;\n"
+        "}\n"
+        "$(Ipoisson) *= $(IpoissonExpDecay);\n"
+    );
+
+    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
+
+    SET_RESET_CODE(
+        "$(V) = $(Vreset);\n"
+        "$(RefracTime) = $(TauRefrac);\n");
+
+    SET_PARAM_NAMES({
+        "C",                // Membrane capacitance
+        "TauM",             // Membrane time constant [ms]
+        "Vrest",            // Resting membrane potential [mV]
+        "Vreset",           // Reset voltage [mV]
+        "Vthresh",          // Spiking threshold [mV]
+        "Ioffset",          // Offset current
+        "TauRefrac",        // Refractory time [ms]
+        "PoissonRate",      // Poisson input rate [Hz]
+        "PoissonWeight",    // How much current each poisson spike adds [nA]
+        "IpoissonTau"});     // Time constant of poisson spike integration [ms]
+
+
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }},
+        {"PoissonExpMinusLambda", [](const vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
+        {"IpoissonExpDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
+        {"IpoissonInit", [](const vector<double> &pars, double dt){ return pars[8] * (1.0 - std::exp(-dt / pars[9])) * (pars[9] / dt); }}});
+
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}});
+};
+IMPLEMENT_MODEL(LIFPoisson);
 
 //----------------------------------------------------------------------------
 // NormalClipped
@@ -76,13 +135,10 @@ void modelDefinition(NNmodel &model)
         5.0);  // 1 - sd
 
     // LIF initial conditions
-    GeNNModels::LIF::VarValues lifInit(
+    LIFPoisson::VarValues lifInit(
         initVar<InitVarSnippet::Normal>(vDist), // 0 - V
-        0.0);                                   // 1 - RefracTime
-
-    // Current source initial conditions
-    PoissonCurrentSourceExp::VarValues poissonCurrInit(
-        0.0);                                   // 0 - iPoisson
+        0.0,                                    // 1 - RefracTime
+        0.0);                                   // 2 - Ipoisson
 
     // Exponential current parameters
     GeNNModels::ExpCurr::ParamValues excitatoryExpCurrParams(
@@ -120,29 +176,24 @@ void modelDefinition(NNmodel &model)
             assert(extInputCurrent >= 0.0);
 
             // LIF model parameters
-            GeNNModels::LIF::ParamValues lifParams(
+            LIFPoisson::ParamValues lifParams(
                 0.25,               // 0 - C
                 10.0,               // 1 - TauM
                 -65.0,              // 2 - Vrest
                 -65.0,              // 3 - Vreset
                 -50.0,              // 4 - Vthresh
                 extInputCurrent,    // 5 - Ioffset
-                2.0);               // 6 - TauRefrac
-
-            PoissonCurrentSourceExp::ParamValues poissonCurrParams(
-                extInputRate,       // 0 - rate
-                extWeight,          // 1 - weight
-                0.5);               // 2 - tauSyn
+                2.0,                // 6 - TauRefrac
+                extInputRate,       // 7 - PoissonRate
+                extWeight,          // 8 - PoissonWeight
+                0.5);               // 9 - IpoissonTau
 
             // Create population
             const unsigned int popSize = Parameters::getScaledNumNeurons(layer, pop);
-            auto *neuronPop = model.addNeuronPopulation<GeNNModels::LIF>(popName, popSize,
-                                                                         lifParams, lifInit);
+            auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(popName, popSize,
+                                                                    lifParams, lifInit);
 
-            // Create current source
-            model.addCurrentSource<PoissonCurrentSourceExp>(popName + "_curr", popName,
-                                                            poissonCurrParams, poissonCurrInit);
-            // Make spikes recordable on host
+            // Make recordable on host
 #ifdef USE_ZERO_COPY
             neuronPop->setSpikeVarMode(VarMode::LOC_ZERO_COPY_INIT_DEVICE);
 #else
