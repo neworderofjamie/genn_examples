@@ -175,7 +175,7 @@ void modelDefinition(NNmodel &model)
     STDPPower::ParamValues stdpParams(
         20.0,           // 0 - tauPlus
         20.0,           // 1 - tauMinus
-        0.116,          // 2 - lambda
+        0.1,          // 2 - lambda
         1.057 * 0.1,    // 3 - alpha
         0.4,            // 4 - mu
         0.001);         // 5 - weight 0
@@ -193,6 +193,14 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues inhibitorySynapseInit(
         Parameters::excitatoryPeakWeight * Parameters::excitatoryInhibitoryRatio);    // 0 - Wij (nA)
 
+#ifdef STATIC
+    InitVarSnippet::Normal::ParamValues wDist(
+        0.04565,    // 0 - mean
+        0.00399);   // 1 - standard deviation
+
+    WeightUpdateModels::StaticPulse::VarValues eeSynapseInit(
+        initVar<InitVarSnippet::Normal>(wDist));    // 0 - Wij (nA)
+#endif
     // Alpha current parameters
     GeNNModels::AlphaCurr::ParamValues alphaCurrParams(
         0.33);  // 0 - TauSyn (ms)
@@ -205,9 +213,9 @@ void modelDefinition(NNmodel &model)
 
 #ifdef STATIC
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
-        "EE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
+        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, Parameters::delayTimestep,
         "E", "E",
-        {}, excitatorySynapseInit,
+        {}, eeSynapseInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 #else
