@@ -1,9 +1,16 @@
 # Ignore object files
 **/*.o
 **/*.obj
+**/*.pdb
+**/*.sdf
+**/*.suo
 
 # Ignore output folders from code generation
 **/*_CODE
+
+# Ignore Visual Studio intermediate directories
+**/obj/
+**/obj_generate/
 
 # Ignore generator executables
 **/generateALL_CPU_ONLY
