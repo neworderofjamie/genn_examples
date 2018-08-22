@@ -173,8 +173,11 @@ int main()
     }
 
     // Write spike recorder cache to disk
-    for(auto &s : spikeRecorders) {
-        s->writeCache();
+    {
+        Timer<> timer("Writing spikes to disk:");
+        for(auto &s : spikeRecorders) {
+            s->writeCache();
+        }
     }
 
 #ifdef MEASURE_TIMING
