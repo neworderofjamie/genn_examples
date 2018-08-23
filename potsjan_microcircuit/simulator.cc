@@ -14,13 +14,57 @@
 // Auto-generated model code
 #include "potjans_microcircuit_CODE/definitions.h"
 
+namespace
+{
+void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnections, unsigned int *&rowLengthExtraGlobalParam, std::mt19937 &rng)
+{
+    unsigned int *rowLengths = nullptr;
+#ifndef CPU_ONLY
+    CHECK_CUDA_ERRORS(cudaMallocHost(&rowLengths, numPre * sizeof(unsigned int)));
+#else
+    rowLengthExtraGlobalParam = new unsigned int[numPre];
+    rowLengths = rowLengthExtraGlobalParam;
+#endif
+    // Calculate row lengths
+    // **NOTE** we are FINISHING at second from last row because all remaining connections must go in last row
+    size_t remainingConnections = numConnections;
+    size_t matrixSize = (size_t)numPre * (size_t)numPost;
+    std::generate_n(&rowLengths[0], numPre - 1,
+                    [&remainingConnections, &matrixSize, numPost, &rng]()
+                    {
+                        const double probability = (double)numPost / (double)matrixSize;
+
+                        // Create distribution to sample row length
+                        std::binomial_distribution<size_t> rowLengthDist(remainingConnections, probability);
+
+                        // Sample row length;
+                        const size_t rowLength = rowLengthDist(rng);
+
+                        // Update counters
+                        remainingConnections -= rowLength;
+                        matrixSize -= numPost;
+
+                        return (unsigned int)rowLength;
+                    });
+
+    // Insert remaining connections into last row
+    rowLengths[numPre - 1] = (unsigned int)remainingConnections;
+
+#ifndef CPU_ONLY
+    CHECK_CUDA_ERRORS(cudaMalloc(&rowLengthExtraGlobalParam, numPre * sizeof(unsigned int)));
+
+    CHECK_CUDA_ERRORS(cudaMemcpy(rowLengthExtraGlobalParam, rowLengths, numPre * sizeof(unsigned int), cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERRORS(cudaFreeHost(rowLengths));
+#endif
+}
+}
 // Macro to build a connection between a pair of populations
-#define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                                    \
-    GeNNUtils::buildFixedNumberTotalWithReplacementConnector(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),        \
-                                                             Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),        \
-                                                             Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,     \
-                                                                                                 Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),    \
-                                                             C##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
+#define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                        \
+    buildRowLengths(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),                                     \
+                                                    Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),     \
+                                                    Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,  \
+                                                                                        Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP), \
+                                                    initSparseConnrowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
 
 // Macro to record a population's output
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                               \
@@ -35,13 +79,9 @@ int main()
         Timer<> timer("Allocation:");
         allocateMem();
     }
-    {
-        Timer<> timer("Initialization:");
-        initialize();
-    }
 
     {
-        Timer<> timer("Building connectivity:");
+        Timer<> timer("Building row lengths:");
 
         std::mt19937 rng;
         BUILD_PROJECTION(23, E, 23, E);
@@ -109,6 +149,12 @@ int main()
         BUILD_PROJECTION(6, I, 6, E);
         BUILD_PROJECTION(6, I, 6, I);
     }
+
+    {
+        Timer<> timer("Initialization:");
+        initialize();
+    }
+
 
     // Final setup
     {
