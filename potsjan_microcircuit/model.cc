@@ -5,7 +5,6 @@
 // GeNN robotics includes
 #include "genn_models/exp_curr.h"
 #include "genn_models/lif.h"
-#include "genn_utils/connectors.h"
 
 // Genn examples includes
 #include "../common/normal_distribution.h"
@@ -115,6 +114,61 @@ public:
 };
 IMPLEMENT_SNIPPET(NormalClippedDelay);
 
+//----------------------------------------------------------------------------
+// FixedNumberTotalWithReplacement
+//----------------------------------------------------------------------------
+//! Initialises variable by sampling from the uniform distribution
+class FixedNumberTotalWithReplacement : public InitSparseConnectivitySnippet::Base
+{
+public:
+    DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 2);
+
+    SET_ROW_BUILD_CODE(
+        "const unsigned int rowLength = $(rowLength)[$(id_pre)];\n"
+        "const scalar u = $(gennrand_uniform);\n"
+        "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
+        "const unsigned int postIdx = (unsigned int)(x * $(numPost));\n"
+        "if(postIdx < $(numPost)) {\n"
+        "   $(addSynapse, postIdx);\n"
+        "}\n"
+        "else {\n"
+        "   $(addSynapse, $(numPost) - 1);\n"
+        "}\n"
+        "c++;\n"
+        "if(c >= rowLength) {\n"
+        "   $(endRow);\n"
+        "}\n");
+    SET_ROW_BUILD_STATE_VARS({{"x", {"scalar", 0.0}},{"c", {"unsigned int", 0}}});
+
+    SET_PARAM_NAMES({"total", "numPost"});
+    SET_EXTRA_GLOBAL_PARAMS({{"rowLength", "unsigned int*"}})
+
+    SET_CALC_MAX_ROW_LENGTH_FUNC(
+        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
+        {
+            // Calculate suitable quantile for 0.9999 change when drawing numPre times
+            const double quantile = pow(0.9999, 1.0 / (double)numPre);
+
+            // There are numConnections connections amongst the numPre*numPost possible connections.
+            // Each of the numConnections connections has an independent p=float(numPost)/(numPre*numPost)
+            // probability of being selected, and the number of synapses in the sub-row is binomially distributed
+            return binomialInverseCDF(quantile, pars[0], (double)numPost / ((double)numPre * (double)numPost));
+        });
+
+    SET_CALC_MAX_COL_LENGTH_FUNC(
+        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
+        {
+            // Calculate suitable quantile for 0.9999 change when drawing numPre times
+            const double quantile = pow(0.9999, 1.0 / (double)numPost);
+
+            // There are numConnections connections amongst the numPre*numPost possible connections.
+            // Each of the numConnections connections has an independent p=float(numPost)/(numPre*numPost)
+            // probability of being selected, and the number of synapses in the sub-row is binomially distributed
+            return binomialInverseCDF(quantile, pars[0], (double)numPre / ((double)numPre * (double)numPost));
+        });
+};
+IMPLEMENT_SNIPPET(FixedNumberTotalWithReplacement);
+
 void modelDefinition(NNmodel &model)
 {
     initGeNN();
@@ -127,6 +181,7 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::buildSharedLibrary = false;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
     GENN_PREFERENCES::optimizeCode = true;
     GENN_PREFERENCES::mergePostsynapticModels = true;
 
@@ -237,6 +292,12 @@ void modelDefinition(NNmodel &model)
                     if(numConnections > 0) {
                         std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << ", meanDelay=" << Parameters::meanDelay[srcPop] << ", delaySD=" << Parameters::delaySD[srcPop] << std::endl;
 
+                        // Build parameters for fixed number total connector
+                        FixedNumberTotalWithReplacement::ParamValues connectParams(
+                            numConnections,                             // 0 - number of connections
+                            numTrg);                                    // 1 - number of postsynaptic neurons
+
+
                         totalSynapses += numConnections;
 
                         // Build unique synapse name
@@ -258,6 +319,7 @@ void modelDefinition(NNmodel &model)
                                 0.0,                                        // 2 - min
                                 maxDelayMs[srcPop]);                        // 3 - max
 
+
                             // Create weight parameters
                             WeightUpdateModels::StaticPulseDendriticDelay::VarValues staticSynapseInit(
                                 initVar<NormalClipped>(wDist),          // 0 - Wij (nA)
@@ -268,12 +330,10 @@ void modelDefinition(NNmodel &model)
                                 synapseName, SYNAPSE_MATRIX_TYPE, NO_DELAY,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
-                                excitatoryExpCurrParams, {});
+                                excitatoryExpCurrParams, {},
+                                initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
 
-                            // Set max connections
-                            synPop->setMaxConnections(
-                                GeNNUtils::calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
-
+                            // Configure dendritic delay
                             synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
                         }
                         // Inhibitory
@@ -302,11 +362,10 @@ void modelDefinition(NNmodel &model)
                                 synapseName, SYNAPSE_MATRIX_TYPE, NO_DELAY,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
-                                inhibitoryExpCurrParams, {});
+                                inhibitoryExpCurrParams, {},
+                                initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
 
-                            // Set max connections
-                            synPop->setMaxConnections(
-                                GeNNUtils::calcFixedNumberTotalWithReplacementConnectorMaxConnections(numSrc, numTrg, numConnections));
+                            // Set max dendritic delay
                             synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
                         }
 

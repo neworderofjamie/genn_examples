@@ -80,6 +80,13 @@ int main()
     std::cout << "\tHost:" << sparseInitHost_tme * 1000.0 << std::endl;
     std::cout << "\tDevice:" << sparseInitDevice_tme * 1000.0 << std::endl;
 
+    while(t < 1000.0f) {
+#ifndef CPU_ONLY
+        stepTimeGPU();
+#else
+        stepTimeCPU();
+#endif
+    }
     // **HACK** Download row lengths and indices
     extern unsigned int *d_rowLengthSyn;
     extern unsigned int *d_indSyn;
@@ -101,9 +108,6 @@ int main()
         }
     }
 
-    for(unsigned int h : histogram) {
-        std::cout << h << ", ";
-    }
-    std::cout << std::endl;
+    std::cout << *std::min_element(histogram.cbegin(), histogram.cend()) << "," << *std::max_element(histogram.cbegin(), histogram.cend()) << std::endl;
   return 0;
 }

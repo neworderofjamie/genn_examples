@@ -13,7 +13,7 @@
 using namespace BoBRobotics;
 
 //----------------------------------------------------------------------------
-// InitSparseConnectivitySnippet::FixedProbability
+// FixedNumberTotalWithReplacement
 //----------------------------------------------------------------------------
 //! Initialises variable by sampling from the uniform distribution
 class FixedNumberTotalWithReplacement : public InitSparseConnectivitySnippet::Base
@@ -22,13 +22,21 @@ public:
     DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 2);
 
     SET_ROW_BUILD_CODE(
+        "const unsigned int rowLength = $(rowLength)[$(id_pre)];\n"
         "const scalar u = $(gennrand_uniform);\n"
-        "const unsigned int postIdx = ceil(u * (scalar)$(numPost)) - 1;\n"
-        "$(addSynapse, postIdx);\n"
-        "$(prevJ)++;\n"
-        "if($(prevJ) >= ($(rowLength)[$(id_pre)] - 1)) {\n"
+        "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
+        "const unsigned int postIdx = (unsigned int)(x * $(numPost));\n"
+        "if(postIdx < $(numPost)) {\n"
+        "   $(addSynapse, postIdx);\n"
+        "}\n"
+        "else {\n"
+        "   $(addSynapse, $(numPost) - 1);\n"
+        "}\n"
+        "c++;\n"
+        "if(c >= rowLength) {\n"
         "   $(endRow);\n"
         "}\n");
+    SET_ROW_BUILD_STATE_VARS({{"x", {"scalar", 0.0}},{"c", {"unsigned int", 0}}});
 
     SET_PARAM_NAMES({"total", "numPost"});
     SET_EXTRA_GLOBAL_PARAMS({{"rowLength", "unsigned int*"}})
@@ -56,8 +64,6 @@ public:
             // probability of being selected, and the number of synapses in the sub-row is binomially distributed
             return binomialInverseCDF(quantile, pars[0], (double)numPre / ((double)numPre * (double)numPost));
         });
-
-    SET_NEEDS_ROW_SORT(true);
 };
 IMPLEMENT_SNIPPET(FixedNumberTotalWithReplacement);
 
@@ -83,7 +89,7 @@ void modelDefinition(NNmodel &model)
         -60.0,  // 2 - Vrest
         -60.0,  // 3 - Vreset
         -50.0,  // 4 - Vthresh
-        0.0,    // 5 - Ioffset
+        0.5,    // 5 - Ioffset
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
