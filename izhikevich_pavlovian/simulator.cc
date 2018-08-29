@@ -28,16 +28,15 @@ unsigned int convertMsToTimesteps(double ms)
 }
 
 template<unsigned int NumPre>
-std::pair<float, float> getMeanOutgoingWeight(const SparseProjection &projection, const scalar *weights,
+std::pair<float, float> getMeanOutgoingWeight(const RaggedProjection<unsigned int> &projection, const scalar *weights,
                                               const std::bitset<NumPre> &rewardedNeuronSet) {
     // Loop through pre-synaptic neurons
     scalar totalOutgoingWeight = 0.0f;
     scalar totalRewardedOutgoingWeight = 0.0f;
     for(unsigned int i = 0; i < NumPre; i++) {
-        // Get indices of row start and end and hence row-length
-        const unsigned int rowStart = projection.indInG[i];
-        const unsigned int rowEnd = projection.indInG[i + 1];
-
+        const size_t rowStart = (i * projection.maxRowLength);
+        const size_t rowEnd = rowStart + projection.rowLength[i];
+        
         // Sum weights in row
         const scalar totalRowOutgoingWeight = std::accumulate(&weights[rowStart], &weights[rowEnd], 0.0f);
 
@@ -72,18 +71,6 @@ int main()
     {
         Timer<> t("Initialization:");
         initialize();
-    }
-
-    {
-        Timer<> t("Building connectivity:");
-        GeNNUtils::buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory,
-                                                  Parameters::probabilityConnection, CII, &allocateII, gen);
-        GeNNUtils::buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                  Parameters::probabilityConnection, CIE, &allocateIE, gen);
-        GeNNUtils::buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory,
-                                                  Parameters::probabilityConnection, CEE, &allocateEE, gen);
-        GeNNUtils::buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory,
-                                                  Parameters::probabilityConnection, CEI, &allocateEI, gen);
     }
 
     // Final setup
@@ -228,10 +215,10 @@ int main()
             }
 
             // If we should record weights this time step, download them from GPU
-            if((t % weightRecordInterval) == 0) {
+           /* if((t % weightRecordInterval) == 0) {
                 CHECK_CUDA_ERRORS(cudaMemcpy(gEE, d_gEE, CEE.connN * sizeof(scalar), cudaMemcpyDeviceToHost));
                 CHECK_CUDA_ERRORS(cudaMemcpy(gEI, d_gEI, CEI.connN * sizeof(scalar), cudaMemcpyDeviceToHost));
-            }
+            }*/
 #else
             // Simulate on CPU
             stepTimeCPU();
@@ -269,7 +256,7 @@ int main()
             }
 #endif
              // If we should record weights this time step
-            if((t % weightRecordInterval) == 0) {
+            /*if((t % weightRecordInterval) == 0) {
                 // Calculate the mean outgoing weights within the EE and EI projections
                 auto eeOutgoing = getMeanOutgoingWeight<Parameters::numExcitatory>(CEE, gEE, rewardedExcStimuliSet);
                 auto eiOutgoing = getMeanOutgoingWeight<Parameters::numExcitatory>(CEI, gEI, rewardedExcStimuliSet);
@@ -277,7 +264,7 @@ int main()
                 // Take the average of these two and write to file
                 weightEvolutionStream << (eeOutgoing.first + eiOutgoing.first) / 2.0f << ","<< (eeOutgoing.second + eiOutgoing.second) / 2.0f << std::endl;
 
-            }
+            }*/
 
             // If we should be recording spikes, write spikes to file
             if(shouldRecordSpikes) {
@@ -286,11 +273,10 @@ int main()
             }
         }
     }
-
+    
     // Write spike data to disk
     e_spikes.writeCache();
     i_spikes.writeCache();
-
 #ifdef MEASURE_TIMING
     std::cout << "Timing:" << std::endl;
     std::cout << "\tHost init:" << initHost_tme * 1000.0 << std::endl;
@@ -301,6 +287,5 @@ int main()
     std::cout << "\tSynapse simulation:" << synapse_tme * 1000.0 << std::endl;
     std::cout << "\tPostsynaptic simulation:" << learning_tme * 1000.0 << std::endl;
 #endif
-
     return 0;
 }

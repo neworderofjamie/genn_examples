@@ -60,6 +60,9 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
+    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
+        Parameters::probabilityConnection); // 0 - prob
+    
     // Excitatory model parameters
     Izhikevich::ParamValues excParams(
         0.02,   // a
@@ -109,25 +112,29 @@ void modelDefinition(NNmodel &model)
     auto iCurrSource = model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceParams, {});
 
     auto ee = model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
-        "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "E", "E",
         dopeParams, dopeInitVars,
-        {}, {});
+        {}, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto ei = model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
-        "EI", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+        "EI", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "E", "I",
         dopeParams, dopeInitVars,
-        {}, {});
-    auto ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        {}, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhSynInit,
-        {}, {});
-    auto ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        {}, {}, 
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "IE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhSynInit,
-        {}, {});
+        {}, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Configure external input current variables so they can be uploaded from host
     e->setVarMode("Iext", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
@@ -141,16 +148,5 @@ void modelDefinition(NNmodel &model)
     ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
     ei->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
-    // Calculate max connections
-    ee->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
-                                                                                 Parameters::probabilityConnection));
-    ei->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
-                                                                                 Parameters::probabilityConnection));
-    ii->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
-                                                                                 Parameters::probabilityConnection));
-    ie->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                                 Parameters::probabilityConnection));
-
-    // **TODO** set max connections
     model.finalize();
 }

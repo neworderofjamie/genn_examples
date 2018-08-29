@@ -4,7 +4,6 @@
 
 // GeNN robotics includes
 #include "common/timer.h"
-#include "genn_utils/connectors.h"
 #include "genn_utils/spike_csv_recorder.h"
 
 // Auto-generated model code
@@ -21,21 +20,6 @@ int main()
     {
         Timer<> t("Initialization:");
         initialize();
-    }
-
-    {
-        Timer<> t("Building connectivity:");
-#ifndef CPU_ONLY
-        std::mt19937 rng;
-#endif
-        GeNNUtils::buildFixedProbabilityConnector(500, 500, 0.02f,
-                                                  CII, &allocateII, rng);
-        GeNNUtils::buildFixedProbabilityConnector(500, 2000, 0.02f,
-                                                  CIE, &allocateIE, rng);
-        GeNNUtils::buildFixedProbabilityConnector(2000, 2000, 0.02f,
-                                                  CEE, &allocateEE, rng);
-        GeNNUtils::buildFixedProbabilityConnector(2000, 500, 0.02f,
-                                                  CEI, &allocateEI, rng);
     }
 
     // Final setup
@@ -67,11 +51,17 @@ int main()
 
             spikes.record(t);
 
+            float totalWeight = 0.0f;
+            unsigned int numSynapses = 0;
+            for(unsigned int i = 0; i < 500; i++) {
+                for(unsigned int s = 0; s < CIE.rowLength[i]; s++) {
+                    totalWeight += gIE[(i * CIE.maxRowLength) + s];
+                    numSynapses++;
+                }
+            }
 
             // Calculate mean IE weights
-            float totalWeight = std::accumulate(&gIE[0], &gIE[CIE.connN], 0.0f);
-            fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)CIE.connN);
-
+            fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)numSynapses);
         }
     }
 

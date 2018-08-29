@@ -1,10 +1,16 @@
 // Standard C includes
 #include <cmath>
 
-//#define USE_DELAY
-//#define MEASURE_TIMING
+#define MEASURE_TIMING
 //#define USE_ZERO_COPY
 //#define JETSON_POWER
+#define RAGGED_CONNECTIVITY
+
+#ifdef RAGGED_CONNECTIVITY
+    #define SYNAPSE_MATRIX_TYPE SynapseMatrixType::RAGGED_INDIVIDUALG
+#else
+    #define SYNAPSE_MATRIX_TYPE SynapseMatrixType::SPARSE_INDIVIDUALG
+#endif  // RAGGED_CONNECTIVITY
 
 // Parameters
 namespace Parameters
@@ -48,8 +54,8 @@ const double dtMs = 0.1;
 const double durationMs = 1000.0;
 
 // Scaling factors for number of neurons and synapses
-const double neuronScalingFactor = 0.1;
-const double connectivityScalingFactor = 0.1;
+const double neuronScalingFactor = 0.5;
+const double connectivityScalingFactor = 0.5;
 
 // Background rate per synapse
 const double backgroundRate = 8.0;  // spikes/s

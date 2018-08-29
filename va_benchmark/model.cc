@@ -6,7 +6,7 @@
 // GeNN robotics includes
 #include "genn_models/exp_curr.h"
 #include "genn_models/lif.h"
-#include "genn_utils/connectors.h"
+
 
 #include "parameters.h"
 
@@ -27,6 +27,9 @@ void modelDefinition(NNmodel &model)
     InitVarSnippet::Uniform::ParamValues vDist(
         Parameters::resetVoltage,       // 0 - min
         Parameters::thresholdVoltage);  // 1 - max
+
+    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
+        Parameters::probabilityConnection); // 0 - prob
 
     // LIF model parameters
     GeNNModels::LIF::ParamValues lifParams(
@@ -61,35 +64,30 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<GeNNModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<GeNNModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+        "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {});
-    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        excitatoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+        "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {});
-    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        excitatoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {});
-    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        inhibitoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+        "IE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {});
-
-    ee->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numExcitatory,
-                                                                                 Parameters::probabilityConnection));
-    ei->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numExcitatory, Parameters::numInhibitory,
-                                                                                 Parameters::probabilityConnection));
-    ii->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numInhibitory,
-                                                                                 Parameters::probabilityConnection));
-    ie->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numInhibitory, Parameters::numExcitatory,
-                                                                                 Parameters::probabilityConnection));
+        inhibitoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);

@@ -44,11 +44,10 @@ int main()
                         const unsigned int numSrc = Parameters::getScaledNumNeurons(srcLayer, srcPop);
 
                         // Find sparse projection structure and allocate function associated with projection
-                        SparseProjection *sparseProjection = (SparseProjection*)model.getSymbol("C" + srcName + "_" + trgName, true);
-                        GeNNUtils::AllocateFn allocateFn = (GeNNUtils::AllocateFn)model.getSymbol("allocate" + srcName + "_" + trgName, true);
-                        if(sparseProjection && allocateFn) {
+                        RaggedProjection<unsigned int> *raggedProjection = (RaggedProjection<unsigned int>*)model.getSymbol("C" + srcName + "_" + trgName, true);
+                        if(raggedProjection) {
                             GeNNUtils::buildFixedNumberTotalWithReplacementConnector(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
-                                                                                     *sparseProjection, allocateFn, rng);
+                                                                                     *raggedProjection, rng);
                         }
                     }
                 }
@@ -84,18 +83,9 @@ int main()
             unsigned int **spikeCount = (unsigned int**)model.getSymbol("glbSpkCnt" + name);
             unsigned int **spikes = (unsigned int**)model.getSymbol("glbSpk" + name);
 
-            // If there is a spike queue pointer associated with population, add delay recorder
-            unsigned int *spikeQueuePointer = (unsigned int*)model.getSymbol("spkQuePtr" + name, true);
-            if(spikeQueuePointer) {
-                spikeRecorders.emplace_back(
-                    new GeNNUtils::SpikeCSVRecorderDelay((name + ".csv").c_str(), numNeurons,
-                                                         *spikeQueuePointer, *spikeCount, *spikes));
-            }
-            // Otherwise, cached recorder
-            else {
-                spikeRecorders.emplace_back(
-                    new GeNNUtils::SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
-            }
+            // Add cached recorder
+            spikeRecorders.emplace_back(
+                new GeNNUtils::SpikeCSVRecorderCached((name + ".csv").c_str(), *spikeCount, *spikes));
         }
     }
 

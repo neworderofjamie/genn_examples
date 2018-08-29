@@ -4,7 +4,6 @@
 #include "modelSpec.h"
 
 // GeNN robotics includes
-#include "genn_utils/connectors.h"
 #include "genn_models/exp_curr.h"
 #include "genn_models/lif.h"
 
@@ -14,13 +13,15 @@ using namespace BoBRobotics;
 
 void modelDefinition(NNmodel &model)
 {
+    GENN_PREFERENCES::autoInitSparseVars = true;
+    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+
     initGeNN();
     model.setDT(1.0);
     model.setName("vogels_2011");
-
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-
+    model.setTiming(true);
+    
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
@@ -28,6 +29,9 @@ void modelDefinition(NNmodel &model)
         -60.0,  // 0 - min
         -50.0); // 1 - max
 
+    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
+        0.02); // 0 - prob
+    
     // LIF model parameters
     GeNNModels::LIF::ParamValues lifParams(
         0.2,    // 0 - C
@@ -72,38 +76,38 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<GeNNModels::LIF>("E", 2000, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<GeNNModels::LIF>("I", 500, lifParams, lifInit);
 
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+        "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {});
-    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        excitatoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+        "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {});
-    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        excitatoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {});
+        inhibitoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ie = model.addSynapsePopulation<Vogels2011, GeNNModels::ExpCurr>(
-        "IE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+        "IE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "I", "E",
         vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
-        inhibitoryExpCurrParams, {});
+        inhibitoryExpCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Configure plastic weight variables they can be downloaded to host
     ie->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    ie->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
 
     // Configure spike variables so that they can be downloaded to host
     e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
     i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
-    ee->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(2000, 2000, 0.02));
-    ei->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(2000, 500, 0.02));
-    ii->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(500, 500, 0.02));
-    ie->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(500, 2000, 0.02));
 
     model.finalize();
 }

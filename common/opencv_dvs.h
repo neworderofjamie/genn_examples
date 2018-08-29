@@ -2,13 +2,14 @@
 
 // Standard C++ includes
 #include <iostream>
+#include <mutex>
 
 // OpenCV includes
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
 #ifndef CPU_ONLY
-#include <opencv2/gpu/gpu.hpp>
+#include <opencv2/core/cuda.hpp>
 #endif  // CPU_ONLY
 
 //----------------------------------------------------------------------------
@@ -231,23 +232,23 @@ public:
         m_SquareROIGPU.upload(getSquareROI());
         
         // Convert square frame to floating-point using GPU
-        cv::gpu::cvtColor(m_SquareROIGPU, m_GreyscaleFrame, CV_BGR2GRAY);
+        cv::cuda::cvtColor(m_SquareROIGPU, m_GreyscaleFrame, CV_BGR2GRAY);
         
         // Convert greyscale frame to floating point
         m_GreyscaleFrame.convertTo(m_GreyscaleFrame, CV_32FC1, 1.0 / 255.0);
 
         // Resample greyscale camera output into current down-sampled frame
-        cv::gpu::resize(m_GreyscaleFrame, curDownSampledFrame, 
+        cv::cuda::resize(m_GreyscaleFrame, curDownSampledFrame,
                         cv::Size(getResolution(), getResolution()));
         
         // If this isn't first frame, calculate difference with previous frame
         if(i > 0) {
             std::lock_guard<std::mutex> lock(outputMutex);
             if(isAbsolute()) {
-                cv::gpu::absdiff(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
+                cv::cuda::absdiff(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
             }
             else {
-                cv::gpu::subtract(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
+                cv::cuda::subtract(curDownSampledFrame, prevDownSampledFrame, m_FrameDifference);
             }
         }
     
@@ -255,7 +256,7 @@ public:
         readFrame();
         
         // Get low-level structure containing device pointer and stride and return
-        auto frameDifferencePtrStep = (cv::gpu::PtrStep<float>)m_FrameDifference;
+        auto frameDifferencePtrStep = (cv::cuda::PtrStep<float>)m_FrameDifference;
         return std::make_pair(frameDifferencePtrStep.data,
                               frameDifferencePtrStep.step / sizeof(float));
     }
@@ -287,19 +288,19 @@ public:
     //----------------------------------------------------------------------------
     // Public API
     //----------------------------------------------------------------------------
-    const cv::gpu::GpuMat &getFrameDifference() const{ return m_FrameDifference; }
+    const cv::cuda::GpuMat &getFrameDifference() const{ return m_FrameDifference; }
     
 private:
     //----------------------------------------------------------------------------
     // Members
     //----------------------------------------------------------------------------
     // GPU matrix m_SquareROI is uploaded to 
-    cv::gpu::GpuMat m_SquareROIGPU;
+    cv::cuda::GpuMat m_SquareROIGPU;
     
-    cv::gpu::GpuMat m_GreyscaleFrame;
+    cv::cuda::GpuMat m_GreyscaleFrame;
     
     // Downsampled frames to calculate output from
-    cv::gpu::GpuMat m_DownsampledFrames[2];
-    cv::gpu::GpuMat m_FrameDifference;
+    cv::cuda::GpuMat m_DownsampledFrames[2];
+    cv::cuda::GpuMat m_FrameDifference;
 };
 #endif  // CPU_ONLY

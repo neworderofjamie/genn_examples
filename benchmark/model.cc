@@ -12,11 +12,67 @@
 
 using namespace BoBRobotics;
 
+//----------------------------------------------------------------------------
+// FixedNumberTotalWithReplacement
+//----------------------------------------------------------------------------
+//! Initialises variable by sampling from the uniform distribution
+class FixedNumberTotalWithReplacement : public InitSparseConnectivitySnippet::Base
+{
+public:
+    DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 2);
+
+    SET_ROW_BUILD_CODE(
+        "const unsigned int rowLength = $(rowLength)[$(id_pre)];\n"
+        "const scalar u = $(gennrand_uniform);\n"
+        "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
+        "const unsigned int postIdx = (unsigned int)(x * $(numPost));\n"
+        "if(postIdx < $(numPost)) {\n"
+        "   $(addSynapse, postIdx);\n"
+        "}\n"
+        "else {\n"
+        "   $(addSynapse, $(numPost) - 1);\n"
+        "}\n"
+        "c++;\n"
+        "if(c >= rowLength) {\n"
+        "   $(endRow);\n"
+        "}\n");
+    SET_ROW_BUILD_STATE_VARS({{"x", {"scalar", 0.0}},{"c", {"unsigned int", 0}}});
+
+    SET_PARAM_NAMES({"total", "numPost"});
+    SET_EXTRA_GLOBAL_PARAMS({{"rowLength", "unsigned int*"}})
+
+    SET_CALC_MAX_ROW_LENGTH_FUNC(
+        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
+        {
+            // Calculate suitable quantile for 0.9999 change when drawing numPre times
+            const double quantile = pow(0.9999, 1.0 / (double)numPre);
+
+            // There are numConnections connections amongst the numPre*numPost possible connections.
+            // Each of the numConnections connections has an independent p=float(numPost)/(numPre*numPost)
+            // probability of being selected, and the number of synapses in the sub-row is binomially distributed
+            return binomialInverseCDF(quantile, pars[0], (double)numPost / ((double)numPre * (double)numPost));
+        });
+
+    SET_CALC_MAX_COL_LENGTH_FUNC(
+        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
+        {
+            // Calculate suitable quantile for 0.9999 change when drawing numPre times
+            const double quantile = pow(0.9999, 1.0 / (double)numPost);
+
+            // There are numConnections connections amongst the numPre*numPost possible connections.
+            // Each of the numConnections connections has an independent p=float(numPost)/(numPre*numPost)
+            // probability of being selected, and the number of synapses in the sub-row is binomially distributed
+            return binomialInverseCDF(quantile, pars[0], (double)numPre / ((double)numPre * (double)numPost));
+        });
+};
+IMPLEMENT_SNIPPET(FixedNumberTotalWithReplacement);
+
 void modelDefinition(NNmodel &model)
 {
     // Enable new automatic initialisation mode
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
 
     initGeNN();
     model.setDT(1.0);
@@ -26,10 +82,6 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
-    InitVarSnippet::Normal::ParamValues gDist(
-        0.0,    // 0 - mean
-        0.1);   // 1 - sd
-
     // LIF model parameters
     GeNNModels::LIF::ParamValues lifParams(
         0.2,    // 0 - C
@@ -37,7 +89,7 @@ void modelDefinition(NNmodel &model)
         -60.0,  // 2 - Vrest
         -60.0,  // 3 - Vreset
         -50.0,  // 4 - Vthresh
-        0.0,    // 5 - Ioffset
+        0.5,    // 5 - Ioffset
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
@@ -46,35 +98,26 @@ void modelDefinition(NNmodel &model)
         -55.0,  // 0 - V
         0.0);    // 1 - RefracTime
 
-    NeuronModels::PoissonNew::ParamValues poissonParams(
-        10.0);      // 0 - firing rate
-
-    NeuronModels::PoissonNew::VarValues poissonInit(
-       0.0);     // 2 - SpikeTime
-
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
-        //initVar<InitVarSnippet::Normal>(gDist));    // 0 - Wij (nA)
-        0.0);
+        0.1);    // 0 - Wij (nA)
 
     // Exponential current parameters
     GeNNModels::ExpCurr::ParamValues expCurrParams(
         5.0);  // 0 - TauSyn (ms)
 
+    FixedNumberTotalWithReplacement::ParamValues connectParams(Parameters::numConnections,
+                                                               Parameters::numNeurons);
+
     // Create IF_curr neuron
-    model.addNeuronPopulation<NeuronModels::PoissonNew>("Stim", Parameters::numPre,
-                                                        poissonParams, poissonInit);
-    model.addNeuronPopulation<GeNNModels::LIF>("Neurons", Parameters::numPost,
+    model.addNeuronPopulation<GeNNModels::LIF>("Neurons", Parameters::numNeurons,
                                                lifParams, lifInit);
 
     auto *syn = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>("Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
-                                                                                                 "Stim", "Neurons",
+                                                                                                 "Neurons", "Neurons",
                                                                                                  {}, staticSynapseInit,
-                                                                                                 expCurrParams, {});
-#if defined(SYNAPSE_MATRIX_CONNECTIVITY_SPARSE) || defined(SYNAPSE_MATRIX_CONNECTIVITY_RAGGED)
-    syn->setMaxConnections(GeNNUtils::calcFixedProbabilityConnectorMaxConnections(Parameters::numPre, Parameters::numPost,
-                                                                                  Parameters::connectionProbability));
-#endif  // SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
+                                                                                                 expCurrParams, {},
+                                                                                                 initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
 
     model.finalize();
 }
