@@ -39,15 +39,15 @@ int main(int argc, char** argv)
 
     {
         // Open CSV output files
-        //GeNNUtils::SpikeCSVRecorderDelay spikes("spikes.csv", Parameters::numExcitatory,
-        //                                        spkQuePtrE, glbSpkCntE, glbSpkE);
-        GeNNUtils::SpikeCSVRecorderCached spikes((outputPath / "spikes.csv").str().c_str(), glbSpkCntE, glbSpkE);
+        GeNNUtils::SpikeCSVRecorderDelay spikes("spikes.csv", Parameters::numExcitatory,
+                                                spkQuePtrE, glbSpkCntE, glbSpkE);
         {
             Timer<> tim("Simulation:");
             // Loop through timesteps
             while(t < Parameters::durationMs) {
                 if((iT % 1000) == 0) {
                     std::cout << (t / Parameters::durationMs) * 100.0 << "%" << std::endl;
+                    std::cout << "Instantaneous mean rate:" << ((double)spikeCount_E / (double)Parameters::numExcitatory) * (1000.0 / Parameters::timestep) << std::endl;
                 }
 
                 // Simulate
@@ -58,7 +58,6 @@ int main(int argc, char** argv)
 #else
                 stepTimeCPU();
 #endif
-
                 spikes.record(t);
             }
         }

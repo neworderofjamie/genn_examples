@@ -16,22 +16,26 @@ using namespace BoBRobotics;
 class STDPPower : public WeightUpdateModels::Base
 {
 public:
-    DECLARE_WEIGHT_UPDATE_MODEL(STDPPower, 6, 1, 1, 1);
+    DECLARE_WEIGHT_UPDATE_MODEL(STDPPower, 7, 1, 1, 1);
 
     SET_PARAM_NAMES({
-      "tauPlus",    // 0 - Potentiation time constant (ms)
-      "tauMinus",   // 1 - Depression time constant (ms)
-      "lambda",     // 2 - Learning rate
-      "alpha",      // 3 - Relative strength of depression and potentiation
-      "mu",         // 4 - Power of potentiation weight update
-      "weight0"});  // 5 - Reference weight
+        "tauPlus",      // 0 - Potentiation time constant (ms)
+        "tauMinus",     // 1 - Depression time constant (ms)
+        "lambda",       // 2 - Learning rate
+        "alpha",        // 3 - Relative strength of depression and potentiation
+        "mu",           // 4 - Power of potentiation weight update
+        "weight0",      // 5 - Reference weight
+        "denDelay"});   // 6 - Dendritic delay
 
 
     SET_VARS({{"g", "scalar"}});
     SET_PRE_VARS({{"preTrace", "scalar"}});
     SET_POST_VARS({{"postTrace", "scalar"}});
 
-    SET_DERIVED_PARAMS({{"weight0Mu", [](const vector<double> &pars, double){ return std::pow(pars[5], 1.0 - pars[4]); }}});
+    SET_DERIVED_PARAMS({
+        {"weight0Mu", [](const vector<double> &pars, double){ return std::pow(pars[5], 1.0 - pars[4]); }},
+        {"denDelayStep", [](const vector<double> &pars, double dt){ return std::floor(pars[6] / dt) - 1.0; }}
+    });
 
     SET_PRE_SPIKE_CODE(
         "scalar dt = $(t) - $(sT_pre);\n"
@@ -41,8 +45,7 @@ public:
         "$(postTrace) = ($(postTrace) * exp(-dt / $(tauMinus))) + 1.0;\n");
 
     SET_SIM_CODE(
-        "$(addtoinSyn) = $(g);\n"
-        "$(updatelinsyn);\n"
+        "$(addToInSynDelay, $(g), (unsigned int)$(denDelayStep));\n"
         "const scalar dt = $(t) - $(sT_post); \n"
         "if (dt > 0)\n"
         "{\n"
@@ -173,12 +176,13 @@ void modelDefinition(NNmodel &model)
 
     // STDP parameters
     STDPPower::ParamValues stdpParams(
-        20.0,           // 0 - tauPlus
-        20.0,           // 1 - tauMinus
-        0.1,          // 2 - lambda
-        1.057 * 0.1,    // 3 - alpha
-        0.4,            // 4 - mu
-        0.001);         // 5 - weight 0
+        20.0,                   // 0 - tauPlus
+        20.0,                   // 1 - tauMinus
+        0.1,                    // 2 - lambda
+        1.057 * 0.1,            // 3 - alpha
+        0.4,                    // 4 - mu
+        0.001,                  // 5 - weight 0
+        Parameters::delayMs);   // 6 - dendritic delay
 
     STDPPower::PreVarValues stdpPreInit(
         0.0);   // 0 - pre trace
@@ -219,12 +223,16 @@ void modelDefinition(NNmodel &model)
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 #else
+    // **NOTE** in order for the weights to remain stable it is important 
+    // that delay is dendritic with matching back propagation delay
     auto *ee = model.addSynapsePopulation<STDPPower, GeNNModels::AlphaCurr>(
-        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, Parameters::delayTimestep,
+        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
         "E", "E",
         stdpParams, excitatorySynapseInit, stdpPreInit, stdpPostInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    ee->setMaxDendriticDelayTimesteps(Parameters::delayTimestep + 1);
+    ee->setBackPropDelaySteps(Parameters::delayTimestep);
 #endif
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
         "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
