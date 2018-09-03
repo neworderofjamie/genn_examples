@@ -3,16 +3,20 @@
 
 #include "modelSpec.h"
 
-#include "../common/exp_curr.h"
-#include "../common/lif.h"
+#include "genn_models/exp_curr.h"
+#include "genn_models/lif.h"
+
 #include "../common/pfister_triplet.h"
 
 #include "parameters.h"
+
+using namespace BoBRobotics;
 
 void modelDefinition(NNmodel &model)
 {
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
 
     initGeNN();
     model.setDT(1.0);
@@ -22,7 +26,7 @@ void modelDefinition(NNmodel &model)
     // Build model
     //---------------------------------------------------------------------------
     // LIF model parameters
-    LIF::ParamValues lifParams(
+    GeNNModels::LIF::ParamValues lifParams(
         0.25,   // 0 - C
         10.0,   // 1 - TauM
         -65.0,  // 2 - Vrest
@@ -32,7 +36,7 @@ void modelDefinition(NNmodel &model)
         2.0);  // 6 - TauRefrac
 
     // LIF initial conditions
-    LIF::VarValues lifInit(
+    GeNNModels::LIF::VarValues lifInit(
         -65.0,  // 0 - V
         0.0);    // 1 - RefracTime
 
@@ -77,7 +81,7 @@ void modelDefinition(NNmodel &model)
         0.0);   // 1 - o2
 
     // Exponential current parameters
-    ExpCurr::ParamValues expCurrParams(
+    GeNNModels::ExpCurr::ParamValues expCurrParams(
         2.5);  // 0 - TauSyn (ms)
 
     std::cout << "Num neurons:" << Parameters::numNeurons << std::endl;
@@ -85,29 +89,29 @@ void modelDefinition(NNmodel &model)
     // Create IF_curr neuron
     model.addNeuronPopulation<NeuronModels::SpikeSource>("PreStim", Parameters::numNeurons, {}, {});
     model.addNeuronPopulation<NeuronModels::SpikeSource>("PostStim", Parameters::numNeurons, {}, {});
-    model.addNeuronPopulation<LIF>("Pre", Parameters::numNeurons, lifParams, lifInit);
-    model.addNeuronPopulation<LIF>("Post", Parameters::numNeurons, lifParams, lifInit);
+    model.addNeuronPopulation<GeNNModels::LIF>("Pre", Parameters::numNeurons, lifParams, lifInit);
+    model.addNeuronPopulation<GeNNModels::LIF>("Post", Parameters::numNeurons, lifParams, lifInit);
 
-    auto preStimToPre = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-            "PreStimToPre", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+            "PreStimToPre", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
             "PreStim", "Pre",
             {}, staticSynapseInit,
-            expCurrParams, {});
-    auto postStimToPost = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
-            "PostStimToPost", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+            expCurrParams, {},
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>({}));
+
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
+            "PostStimToPost", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
             "PostStim", "Post",
             {}, staticSynapseInit,
-            expCurrParams, {});
+            expCurrParams, {},
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>({}));
 
-    auto preToPost = model.addSynapsePopulation<PfisterTriplet, ExpCurr>(
-            "PreToPost", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+    model.addSynapsePopulation<PfisterTriplet, GeNNModels::ExpCurr>(
+            "PreToPost", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
             "Pre", "Post",
             pfisterParams, pfisterInit, pfisterPreInit, pfisterPostInit,
-            expCurrParams, {});
-
-    preStimToPre->setMaxConnections(1);
-    postStimToPost->setMaxConnections(1);
-    preToPost->setMaxConnections(1);
+            expCurrParams, {},
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>({}));
 
     model.finalize();
 }

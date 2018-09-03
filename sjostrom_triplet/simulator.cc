@@ -1,9 +1,12 @@
 #include <algorithm>
 
 #include "sjostrom_triplet_CODE/definitions.h"
+
+#include "genn_utils/spike_csv_recorder.h"
+
 #include "parameters.h"
 
-#include "connectors.h"
+using namespace BoBRobotics;
 
 int main()
 {
@@ -11,15 +14,6 @@ int main()
     allocateMem();
 
     initialize();
-
-    // 1-1 connecting stimuli to neurons
-    buildOneToOneConnector(Parameters::numNeurons, Parameters::numNeurons,
-                           CPreStimToPre, &allocatePreStimToPre);
-    buildOneToOneConnector(Parameters::numNeurons, Parameters::numNeurons,
-                           CPostStimToPost, &allocatePostStimToPost);
-    buildOneToOneConnector(Parameters::numNeurons, Parameters::numNeurons,
-                           CPreToPost, &allocatePreToPost);
-
 
     // Setup reverse connection indices for STDP
     initsjostrom_triplet();
@@ -64,11 +58,10 @@ int main()
 
     std::cout << "Sim timesteps:" << simTimesteps << std::endl;
 
-    FILE *spikes = fopen("spikes.csv", "w");
-    fprintf(spikes, "Time(ms), Neuron ID\n");
+    GeNNUtils::SpikeCSVRecorder recorder("spikes.csv", glbSpkCntPre, glbSpkPre);
 
     // Loop through timesteps
-    for(unsigned int t = 0; t < simTimesteps; t++)
+    while(iT < simTimesteps)
     {
         // Zero spike counts
         glbSpkCntPreStim[0] = 0;
@@ -114,13 +107,8 @@ int main()
         stepTimeCPU();
 #endif
 
-        // Write spike times to file
-        for(unsigned int i = 0; i < glbSpkCntPre[0]; i++)
-        {
-            fprintf(spikes, "%f, %u\n", 1.0 * (double)t, glbSpkPre[i]);
-        }
+        recorder.record(t);
     }
-    fclose(spikes);
 
     FILE *weights = fopen("weights.csv", "w");
     fprintf(weights, "Frequency [Hz], Delta T [ms], Weight\n");
