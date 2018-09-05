@@ -44,12 +44,8 @@ int main(int argc, char** argv)
         {
             Timer<> tim("Simulation:");
             // Loop through timesteps
+            double totalSpikes = 0.0;
             while(t < Parameters::durationMs) {
-                if((iT % 1000) == 0) {
-                    std::cout << (t / Parameters::durationMs) * 100.0 << "%" << std::endl;
-                    std::cout << "Instantaneous mean rate:" << ((double)spikeCount_E / (double)Parameters::numExcitatory) * (1000.0 / Parameters::timestep) << std::endl;
-                }
-
                 // Simulate
 #ifndef CPU_ONLY
                 stepTimeGPU();
@@ -58,6 +54,13 @@ int main(int argc, char** argv)
 #else
                 stepTimeCPU();
 #endif
+               totalSpikes += (double)spikeCount_E;
+               if((iT % 1000) == 0) {
+
+                    std::cout << (t / Parameters::durationMs) * 100.0 << "%" << std::endl;
+                    std::cout << "Mean spike rate:" << (totalSpikes / (double)Parameters::numExcitatory) / (t / 1000.0) << " Hz" << std::endl;
+                }
+
                 spikes.record(t);
             }
         }

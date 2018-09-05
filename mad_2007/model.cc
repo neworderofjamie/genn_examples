@@ -53,6 +53,7 @@ public:
         "    const scalar deltaG = -$(lambda) * $(alpha) * $(g) * timing;\n"
         "    $(g) += deltaG;\n"
         "}\n");
+    
     SET_LEARN_POST_CODE(
         "const scalar dt = $(t) - $(sT_pre);\n"
         "if (dt > 0)\n"
@@ -232,7 +233,7 @@ void modelDefinition(NNmodel &model)
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     ee->setMaxDendriticDelayTimesteps(Parameters::delayTimestep + 1);
-    ee->setBackPropDelaySteps(Parameters::delayTimestep);
+    ee->setBackPropDelaySteps(Parameters::delayTimestep - 1);
 #endif
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
         "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
