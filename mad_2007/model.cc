@@ -45,15 +45,14 @@ public:
         "$(postTrace) = ($(postTrace) * exp(-dt / $(tauMinus))) + 1.0;\n");
 
     SET_SIM_CODE(
-        "$(addToInSynDelay, $(g), (unsigned int)$(denDelayStep));\n"
         "const scalar dt = $(t) - $(sT_post); \n"
         "if (dt > 0)\n"
         "{\n"
         "    const scalar timing = $(postTrace) * exp(-dt / $(tauMinus));\n"
         "    const scalar deltaG = -$(lambda) * $(alpha) * $(g) * timing;\n"
         "    $(g) += deltaG;\n"
-        "}\n");
-    
+        "}\n"
+        "$(addToInSynDelay, $(g), (unsigned int)$(denDelayStep));\n");
     SET_LEARN_POST_CODE(
         "const scalar dt = $(t) - $(sT_pre);\n"
         "if (dt > 0)\n"
@@ -135,6 +134,7 @@ void modelDefinition(NNmodel &model)
     model.setDT(0.1);
     model.setName("mad_2007");
 
+    GENN_PREFERENCES::learnPostBeforePre = true;
     GENN_PREFERENCES::optimizeCode = true;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
