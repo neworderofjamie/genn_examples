@@ -39,7 +39,7 @@ int main(int argc, char** argv)
 
     {
         // Open CSV output files
-        GeNNUtils::SpikeCSVRecorderDelay spikes("spikes.csv", Parameters::numExcitatory,
+        GeNNUtils::SpikeCSVRecorderDelayCached spikes("spikes.csv", Parameters::numExcitatory,
                                                 spkQuePtrE, glbSpkCntE, glbSpkE);
         {
             Timer<> tim("Simulation:");

@@ -17,7 +17,7 @@ namespace Parameters
 
     const double delayMs = 1.5;
 
-    const unsigned int delayTimestep = (unsigned int)(delayMs / timestep) - 1;
+    const unsigned int delayTimestep = (unsigned int)(delayMs / timestep);
 
     // number of cells
     const unsigned int numExcitatory = 90000;

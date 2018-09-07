@@ -24,8 +24,8 @@ public:
         "lambda",       // 2 - Learning rate
         "alpha",        // 3 - Relative strength of depression and potentiation
         "mu",           // 4 - Power of potentiation weight update
-        "weight0",      // 5 - Reference weight
-        "denDelay"});   // 6 - Dendritic delay
+        "weight0",      // 5 - Reference weight (nA)
+        "denDelay"});   // 6 - Dendritic delay (ms)
 
 
     SET_VARS({{"g", "scalar"}});
@@ -134,7 +134,6 @@ void modelDefinition(NNmodel &model)
     model.setDT(0.1);
     model.setName("mad_2007");
 
-    GENN_PREFERENCES::learnPostBeforePre = true;
     GENN_PREFERENCES::optimizeCode = true;
     GENN_PREFERENCES::autoInitSparseVars = true;
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
@@ -218,7 +217,7 @@ void modelDefinition(NNmodel &model)
 
 #ifdef STATIC
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
-        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, Parameters::delayTimestep,
+        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, Parameters::delayTimestep - 1,
         "E", "E",
         {}, eeSynapseInit,
         alphaCurrParams, alphaCurrInit,
@@ -232,23 +231,23 @@ void modelDefinition(NNmodel &model)
         stdpParams, excitatorySynapseInit, stdpPreInit, stdpPostInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    ee->setMaxDendriticDelayTimesteps(Parameters::delayTimestep + 1);
-    ee->setBackPropDelaySteps(Parameters::delayTimestep - 1);
+    ee->setMaxDendriticDelayTimesteps(Parameters::delayTimestep);
+    ee->setBackPropDelaySteps(Parameters::delayTimestep - 5);
 #endif
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
-        "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
+        "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep - 1,
         "E", "I",
         {}, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
-        "II", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
+        "II", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep - 1,
         "I", "I",
         {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
-        "IE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep,
+        "IE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep - 1,
         "I", "E",
         {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit,
