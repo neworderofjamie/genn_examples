@@ -132,6 +132,7 @@ void modelDefinition(NNmodel &model)
 {
     initGeNN();
     model.setDT(0.1);
+    model.setTimePrecision(TimePrecision::DOUBLE);
     model.setName("mad_2007");
 
     GENN_PREFERENCES::optimizeCode = true;
@@ -232,7 +233,7 @@ void modelDefinition(NNmodel &model)
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     ee->setMaxDendriticDelayTimesteps(Parameters::delayTimestep);
-    ee->setBackPropDelaySteps(Parameters::delayTimestep - 5);
+    ee->setBackPropDelaySteps(Parameters::delayTimestep - 4);
 #endif
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
         "EI", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep - 1,
