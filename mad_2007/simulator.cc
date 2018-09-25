@@ -44,7 +44,8 @@ int main(int argc, char** argv)
         {
             Timer<> tim("Simulation:");
             // Loop through timesteps
-            double totalSpikes = 0.0;
+            double averageSpikes = 0.0;
+            const double alpha = 0.001;
             while(t < Parameters::durationMs) {
                 // Simulate
 #ifndef CPU_ONLY
@@ -54,14 +55,17 @@ int main(int argc, char** argv)
 #else
                 stepTimeCPU();
 #endif
-               totalSpikes += (double)spikeCount_E;
-               if((iT % 1000) == 0) {
+                averageSpikes = (alpha * (double)spikeCount_E) + ((1.0 - alpha) * averageSpikes);
+                if((iT % 1000) == 0) {
 
                     std::cout << (t / Parameters::durationMs) * 100.0 << "%" << std::endl;
-                    std::cout << "Mean spike rate:" << (totalSpikes / (double)Parameters::numExcitatory) / (t / 1000.0) << " Hz" << std::endl;
+                    std::cout << "Moving average spike rate:" << (averageSpikes / (double)Parameters::numExcitatory) / (Parameters::timestep / 1000.0) << " Hz" << std::endl;
                 }
 
-                spikes.record(t);
+                // Record last 50s of spiking activity
+                //if(t > (Parameters::durationMs - (50.0 * 1000.0))) {
+                    spikes.record(t);
+                //}
             }
         }
     }
