@@ -70,7 +70,7 @@ void modelDefinition(NNmodel &model)
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
         "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "E", "I",
@@ -82,7 +82,7 @@ void modelDefinition(NNmodel &model)
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
         "IE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "I", "E",

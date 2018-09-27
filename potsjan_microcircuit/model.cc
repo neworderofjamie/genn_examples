@@ -121,18 +121,18 @@ IMPLEMENT_SNIPPET(NormalClippedDelay);
 class FixedNumberTotalWithReplacement : public InitSparseConnectivitySnippet::Base
 {
 public:
-    DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 2);
+    DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 1);
 
     SET_ROW_BUILD_CODE(
         "const unsigned int rowLength = $(rowLength)[$(id_pre)];\n"
         "const scalar u = $(gennrand_uniform);\n"
         "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
-        "const unsigned int postIdx = (unsigned int)(x * $(numPost));\n"
-        "if(postIdx < $(numPost)) {\n"
+        "const unsigned int postIdx = (unsigned int)(x * $(num_post));\n"
+        "if(postIdx < $(num_post)) {\n"
         "   $(addSynapse, postIdx);\n"
         "}\n"
         "else {\n"
-        "   $(addSynapse, $(numPost) - 1);\n"
+        "   $(addSynapse, $(num_post) - 1);\n"
         "}\n"
         "c++;\n"
         "if(c >= rowLength) {\n"
@@ -140,7 +140,7 @@ public:
         "}\n");
     SET_ROW_BUILD_STATE_VARS({{"x", {"scalar", 0.0}},{"c", {"unsigned int", 0}}});
 
-    SET_PARAM_NAMES({"total", "numPost"});
+    SET_PARAM_NAMES({"total"});
     SET_EXTRA_GLOBAL_PARAMS({{"rowLength", "unsigned int*"}})
 
     SET_CALC_MAX_ROW_LENGTH_FUNC(
@@ -266,13 +266,11 @@ void modelDefinition(NNmodel &model)
     for(unsigned int trgLayer = 0; trgLayer < Parameters::LayerMax; trgLayer++) {
         for(unsigned int trgPop = 0; trgPop < Parameters::PopulationMax; trgPop++) {
             const std::string trgName = Parameters::getPopulationName(trgLayer, trgPop);
-            const unsigned int numTrg = Parameters::getScaledNumNeurons(trgLayer, trgPop);
 
             // Loop through source populations and layers
             for(unsigned int srcLayer = 0; srcLayer < Parameters::LayerMax; srcLayer++) {
                 for(unsigned int srcPop = 0; srcPop < Parameters::PopulationMax; srcPop++) {
                     const std::string srcName = Parameters::getPopulationName(srcLayer, srcPop);
-                    const unsigned int numSrc = Parameters::getScaledNumNeurons(srcLayer, srcPop);
 
                     // Determine mean weight
                     const double meanWeight = Parameters::getMeanWeight(srcLayer, srcPop, trgLayer, trgPop) / sqrt(Parameters::connectivityScalingFactor);
@@ -294,9 +292,7 @@ void modelDefinition(NNmodel &model)
 
                         // Build parameters for fixed number total connector
                         FixedNumberTotalWithReplacement::ParamValues connectParams(
-                            numConnections,                             // 0 - number of connections
-                            numTrg);                                    // 1 - number of postsynaptic neurons
-
+                            numConnections);                            // 0 - number of connections
 
                         totalSynapses += numConnections;
 
