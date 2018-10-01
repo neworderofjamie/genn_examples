@@ -8,10 +8,14 @@ int main()
     allocateMem();
     initialize();
     ofstream os("tenHHModel_output.V.dat");
-    for (int i= 0; i < 10000; i++) {
+    while (t < 200.0f) {
+#ifdef CPU_ONLY
+        stepTimeCPU();
+#else
         stepTimeGPU();
 
         pullPop1StateFromDevice();
+#endif
         os << t << " ";
         for (int j= 0; j < 10; j++) {
             os << VPop1[j] << " ";
