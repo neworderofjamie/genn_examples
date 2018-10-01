@@ -8,7 +8,7 @@ int main()
     allocateMem();
     initialize();
     ofstream os("tenHHModel_output.V.dat");
-    while (t < 200.0f) {
+    while (t < 1000.0f) {
 #ifdef CPU_ONLY
         stepTimeCPU();
 #else

@@ -15,15 +15,14 @@ void modelDefinition(NNmodel &model)
         -95.0,          // 3 - EK: K equi potential in mV
         0.02672,       // 4 - gl: leak conductance in muS
         -63.563,       // 5 - El: leak equi potential in mV
-        0.143         // 6 - Cmem: membr. capacity density in nF
-    );
+        0.143);       // 6 - Cmem: membr. capacity density in nF
 
     NeuronModels::TraubMiles::VarValues ini(
         -60.0,         // 0 - membrane potential V
         0.0529324,     // 1 - prob. for Na channel activation m
         0.3176767,     // 2 - prob. for not Na channel blocking h
-        0.5961207      // 3 - prob. for K channel activation n
-    );
+        0.5961207);    // 3 - prob. for K channel activation n
+
     model.addNeuronPopulation<NeuronModels::TraubMiles>("Pop1", 10, p, ini);
     model.finalize();
 }

@@ -97,21 +97,21 @@ void modelDefinition(NNmodel &model)
             "PreStim", "Pre",
             {}, staticSynapseInit,
             expCurrParams, {},
-            initConnectivity<InitSparseConnectivitySnippet::OneToOne>({}));
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
             "PostStimToPost", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
             "PostStim", "Post",
             {}, staticSynapseInit,
             expCurrParams, {},
-            initConnectivity<InitSparseConnectivitySnippet::OneToOne>({}));
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 
     model.addSynapsePopulation<PfisterTriplet, GeNNModels::ExpCurr>(
             "PreToPost", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
             "Pre", "Post",
             pfisterParams, pfisterInit, pfisterPreInit, pfisterPostInit,
             expCurrParams, {},
-            initConnectivity<InitSparseConnectivitySnippet::OneToOne>({}));
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 
     model.finalize();
 }

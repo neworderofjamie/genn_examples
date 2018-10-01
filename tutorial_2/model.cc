@@ -28,8 +28,7 @@ IMPLEMENT_SNIPPET(FirstToFirst);
 void modelDefinition(NNmodel &model)
 {
     GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::autoInitSparseVars = true;
+    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
 
     // definition of tenHHRing
     initGeNN();
@@ -43,15 +42,14 @@ void modelDefinition(NNmodel &model)
         -95.0,      // 3 - EK: K equi potential in mV
         0.02672,    // 4 - gl: leak conductance in muS
         -63.563,    // 5 - El: leak equi potential in mV
-        0.143       // 6 - Cmem: membr. capacity density in nF
-    );
+        0.143);     // 6 - Cmem: membr. capacity density in nF
 
     NeuronModels::TraubMiles::VarValues ini(
         -60.0,         // 0 - membrane potential V
         0.0529324,     // 1 - prob. for Na channel activation m
         0.3176767,     // 2 - prob. for not Na channel blocking h
-        0.5961207      // 3 - prob. for K channel activation n
-    );
+        0.5961207);    // 3 - prob. for K channel activation n
+
     model.addNeuronPopulation<NeuronModels::TraubMiles>("Pop1", 10, p, ini);
     model.addNeuronPopulation<NeuronModels::SpikeSource>("Stim", 1, {}, {});
 
@@ -67,13 +65,13 @@ void modelDefinition(NNmodel &model)
         "Pop1", "Pop1",
         {}, s_ini,
         ps_p, {},
-        initConnectivity<Ring>({}));
+        initConnectivity<Ring>());
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCond>(
         "StimPop1", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
         "Stim", "Pop1",
         {}, s_ini,
         ps_p, {},
-        initConnectivity<FirstToFirst>({}));
+        initConnectivity<FirstToFirst>());
     model.finalize();
 }
