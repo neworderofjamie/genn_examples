@@ -98,7 +98,7 @@ for i, (w, d, l) in enumerate(zip(weights, data,
     print("%s mean firing rate %fHz" %
           (l, float(len(d.segments[0].spiketrains[0])) / float(duration / 1000)))
 
-    axes[i].hist(w / g_max, np.arange(0.0, 1.0, 1.0 / 20.0))
+    axes[i].hist(w / g_max, np.linspace(0.0, 1.0, 20))
     axes[i].set_title("%s weight dependence" % l)
     axes[i].set_ylabel("Number of synapses")
     axes[i].set_xlim((0.0, 1.0))
