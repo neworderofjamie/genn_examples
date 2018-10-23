@@ -29,7 +29,7 @@ lif_model = genn_model.create_custom_neuron_class(
     "LIF",
     param_names=["C", "TauM", "Vrest", "Vreset", "Vthresh", "Ioffset", "TauRefrac"],
     var_name_types=[(vn, "scalar") for vn in ["V", "RefracTime"]],
-    sim_code='''
+    sim_code="""
     if ($(RefracTime) <= 0.0)
     {
         scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);
@@ -39,10 +39,10 @@ lif_model = genn_model.create_custom_neuron_class(
     {
         $(RefracTime) -= DT;
     }
-    ''',
-    reset_code='''
+    """,
+    reset_code="""
     $(V) = $(Vreset);
-    $(RefracTime) = $(TauRefrac);''',
+    $(RefracTime) = $(TauRefrac);""",
     threshold_condition_code="$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)",
     derived_params=[
         ("ExpTC", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
