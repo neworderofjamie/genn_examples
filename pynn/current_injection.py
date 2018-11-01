@@ -35,8 +35,8 @@ sim.setup()
 cells = sim.Population(4, sim.IF_curr_exp(v_thresh=-55.0, tau_refrac=5.0, tau_m=10.0))
 
 current_sources = [sim.DCSource(amplitude=0.5, start=50.0, stop=400.0),
-                   #sim.StepCurrentSource(times=[50.0, 210.0, 250.0, 410.0],
-                   #                      amplitudes=[0.4, 0.6, -0.2, 0.2]),
+                   sim.StepCurrentSource(times=[50.0, 210.0, 250.0, 410.0],
+                                         amplitudes=[0.4, 0.6, -0.2, 0.2]),
                    sim.ACSource(start=50.0, stop=450.0, amplitude=0.2,
                                 offset=0.1, frequency=10.0, phase=180.0),
                    sim.NoisyCurrentSource(mean=0.5, stdev=0.2, start=50.0,
