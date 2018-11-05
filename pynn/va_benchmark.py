@@ -260,7 +260,7 @@ figure, axes = pylab.subplots(2, sharex=True)
 # Plot spike raster
 raster_axis = axes[0]
 plot_spiketrains(raster_axis, e_data.segments[0], 0, color="red", s=0.5)
-plot_spiketrains(raster_axis, i_data.segments[0], n_exc, color="grey", s=0.5)
+plot_spiketrains(raster_axis, i_data.segments[0], n_exc if inh_cells.first_id == 0 else 0, color="grey", s=0.5)
 raster_axis.set_ylabel("Neuron ID")
 raster_axis.set_xlim((0, tstop))
 raster_axis.set_ylim((0, n))
