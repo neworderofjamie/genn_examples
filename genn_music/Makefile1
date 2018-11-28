@@ -1,0 +1,5 @@
+EXECUTABLE      := simExc
+SOURCES         := simulator1.cc
+INCLUDE_FLAGS   :=-I$(HOME)/.local/include `mpicxx --showme:compile`
+LINK_FLAGS      :=-L$(HOME)/.local/lib -lmusic `mpicxx --showme:link`
+include $(GENN_PATH)/userproject/include/makefile_common_gnu.mk
