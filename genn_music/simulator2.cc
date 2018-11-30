@@ -3,43 +3,44 @@
 
 #include <music.hh>
 
-class MyEventHandlerGlobal : public MUSIC::EventHandlerGlobalIndex {
+class MyEventHandlerGlobal : public MUSIC::EventHandlerGlobalIndex 
+{
 public:
-  void operator () (double t, MUSIC::GlobalIndex id)
-  {
-    // Print incoming event
-    spike_Exc[spikeCount_Exc]= id;
-    spikeCount_Exc++;
-  }
+    void operator () (double t, MUSIC::GlobalIndex id)
+    {
+        // Print incoming event
+        spike_Exc[spikeCount_Exc]= id;
+        spikeCount_Exc++;
+    }
 };
 
 
 int main(int argc, char *argv[])
 {
-  // Get real argc and argv
-  MUSIC::Setup* setup = new MUSIC::Setup (argc, argv);
+    // Get real argc and argv
+    MUSIC::Setup* setup = new MUSIC::Setup (argc, argv);
 
-  // Publish an input port
-  MUSIC::EventInputPort* in = setup->publishEventInput ("in");
+    // Publish an input port
+    MUSIC::EventInputPort* in = setup->publishEventInput ("in");
 
-  // Publish an input port
-  MUSIC::EventOutputPort* out = setup->publishEventOutput ("out");
+    // Publish an input port
+    MUSIC::EventOutputPort* out = setup->publishEventOutput ("out");
 
-  MyEventHandlerGlobal evhandlerGlobal;  
+    MyEventHandlerGlobal evhandlerGlobal;  
 
-  allocateMem();
-  std::cout << "Initialising" << std::endl;
-  initialize();
-  initInhModel();
+    allocateMem();
+    std::cout << "Initialising" << std::endl;
+    initialize();
+    initInhModel();
 
-  MUSIC::LinearIndex indicesExc (0, 8000);
-  in->map (&indicesExc, &evhandlerGlobal, 0.001);
+    MUSIC::LinearIndex indicesExc (0, 8000);
+    in->map (&indicesExc, &evhandlerGlobal, 0.001, 1);
 
-  MUSIC::LinearIndex indicesInh (0, 2000);
-  out->map(&indicesInh, MUSIC::Index::GLOBAL);
+    MUSIC::LinearIndex indicesInh (0, 2000);
+    out->map(&indicesInh, MUSIC::Index::GLOBAL);
 
-  // Prepare for simulation
-  MUSIC::Runtime runtime(setup, 0.001);
+    // Prepare for simulation
+    MUSIC::Runtime runtime(setup, 0.001);
 
     std::cout << "Simulating" << std::endl;
     std::ofstream stream("InhSpikes.csv");
