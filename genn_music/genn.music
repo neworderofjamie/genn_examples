@@ -1,0 +1,10 @@
+np = 1
+
+[simExc]
+    binary=./simExc
+
+[simInh]
+    binary=./simInh
+
+simExc.out->simInh.in [8000]
+simInh.out->simExc.in [2000]
