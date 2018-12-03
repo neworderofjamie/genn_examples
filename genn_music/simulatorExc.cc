@@ -4,6 +4,7 @@
 #include <music.hh>
 
 #include "../common/music.h"
+#include "genn_utils/spike_csv_recorder.h"
 
 class MyEventHandlerGlobal : public MUSIC::EventHandlerGlobalIndex 
 {
@@ -18,7 +19,7 @@ public:
 };
 
 
-
+using namespace BoBRobotics;
 
 int main(int argc, char *argv[])
 {
@@ -45,8 +46,7 @@ int main(int argc, char *argv[])
     MUSIC::Runtime runtime(setup, 0.001);
 
     std::cout << "Simulating" << std::endl;
-    std::ofstream stream("ExcSpikes1.csv");
-    std::ofstream streamInh("InhSpikes1.csv");
+    BoBRobotics::GeNNUtils::SpikeCSVRecorder recorder("SpikesInh.csv", glbSpkCntInh, glbSpkInh);
     while(t < 1000.0f) {
 #ifdef CPU_ONLY
         stepTimeCPU();
@@ -57,14 +57,12 @@ int main(int argc, char *argv[])
         pullInhCurrentSpikesFromDevice();
 #endif
 
-        spikeOut.record(t);
+        spikeOut.transmit(t);
         
         
         spikeCount_Inh = 0;
         runtime.tick ();
-        for(unsigned int i = 0; i < spikeCount_Inh; i++) {
-            streamInh << t << ", " << spike_Inh[i] << std::endl;
-        }
+        recorder.record(t);
         
     }
     runtime.finalize();

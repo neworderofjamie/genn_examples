@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-exc = np.loadtxt("ExcSpikes1.csv", delimiter=",")
-inh = np.loadtxt("InhSpikes1.csv", delimiter=",")
+exc = np.loadtxt("SpikesExc.csv", delimiter=",", skiprows=1)
+inh = np.loadtxt("SpikesInh.csv", delimiter=",", skiprows=1)
 
 # Create plot
 figure, axes = plt.subplots(2, sharex=True)
