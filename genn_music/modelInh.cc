@@ -7,7 +7,7 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
     initGeNN();
     model.setDT(1.0);
-    model.setName("InhModel");
+    model.setName("ModelInh");
 
     // Izhikevich model parameters
     NeuronModels::Izhikevich::ParamValues izkParams(

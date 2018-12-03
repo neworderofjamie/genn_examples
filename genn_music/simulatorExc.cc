@@ -1,4 +1,4 @@
-#include "ExcModel_CODE/definitions.h"
+#include "ModelExc_CODE/definitions.h"
 #include <fstream>
 
 #include <music.hh>
@@ -34,14 +34,13 @@ int main(int argc, char *argv[])
     allocateMem();
     std::cout << "Initialising" << std::endl;
     initialize();
-    initExcModel();
+    initModelExc();
 
     MUSIC::LinearIndex indicesInh (0, 2000);
     in->map (&indicesInh, &evhandlerGlobal, 0.001, 1);
 
     MUSICSpikeOut spikeOut("out", 8000, glbSpkCntExc, glbSpkExc, setup);
 
-    std::cout << "Created MUSICSpikeOut1" << std::endl;
     // Prepare for simulation
     MUSIC::Runtime runtime(setup, 0.001);
 

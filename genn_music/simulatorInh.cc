@@ -1,4 +1,4 @@
-#include "InhModel_CODE/definitions.h"
+#include "ModelInh_CODE/definitions.h"
 #include <fstream>
 
 #include <music.hh>
@@ -30,14 +30,12 @@ int main(int argc, char *argv[])
     allocateMem();
     std::cout << "Initialising" << std::endl;
     initialize();
-    initInhModel();
+    initModelInh();
 
     MUSIC::LinearIndex indicesExc (0, 8000);
     in->map (&indicesExc, &evhandlerGlobal, 0.001, 1);
 
     MUSICSpikeOut spikeOut("out", 2000, glbSpkCntInh, glbSpkInh, setup);
-
-    std::cout << "Created MUSICSpikeOut2" << std::endl;
 
     // Prepare for simulation
     MUSIC::Runtime runtime(setup, 0.001);
