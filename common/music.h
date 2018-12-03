@@ -54,7 +54,14 @@ private:
 class MUSICSpikeIn : public MUSIC::EventHandlerGlobalIndex
 {
 public:
-    MUSICSpikeIn(const char *portName, unsigned int popSize, double dt,
+    MUSICSpikeIn(const char *portName, unsigned int popSize, double acceptableLatencyMs,
+                 unsigned int * const spkCnt, unsigned int * const spk,
+                 MUSIC::Setup *setup)
+    :   MUSICSpikeIn(portName, popSize, acceptableLatencyMs, 1, spkCnt, spk, setup)
+    {
+    }
+
+    MUSICSpikeIn(const char *portName, unsigned int popSize, double acceptableLatencyMs, int maxBuffered,
                  unsigned int * const spkCnt, unsigned int * const spk,
                  MUSIC::Setup *setup)
     :   m_Indices(0, popSize), m_SpkCnt(spkCnt), m_Spk(spk)
@@ -63,7 +70,7 @@ public:
         m_Port = setup->publishEventInput(portName);
 
         // Map port
-        m_Port->map(&m_Indices, this, dt / 1000.0, 1);
+        m_Port->map(&m_Indices, this, acceptableLatencyMs / 1000.0, maxBuffered);
     }
 
     virtual ~MUSICSpikeIn()
