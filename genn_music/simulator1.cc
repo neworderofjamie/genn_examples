@@ -3,6 +3,8 @@
 
 #include <music.hh>
 
+#include "../common/music.h"
+
 class MyEventHandlerGlobal : public MUSIC::EventHandlerGlobalIndex 
 {
 public:
@@ -16,16 +18,16 @@ public:
 };
 
 
+
+
 int main(int argc, char *argv[])
 {
     // Get real argc and argv
-    MUSIC::Setup* setup = new MUSIC::Setup (argc, argv);
+    // **YUCK** MUSIC::Runtime deletes this so it needs to be created as raw pointer on heap
+    auto *setup = new MUSIC::Setup(argc, argv);
 
     // Publish an input port
-    MUSIC::EventInputPort* in = setup->publishEventInput ("in");
-
-    // Publish an input port
-    MUSIC::EventOutputPort* out = setup->publishEventOutput ("out");
+    MUSIC::EventInputPort* in = setup->publishEventInput("in");
 
     MyEventHandlerGlobal evhandlerGlobal;  
 
@@ -37,9 +39,9 @@ int main(int argc, char *argv[])
     MUSIC::LinearIndex indicesInh (0, 2000);
     in->map (&indicesInh, &evhandlerGlobal, 0.001, 1);
 
-    MUSIC::LinearIndex indicesExc (0, 8000);
-    out->map(&indicesExc, MUSIC::Index::GLOBAL);
+    MUSICSpikeOut spikeOut("out", 8000, glbSpkCntExc, glbSpkExc, setup);
 
+    std::cout << "Created MUSICSpikeOut1" << std::endl;
     // Prepare for simulation
     MUSIC::Runtime runtime(setup, 0.001);
 
@@ -56,10 +58,7 @@ int main(int argc, char *argv[])
         pullInhCurrentSpikesFromDevice();
 #endif
 
-        for(unsigned int i = 0; i < spikeCount_Exc; i++) {
-            stream << t << ", " << spike_Exc[i] << std::endl;
-            out->insertEvent(t/1000.0, MUSIC::GlobalIndex(spike_Exc[i]));
-        }
+        spikeOut.record(t);
         
         
         spikeCount_Inh = 0;
