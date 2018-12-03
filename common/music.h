@@ -14,7 +14,7 @@ public:
                   MUSIC::Setup *setup)
     :   m_Indices(0, popSize), m_SpkCnt(spkCnt), m_Spk(spk)
     {
-        // Public port
+        // Publish port
         m_Port = setup->publishEventOutput(portName);
 
         // Map port
@@ -31,7 +31,7 @@ public:
     //----------------------------------------------------------------------------
     // Public API
     //----------------------------------------------------------------------------
-    void record(double t)
+    void transmit(double t)
     {
         for(unsigned int i = 0; i < m_SpkCnt[0]; i++) {
             m_Port->insertEvent(t / 1000.0, MUSIC::GlobalIndex(m_Spk[i]));
@@ -44,48 +44,53 @@ private:
     //----------------------------------------------------------------------------
     MUSIC::LinearIndex m_Indices;
     MUSIC::EventOutputPort *m_Port;
-    const unsigned int *m_SpkCnt;
-    const unsigned int *m_Spk;
+    const unsigned int * const m_SpkCnt;
+    const unsigned int * const m_Spk;
 };
 
 //----------------------------------------------------------------------------
 // MUSICSpikeIn
 //----------------------------------------------------------------------------
-/*class MUSICSpikeIn
+class MUSICSpikeIn : public MUSIC::EventHandlerGlobalIndex
 {
 public:
-    MUSICSpikeIn(const char *portName, unsigned int popSize,
-                 const unsigned int &spkQueuePtr, const unsigned int *spkCnt, const unsigned int *spk,
-                 MUSIC::Setup &setup)
-    :   m_SpkQueuePtr(spkQueuePtr), m_SpkCnt(spkCnt), m_Spk(spk), m_PopSize(popSize)
+    MUSICSpikeIn(const char *portName, unsigned int popSize, double dt,
+                 unsigned int * const spkCnt, unsigned int * const spk,
+                 MUSIC::Setup *setup)
+    :   m_Indices(0, popSize), m_SpkCnt(spkCnt), m_Spk(spk)
     {
-        // Public port
-        m_Port = setup.publishEventOutput(portName);
+        // Publish port
+        m_Port = setup->publishEventInput(portName);
 
         // Map port
-        MUSIC::LinearIndex indices(0, popSize);
-        m_Port->map(&indices, MUSIC::Index::GLOBAL);
+        m_Port->map(&m_Indices, this, dt / 1000.0, 1);
+    }
 
+    virtual ~MUSICSpikeIn()
+    {
+        delete m_Port;
     }
 
     //----------------------------------------------------------------------------
     // Public API
     //----------------------------------------------------------------------------
-    void record(double t)
+    void tick()
     {
-        const unsigned int *currentSpk = &m_Spk[m_SpkQueuePtr * m_PopSize];
-        for(unsigned int i = 0; i < m_SpkCnt[m_SpkQueuePtr]; i++) {
-            m_Port->insertEvent(t / 1000.0, MUSIC::GlobalIndex(currentSpk[i]));
-        }
+        m_SpkCnt[0] = 0;
+    }
+
+    void operator () (double t, MUSIC::GlobalIndex id)
+    {
+        // Add incoming spike to buffer
+        m_Spk[m_SpkCnt[0]++]= id;
     }
 
 private:
     //----------------------------------------------------------------------------
     // Members
     //----------------------------------------------------------------------------
-    MUSIC::EventOutputPort *m_Port;
-    const unsigned int &m_SpkQueuePtr;
-    const unsigned int *m_SpkCnt;
-    const unsigned int *m_Spk;
-    const unsigned int m_PopSize;
-};*/
+    MUSIC::LinearIndex m_Indices;
+    MUSIC::EventInputPort *m_Port;
+    unsigned int * const m_SpkCnt;
+    unsigned int * const m_Spk;
+};

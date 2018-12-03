@@ -6,16 +6,6 @@
 #include "../common/music.h"
 #include "genn_utils/spike_csv_recorder.h"
 
-class MyEventHandlerGlobal : public MUSIC::EventHandlerGlobalIndex 
-{
-public:
-    void operator () (double t, MUSIC::GlobalIndex id)
-    {
-        // Print incoming event
-        spike_Exc[spikeCount_Exc]= id;
-        spikeCount_Exc++;
-    }
-};
 using namespace BoBRobotics;
 
 
@@ -24,19 +14,12 @@ int main(int argc, char *argv[])
     // **YUCK** MUSIC::Runtime deletes this so it needs to be created as raw pointer on heap
     auto *setup = new MUSIC::Setup(argc, argv);
 
-    // Publish an input port
-    MUSIC::EventInputPort* in = setup->publishEventInput ("in");
-
-    MyEventHandlerGlobal evhandlerGlobal;  
-
     allocateMem();
     std::cout << "Initialising" << std::endl;
     initialize();
     initModelInh();
 
-    MUSIC::LinearIndex indicesExc (0, 8000);
-    in->map (&indicesExc, &evhandlerGlobal, 0.001, 1);
-
+    MUSICSpikeIn spikeIn("in", 8000, DT, glbSpkCntExc, glbSpkExc, setup);
     MUSICSpikeOut spikeOut("out", 2000, glbSpkCntInh, glbSpkInh, setup);
 
     // Prepare for simulation
@@ -53,8 +36,10 @@ int main(int argc, char *argv[])
         pullInhCurrentSpikesFromDevice();
 #endif
         spikeOut.transmit(t);
-        spikeCount_Exc = 0;
-        runtime.tick ();
+        spikeIn.tick();
+
+        runtime.tick();
+
         recorder.record(t);
     }
     runtime.finalize();
