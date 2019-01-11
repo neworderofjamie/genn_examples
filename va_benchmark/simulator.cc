@@ -27,7 +27,7 @@ int main()
     // Final setup
     {
         Timer<> t("Sparse init:");
-        initva_benchmark();
+        initializeSparse();
     }
 
     // Open CSV output files
@@ -39,13 +39,10 @@ int main()
         for(unsigned int t = 0; t < 10000; t++)
         {
             // Simulate
-#ifndef CPU_ONLY
-            stepTimeGPU();
+            stepTime();
 
             pullECurrentSpikesFromDevice();
-#else
-            stepTimeCPU();
-#endif
+
 
             spikes.record(t);
         }

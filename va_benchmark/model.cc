@@ -14,13 +14,10 @@ using namespace BoBRobotics;
 
 void modelDefinition(NNmodel &model)
 {
-    initGeNN();
     model.setDT(1.0);
     model.setName("va_benchmark");
-
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    model.setDefaultVarLocation(VarLocation::DEVICE);
+    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
 
     //---------------------------------------------------------------------------
     // Build model
@@ -66,33 +63,31 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<GeNNModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "IE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Configure spike variables so that they can be downloaded to host
-    e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
-    model.finalize();
+    e->setSpikeLocation(VarLocation::HOST_DEVICE);
+    i->setSpikeLocation(VarLocation::HOST_DEVICE);
 }
