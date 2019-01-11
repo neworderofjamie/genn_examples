@@ -22,8 +22,7 @@ public:
     SET_VARS({{"g", "scalar"}});
 
     SET_SIM_CODE(
-        "$(addtoinSyn) = $(g);\n"
-        "$(updatelinsyn);\n"
+        "$(addToInSyn, $(g));\n"
         "scalar dt = $(t) - $(sT_post); \n"
         "scalar timing = exp(-dt / $(tau)) - $(rho);\n"
         "scalar newWeight = $(g) - ($(eta) * timing);\n"
