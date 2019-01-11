@@ -13,14 +13,11 @@ using namespace BoBRobotics;
 
 void modelDefinition(NNmodel &model)
 {
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-
-    initGeNN();
     model.setDT(1.0);
     model.setName("vogels_2011");
     model.setTiming(true);
+    model.setDefaultVarLocation(VarLocation::DEVICE);
+    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
     
     //---------------------------------------------------------------------------
     // Build model
@@ -77,37 +74,35 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<GeNNModels::LIF>("I", 500, lifParams, lifInit);
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "EE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "EI", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ie = model.addSynapsePopulation<Vogels2011, GeNNModels::ExpCurr>(
-        "IE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
+        "IE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "I", "E",
         vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Configure plastic weight variables they can be downloaded to host
-    ie->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    ie->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    ie->setWUVarLocation("g", VarLocation::HOST_DEVICE);
+    ie->setSparseConnectivityLocation(VarLocation::HOST_DEVICE);
 
     // Configure spike variables so that they can be downloaded to host
-    e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
-    model.finalize();
+    e->setSpikeLocation(VarLocation::HOST_DEVICE);
+    i->setSpikeLocation(VarLocation::HOST_DEVICE);
 }
