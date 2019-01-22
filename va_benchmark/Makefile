@@ -1,6 +1,6 @@
 
 GENERATED_CODE_DIR	:=va_benchmark_CODE
-CXXFLAGS 		+=-std=c++11 -Wall -Wpedantic -Wextra 
+CXXFLAGS 		+=-std=c++11 -Wall -Wpedantic -Wextra -I$(CUDA_PATH)/include
 
 .PHONY: all clean generated_code
 
