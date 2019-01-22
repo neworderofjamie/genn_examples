@@ -25,7 +25,7 @@ int main()
     // Final setup
     {
         Timer<> t("Sparse init:");
-        initvogels_2011();
+        initializeSparse();
     }
 
     // Open CSV output files
@@ -40,22 +40,18 @@ int main()
         for(unsigned int t = 0; t < 10000; t++)
         {
             // Simulate
-#ifndef CPU_ONLY
-            stepTimeGPU();
+            stepTime();
 
             pullECurrentSpikesFromDevice();
-            //pullIEStateFromDevice();
-#else
-            stepTimeCPU();
-#endif
+            pullIEStateFromDevice();
 
             spikes.record(t);
 
             float totalWeight = 0.0f;
             unsigned int numSynapses = 0;
             for(unsigned int i = 0; i < 500; i++) {
-                for(unsigned int s = 0; s < CIE.rowLength[i]; s++) {
-                    totalWeight += gIE[(i * CIE.maxRowLength) + s];
+                for(unsigned int s = 0; s < rowLengthIE[i]; s++) {
+                    totalWeight += gIE[(i * maxRowLengthIE) + s];
                     numSynapses++;
                 }
             }
