@@ -5,7 +5,6 @@
 
 // GeNN robotics includes
 #include "common/timer.h"
-#include "genn_utils/connectors.h"
 #include "genn_utils/spike_csv_recorder.h"
 
 // Model parameters
@@ -159,7 +158,7 @@ int main()
     // Final setup
     {
         Timer<> timer("Sparse init:");
-        initpotjans_microcircuit();
+        initializeSparse();
     }
 
     // Create spike recorders
@@ -192,8 +191,7 @@ int main()
             }
 
             // Simulate
-#ifndef CPU_ONLY
-            stepTimeGPU();
+            stepTime();
 
             pull23ECurrentSpikesFromDevice();
             pull23ICurrentSpikesFromDevice();
@@ -203,9 +201,6 @@ int main()
             pull5ICurrentSpikesFromDevice();
             pull6ECurrentSpikesFromDevice();
             pull6ICurrentSpikesFromDevice();
-#else
-            stepTimeCPU();
-#endif
 
             {
                 TimerAccumulate<> timer(recordMs);
