@@ -14,19 +14,22 @@ using namespace BoBRobotics;
 int main()
 {
     {
-        Timer<> t("Allocation:");
+        Timer<> b("Allocation:");
         allocateMem();
     }
     {
-        Timer<> t("Initialization:");
+        Timer<> b("Initialization:");
         initialize();
     }
 
     // Final setup
     {
-        Timer<> t("Sparse init:");
+        Timer<> b("Sparse init:");
         initializeSparse();
     }
+
+    // Download IE connectivity from device
+    pullIEConnectivityFromDevice();
 
     // Open CSV output files
     GeNNUtils::SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
@@ -35,10 +38,9 @@ int main()
     fprintf(weights, "Time(ms), Weight (nA)\n");
 
     {
-        Timer<> t("Simulation:");
+        Timer<> b("Simulation:");
         // Loop through timesteps
-        for(unsigned int t = 0; t < 10000; t++)
-        {
+        while(t < 10000.0f) {
             // Simulate
             stepTime();
 
@@ -57,7 +59,7 @@ int main()
             }
 
             // Calculate mean IE weights
-            fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)numSynapses);
+            fprintf(weights, "%f, %f\n", 1.0 * t, totalWeight / (double)numSynapses);
         }
     }
 
