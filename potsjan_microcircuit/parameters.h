@@ -46,7 +46,7 @@ const char *populationNames[PopulationMax] = {
 const double dtMs = 0.1;
 
 // Simulation duration [ms]
-const double durationMs = 10.0 * 1000.0;
+const double durationMs = 1000.0;
 
 // Scaling factors for number of neurons and synapses
 const double neuronScalingFactor = 0.5;
