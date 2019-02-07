@@ -3,6 +3,11 @@
 #include <random>
 #include <vector>
 
+// CUDA includes
+#ifndef CPU_ONLY
+#include <cuda_runtime.h>
+#endif
+
 // GeNN robotics includes
 #include "common/timer.h"
 #include "genn_utils/spike_csv_recorder.h"

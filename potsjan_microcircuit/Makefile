@@ -1,4 +1,4 @@
-
+CUDA_PATH		?=/usr/local/cuda
 GENERATED_CODE_DIR	:=potjans_microcircuit_CODE
 CXXFLAGS 		+=-std=c++11 -Wall -Wpedantic -Wextra -I$(CUDA_PATH)/include
 
