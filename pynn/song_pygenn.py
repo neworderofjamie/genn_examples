@@ -5,10 +5,6 @@ from time import time
 from pygenn import genn_wrapper
 from pygenn import genn_model
 
-import pygenn_models
-#from pygenn_models import (lif_model, exp_curr_model,
-#                           stdp_additive)
-
 # LIF neuron model
 lif_model = genn_model.create_custom_neuron_class(
     "LIF",
@@ -139,7 +135,7 @@ A_PLUS = 0.01
 A_MINUS = 1.05 * A_PLUS
 
 
-model = genn_model.GeNNModel("float", "song", enable_debug=False, cpu_only=False)
+model = genn_model.GeNNModel("float", "song")
 model.dT = DT
 
 model.default_var_mode = genn_wrapper.VarMode_LOC_HOST_DEVICE_INIT_DEVICE
