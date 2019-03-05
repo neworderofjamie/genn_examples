@@ -57,10 +57,9 @@ exp_curr_model = genn_model.create_custom_postsynaptic_class(
     derived_params=[("expDecay", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
                    ("init", genn_model.create_dpf_class(lambda pars, dt: (pars[0] * (1.0 - np.exp(-dt / pars[0]))) * (1.0 / dt))())])()
 
-model = genn_model.GeNNModel("float", "va_benchmark", enable_debug=False, cpu_only=False)
+model = genn_model.GeNNModel("float", "va_benchmark")
 model.dT = TIMESTEP
 
-print model.dT
 model.default_var_mode = genn_wrapper.VarMode_LOC_HOST_DEVICE_INIT_DEVICE
 model.default_sparse_connectivity_mode = genn_wrapper.VarMode_LOC_HOST_DEVICE_INIT_DEVICE
 
