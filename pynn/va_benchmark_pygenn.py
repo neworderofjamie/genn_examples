@@ -57,13 +57,8 @@ exp_curr_model = genn_model.create_custom_postsynaptic_class(
     derived_params=[("expDecay", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
                    ("init", genn_model.create_dpf_class(lambda pars, dt: (pars[0] * (1.0 - np.exp(-dt / pars[0]))) * (1.0 / dt))())])()
 
-model = genn_model.GeNNModel("float", "va_benchmark", enable_debug=False, cpu_only=False)
+model = genn_model.GeNNModel("float", "va_benchmark")
 model.dT = TIMESTEP
-
-print model.dT
-model.default_var_mode = genn_wrapper.VarMode_LOC_HOST_DEVICE_INIT_DEVICE
-model.default_sparse_connectivity_mode = genn_wrapper.VarMode_LOC_HOST_DEVICE_INIT_DEVICE
-
 
 fixed_prob = {"prob": PROBABILITY_CONNECTION}
 
@@ -82,25 +77,25 @@ inhibitory_post_syn_params = {"tau": 10.0}
 excitatory_pop = model.add_neuron_population("E", NUM_EXCITATORY, lif_model, lif_params, lif_init)
 inhibitory_pop = model.add_neuron_population("I", NUM_INHIBITORY, lif_model, lif_params, lif_init)
 
-model.add_synapse_population("EE", "RAGGED_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("EE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     excitatory_pop, inhibitory_pop,
     "StaticPulse", {}, excitatory_synapse_init, {}, {},
     exp_curr_model, excitatory_post_syn_params, {},
     genn_model.init_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("EI", "RAGGED_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("EI", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     excitatory_pop, inhibitory_pop,
     "StaticPulse", {}, excitatory_synapse_init, {}, {},
     exp_curr_model, excitatory_post_syn_params, {},
     genn_model.init_connectivity("FixedProbability", fixed_prob))
 
-model.add_synapse_population("II", "RAGGED_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("II", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     inhibitory_pop, inhibitory_pop,
     "StaticPulse", {}, inhibitory_synapse_init, {}, {},
     exp_curr_model, inhibitory_post_syn_params, {},
     genn_model.init_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("IE", "RAGGED_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("IE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     inhibitory_pop, excitatory_pop,
     "StaticPulse", {}, inhibitory_synapse_init, {}, {},
     exp_curr_model, inhibitory_post_syn_params, {},
