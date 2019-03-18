@@ -15,38 +15,27 @@ using namespace BoBRobotics;
 
 int main()
 {
-    {
-        Timer<> t("Allocation:");
-        allocateMem();
-    }
-    {
-        Timer<> t("Initialization:");
-        initialize();
-    }
-
-    // Final setup
-    {
-        Timer<> t("Sparse init:");
-        initializeSparse();
-    }
+    allocateMem();
+    initialize();
+    initializeSparse();
 
     // Open CSV output files
     GeNNUtils::SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
 
-    {
-        Timer<> t("Simulation:");
-        // Loop through timesteps
-        for(unsigned int t = 0; t < 10000; t++)
-        {
-            // Simulate
-            stepTime();
+    while(t < 10000.0) {
+        // Simulate
+        stepTime();
 
-            pullECurrentSpikesFromDevice();
+        pullECurrentSpikesFromDevice();
 
 
-            spikes.record(t);
-        }
+        spikes.record(t);
     }
+
+    std::cout << "Init:" << initTime << std::endl;
+    std::cout << "Init sparse:" << initSparseTime << std::endl;
+    std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
+    std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
 
     return 0;
 }

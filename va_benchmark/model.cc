@@ -18,6 +18,7 @@ void modelDefinition(NNmodel &model)
     model.setName("va_benchmark");
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
+    model.setTiming(true);
 
     //---------------------------------------------------------------------------
     // Build model
