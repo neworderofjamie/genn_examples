@@ -68,7 +68,7 @@ void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnec
                                                     Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),     \
                                                     Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,  \
                                                                                         Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP), \
-                                                    initSparseConnrowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
+                                                    rowLengthinitSparseConn##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
 
 // Macro to record a population's output
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                               \
@@ -228,12 +228,10 @@ int main()
 
 #ifdef MEASURE_TIMING
     std::cout << "Timing:" << std::endl;
-    std::cout << "\tHost init:" << initHost_tme * 1000.0 << std::endl;
-    std::cout << "\tDevice init:" << initDevice_tme * 1000.0 << std::endl;
-    std::cout << "\tHost sparse init:" << sparseInitHost_tme * 1000.0 << std::endl;
-    std::cout << "\tDevice sparse init:" << sparseInitDevice_tme * 1000.0 << std::endl;
-    std::cout << "\tNeuron simulation:" << neuron_tme * 1000.0 << std::endl;
-    std::cout << "\tSynapse simulation:" << synapse_tme * 1000.0 << std::endl;
+    std::cout << "\tInit:" << initTime * 1000.0 << std::endl;
+    std::cout << "\tSparse init:" << initSparseTime * 1000.0 << std::endl;
+    std::cout << "\tNeuron simulation:" << neuronUpdateTime * 1000.0 << std::endl;
+    std::cout << "\tSynapse simulation:" << presynapticUpdateTime * 1000.0 << std::endl;
 #endif
     std::cout << "Record:" << recordMs << "ms" << std::endl;
 
