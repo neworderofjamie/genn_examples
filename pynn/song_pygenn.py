@@ -182,9 +182,9 @@ print("Simulating")
 while model.t < DURATION_MS:
     model.step_time()
 
-# Pull synaptic state from device
-model.pull_state_from_device("input_additive")
-model.pull_state_from_device("input_multiplicative")
+# Pull weight variables from device
+model.pull_var_from_device("input_additive", "g")
+model.pull_var_from_device("input_multiplicative", "g")
 
 # Get weights
 weights = [input_additive.get_var_values("g"),
