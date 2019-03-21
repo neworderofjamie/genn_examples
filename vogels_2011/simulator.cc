@@ -45,7 +45,7 @@ int main()
             stepTime();
 
             pullECurrentSpikesFromDevice();
-            pullIEStateFromDevice();
+            pullgIEFromDevice();
 
             spikes.record(t);
 
