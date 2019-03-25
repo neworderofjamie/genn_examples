@@ -2,29 +2,20 @@ import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
-with open("voltages.csv", "rb") as csv_file:
-    csv_reader = csv.reader(csv_file, delimiter = ",")
+# Read CSV spikes
+data = np.loadtxt("voltages.csv", delimiter=",", skiprows=1,
+                  dtype={"names": ("time", "voltage", "current"),
+                         "formats": (np.float, np.float, np.float)})
 
-    # Skip headers
-    csv_reader.next()
+# Create plot
+figure, axes = plt.subplots(2)
 
-    # Read data and zip into columns
-    data_columns = zip(*csv_reader)
+# Plot voltages
+axes[0].set_title("Voltage")
+axes[0].plot(data["time"], data["voltage"])
 
-    # Convert times to numpy
-    times = np.asarray(data_columns[0], dtype=float)
-    voltage = np.asarray(data_columns[1], dtype=float)
-    current = np.asarray(data_columns[2], dtype=float)
+axes[1].set_title("Input current")
+axes[1].plot(data["time"], data["current"])
 
-    # Create plot
-    figure, axes = plt.subplots(2)
-
-    # Plot voltages
-    axes[0].set_title("Voltage")
-    axes[0].plot(times, voltage)
-    
-    axes[1].set_title("Input current")
-    axes[1].plot(times, current)
-
-    # Show plot
-    plt.show()
+# Show plot
+plt.show()
