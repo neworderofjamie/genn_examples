@@ -1,18 +1,11 @@
-
 // GeNN includes
 #include "modelSpec.h"
-
-// GeNN robotics includes
-#include "genn_models/exp_curr.h"
-#include "genn_models/lif.h"
 
 // Genn examples includes
 #include "../common/normal_distribution.h"
 
 // Model includes
 #include "parameters.h"
-
-using namespace BoBRobotics;
 
 //----------------------------------------------------------------------------
 // LIFPoisson
@@ -124,7 +117,7 @@ public:
     DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 1);
 
     SET_ROW_BUILD_CODE(
-        "const unsigned int rowLength = $(rowLength)[$(id_pre)];\n"
+        "const unsigned int rowLength = $(preCalcRowLength)[$(id_pre)];\n"
         "const scalar u = $(gennrand_uniform);\n"
         "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
         "const unsigned int postIdx = (unsigned int)(x * $(num_post));\n"
@@ -141,7 +134,7 @@ public:
     SET_ROW_BUILD_STATE_VARS({{"x", {"scalar", 0.0}},{"c", {"unsigned int", 0}}});
 
     SET_PARAM_NAMES({"total"});
-    SET_EXTRA_GLOBAL_PARAMS({{"rowLength", "unsigned int*"}})
+    SET_EXTRA_GLOBAL_PARAMS({{"preCalcRowLength", "unsigned int*"}})
 
     SET_CALC_MAX_ROW_LENGTH_FUNC(
         [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
@@ -173,9 +166,7 @@ void modelDefinition(NNmodel &model)
 {
     model.setDT(Parameters::dtMs);
     model.setName("potjans_microcircuit");
-#ifdef MEASURE_TIMING
-    model.setTiming(true);
-#endif
+    model.setTiming(Parameters::measureTiming);
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
     model.setMergePostsynapticModels(true);
@@ -193,10 +184,10 @@ void modelDefinition(NNmodel &model)
         0.0);                                   // 2 - Ipoisson
 
     // Exponential current parameters
-    GeNNModels::ExpCurr::ParamValues excitatoryExpCurrParams(
+    PostsynapticModels::ExpCurr::ParamValues excitatoryExpCurrParams(
         0.5);  // 0 - TauSyn (ms)
 
-    GeNNModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
+    PostsynapticModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
         0.5);  // 0 - TauSyn (ms)
 
     const double quantile = 0.9999;
@@ -320,7 +311,7 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClippedDelay>(dDist));    // 1 - delay (ms)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, GeNNModels::ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, PostsynapticModels::ExpCurr>(
                                 synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
@@ -352,7 +343,7 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClippedDelay>(dDist));    // 1 - delay (ms)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, GeNNModels::ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, PostsynapticModels::ExpCurr>(
                                 synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
                                 srcName, trgName,
                                 {}, staticSynapseInit,

@@ -1,13 +1,12 @@
-CUDA_PATH		?=/usr/local/cuda
 GENERATED_CODE_DIR	:=potjans_microcircuit_CODE
-CXXFLAGS 		+=-std=c++11 -Wall -Wpedantic -Wextra -I$(CUDA_PATH)/include
+CXXFLAGS 		+=-std=c++11 -Wall -Wpedantic -Wextra
 
 .PHONY: all clean generated_code
 
-all: simulator
+all: potjans_microcircuit
 
-simulator: simulator.cc generated_code
-	$(CXX) $(CXXFLAGS) simulator.cc -o simulator -I$(BOB_ROBOTICS_PATH) -L$(GENERATED_CODE_DIR) -L$(CUDA_PATH)/lib64 -lrunner -lcudart -Wl,-rpath=$(GENERATED_CODE_DIR)
+potjans_microcircuit: simulator.cc generated_code
+	$(CXX) $(CXXFLAGS)  -I$(BOB_ROBOTICS_PATH) simulator.cc -o potjans_microcircuit -L$(GENERATED_CODE_DIR) -lrunner -Wl,-rpath=$(GENERATED_CODE_DIR)
 
-generated_code: 
+generated_code:
 	$(MAKE) -C $(GENERATED_CODE_DIR)

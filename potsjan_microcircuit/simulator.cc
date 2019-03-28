@@ -3,11 +3,6 @@
 #include <random>
 #include <vector>
 
-// CUDA includes
-#ifndef CPU_ONLY
-#include <cuda_runtime.h>
-#endif
-
 // GeNN robotics includes
 #include "common/timer.h"
 #include "genn_utils/spike_csv_recorder.h"
@@ -20,15 +15,8 @@
 
 namespace
 {
-void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnections, unsigned int *&rowLengthExtraGlobalParam, std::mt19937 &rng)
+void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnections, unsigned int *rowLengths, std::mt19937 &rng)
 {
-    unsigned int *rowLengths = nullptr;
-#ifndef CPU_ONLY
-    CHECK_CUDA_ERRORS(cudaMallocHost(&rowLengths, numPre * sizeof(unsigned int)));
-#else
-    rowLengthExtraGlobalParam = new unsigned int[numPre];
-    rowLengths = rowLengthExtraGlobalParam;
-#endif
     // Calculate row lengths
     // **NOTE** we are FINISHING at second from last row because all remaining connections must go in last row
     size_t remainingConnections = numConnections;
@@ -53,22 +41,17 @@ void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnec
 
     // Insert remaining connections into last row
     rowLengths[numPre - 1] = (unsigned int)remainingConnections;
-
-#ifndef CPU_ONLY
-    CHECK_CUDA_ERRORS(cudaMalloc(&rowLengthExtraGlobalParam, numPre * sizeof(unsigned int)));
-
-    CHECK_CUDA_ERRORS(cudaMemcpy(rowLengthExtraGlobalParam, rowLengths, numPre * sizeof(unsigned int), cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERRORS(cudaFreeHost(rowLengths));
-#endif
 }
 }
 // Macro to build a connection between a pair of populations
-#define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                        \
-    buildRowLengths(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),                                     \
-                                                    Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),     \
-                                                    Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,  \
-                                                                                        Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP), \
-                                                    rowLengthinitSparseConn##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng)
+#define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                                                \
+    allocatepreCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP));        \
+    buildRowLengths(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),                                                             \
+                    Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                                                             \
+                    Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,                                                          \
+                                                        Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                                                         \
+                    preCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng);                                                                                          \
+    pushpreCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP##ToDevice(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP))   \
 
 // Macro to record a population's output
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                               \
@@ -226,13 +209,13 @@ int main()
         }
     }
 
-#ifdef MEASURE_TIMING
-    std::cout << "Timing:" << std::endl;
-    std::cout << "\tInit:" << initTime * 1000.0 << std::endl;
-    std::cout << "\tSparse init:" << initSparseTime * 1000.0 << std::endl;
-    std::cout << "\tNeuron simulation:" << neuronUpdateTime * 1000.0 << std::endl;
-    std::cout << "\tSynapse simulation:" << presynapticUpdateTime * 1000.0 << std::endl;
-#endif
+    if(Parameters::measureTiming) {
+        std::cout << "Timing:" << std::endl;
+        std::cout << "\tInit:" << initTime * 1000.0 << std::endl;
+        std::cout << "\tSparse init:" << initSparseTime * 1000.0 << std::endl;
+        std::cout << "\tNeuron simulation:" << neuronUpdateTime * 1000.0 << std::endl;
+        std::cout << "\tSynapse simulation:" << presynapticUpdateTime * 1000.0 << std::endl;
+    }
     std::cout << "Record:" << recordMs << "ms" << std::endl;
 
     return 0;
