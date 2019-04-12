@@ -1,27 +1,19 @@
-import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
-with open("tenHHRing_output.V.dat", "rb") as csv_file:
-    csv_reader = csv.reader(csv_file, delimiter = " ")
+data = np.loadtxt("tenHHRing_output.V.dat", dtype=float)
 
-    # Skip headers
-    csv_reader.next()
+times = data[:,0]
+voltages = data[:,1:]
 
-    # Read data and zip into columns
-    data_columns = zip(*csv_reader)
+print(voltages.shape)
+# Create plot
+figure, axis = plt.subplots()
+axis.set_xlabel("time [ms]")
+axis.set_ylabel("membrane voltage [mV]")
+# Plot voltages
+for i in range(voltages.shape[1]):
+    axis.plot(times, voltages[:,i])
 
-    # Convert times to numpy
-    times = np.asarray(data_columns[0], dtype=float)
-    voltages = [np.asarray(data_columns[i], dtype=float) for i in range(1, 11)]
-
-    # Create plot
-    figure, axis = plt.subplots()
-    axis.set_xlabel("time [ms]")
-    axis.set_ylabel("membrane voltage [mV]")
-    # Plot voltages
-    for v in voltages:
-        axis.plot(times, v)
-
-    # Show plot
-    plt.show()
+# Show plot
+plt.show()
