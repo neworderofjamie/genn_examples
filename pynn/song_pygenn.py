@@ -5,40 +5,6 @@ from time import time
 from pygenn import genn_wrapper
 from pygenn import genn_model
 
-
-# LIF neuron model
-lif_model = genn_model.create_custom_neuron_class(
-    "LIF",
-    param_names=["C", "TauM", "Vrest", "Vreset", "Vthresh", "Ioffset", "TauRefrac"],
-    var_name_types=[(vn, "scalar") for vn in ["V", "RefracTime"]],
-    sim_code="""
-    if ($(RefracTime) <= 0.0)
-    {
-        scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);
-        $(V) = alpha - ($(ExpTC) * (alpha - $(V)));
-    }
-    else
-    {
-        $(RefracTime) -= DT;
-    }
-    """,
-    reset_code="""
-    $(V) = $(Vreset);
-    $(RefracTime) = $(TauRefrac);""",
-    threshold_condition_code="$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)",
-    derived_params=[
-        ("ExpTC", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
-        ("Rmembrane", genn_model.create_dpf_class(lambda pars, dt: pars[1] / pars[0])())])()
-
-# ExpCurr synapse
-exp_curr_model = genn_model.create_custom_postsynaptic_class(
-    "ExpCurr",
-    param_names=["tau"],
-    decay_code="$(inSyn) *= $(expDecay);",
-    apply_input_code="$(Isyn) += $(init) * $(inSyn);",
-    derived_params=[("expDecay", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
-                   ("init", genn_model.create_dpf_class(lambda pars, dt: (pars[0] * (1.0 - np.exp(-dt / pars[0]))) * (1.0 / dt))())])()
-
 # STDP synapse with additive weight dependence
 stdp_additive = genn_model.create_custom_weight_update_class(
     "STDPAdditive",
@@ -83,7 +49,7 @@ stdp_additive = genn_model.create_custom_weight_update_class(
         """,
 
     is_pre_spike_time_required=True,
-    is_post_spike_time_required=True)()
+    is_post_spike_time_required=True)
 
 # STDP synapse with multiplicative weight dependence
 stdp_multiplicative = genn_model.create_custom_weight_update_class(
@@ -125,7 +91,7 @@ stdp_multiplicative = genn_model.create_custom_weight_update_class(
         """,
 
     is_pre_spike_time_required=True,
-    is_post_spike_time_required=True)()
+    is_post_spike_time_required=True)
 
 DT = 1.0
 NUM_EX_SYNAPSES = 1000
@@ -156,20 +122,20 @@ stdp_pre_init = {"preTrace": 0.0}
 stdp_post_init = {"postTrace": 0.0}
 
 # Create neuron populations
-additive_pop = model.add_neuron_population("additive", 1, lif_model, lif_params, lif_init)
-multiplicative_pop = model.add_neuron_population("multiplicative", 1, lif_model, lif_params, lif_init)
+additive_pop = model.add_neuron_population("additive", 1, "LIF", lif_params, lif_init)
+multiplicative_pop = model.add_neuron_population("multiplicative", 1, "LIF", lif_params, lif_init)
 
 poisson_pop = model.add_neuron_population("input", NUM_EX_SYNAPSES, "PoissonNew", poisson_params, poisson_init)
 
 input_additive = model.add_synapse_population("input_additive", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
     poisson_pop, additive_pop,
     stdp_additive, stdp_params, stdp_init, stdp_pre_init, stdp_post_init,
-    exp_curr_model, post_syn_params, {})
+    "ExpCurr", post_syn_params, {})
 
 input_multiplicative = model.add_synapse_population("input_multiplicative", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
     poisson_pop, multiplicative_pop,
     stdp_multiplicative, stdp_params, stdp_init, stdp_pre_init, stdp_post_init,
-    exp_curr_model, post_syn_params, {})
+    "ExpCurr", post_syn_params, {})
 
 print("Building Model")
 model.build()
