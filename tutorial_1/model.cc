@@ -4,7 +4,6 @@
 void modelDefinition(NNmodel &model)
 {
     // definition of tenHHModel
-    initGeNN();
     model.setDT(0.1);
     model.setName("tenHHModel");
 
@@ -24,5 +23,4 @@ void modelDefinition(NNmodel &model)
         0.5961207);    // 3 - prob. for K channel activation n
 
     model.addNeuronPopulation<NeuronModels::TraubMiles>("Pop1", 10, p, ini);
-    model.finalize();
 }

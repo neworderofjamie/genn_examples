@@ -1,18 +1,11 @@
-
 // GeNN includes
 #include "modelSpec.h"
-
-// GeNN robotics includes
-#include "genn_models/exp_curr.h"
-#include "genn_models/lif.h"
 
 // Genn examples includes
 #include "../common/normal_distribution.h"
 
 // Model includes
 #include "parameters.h"
-
-using namespace BoBRobotics;
 
 //----------------------------------------------------------------------------
 // LIFPoisson
@@ -64,11 +57,11 @@ public:
 
 
     SET_DERIVED_PARAMS({
-        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }},
-        {"PoissonExpMinusLambda", [](const vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
-        {"IpoissonExpDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
-        {"IpoissonInit", [](const vector<double> &pars, double dt){ return pars[8] * (1.0 - std::exp(-dt / pars[9])) * (pars[9] / dt); }}});
+        {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }},
+        {"PoissonExpMinusLambda", [](const std::vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
+        {"IpoissonExpDecay", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
+        {"IpoissonInit", [](const std::vector<double> &pars, double dt){ return pars[8] * (1.0 - std::exp(-dt / pars[9])) * (pars[9] / dt); }}});
 
     SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}});
 };
@@ -124,7 +117,7 @@ public:
     DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 1);
 
     SET_ROW_BUILD_CODE(
-        "const unsigned int rowLength = $(rowLength)[$(id_pre)];\n"
+        "const unsigned int rowLength = $(preCalcRowLength)[$(id_pre)];\n"
         "const scalar u = $(gennrand_uniform);\n"
         "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
         "const unsigned int postIdx = (unsigned int)(x * $(num_post));\n"
@@ -138,10 +131,10 @@ public:
         "if(c >= rowLength) {\n"
         "   $(endRow);\n"
         "}\n");
-    SET_ROW_BUILD_STATE_VARS({{"x", {"scalar", 0.0}},{"c", {"unsigned int", 0}}});
+    SET_ROW_BUILD_STATE_VARS({{"x", "scalar", 0.0},{"c", "unsigned int", 0}});
 
     SET_PARAM_NAMES({"total"});
-    SET_EXTRA_GLOBAL_PARAMS({{"rowLength", "unsigned int*"}})
+    SET_EXTRA_GLOBAL_PARAMS({{"preCalcRowLength", "unsigned int*"}})
 
     SET_CALC_MAX_ROW_LENGTH_FUNC(
         [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
@@ -171,19 +164,14 @@ IMPLEMENT_SNIPPET(FixedNumberTotalWithReplacement);
 
 void modelDefinition(NNmodel &model)
 {
-    initGeNN();
     model.setDT(Parameters::dtMs);
     model.setName("potjans_microcircuit");
-#ifdef MEASURE_TIMING
-    model.setTiming(true);
-#endif
+    model.setTiming(Parameters::measureTiming);
+    model.setDefaultVarLocation(VarLocation::DEVICE);
+    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
+    model.setMergePostsynapticModels(true);
 
-    GENN_PREFERENCES::buildSharedLibrary = false;
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::optimizeCode = true;
-    GENN_PREFERENCES::mergePostsynapticModels = true;
+    GENN_PREFERENCES.optimizeCode = true;
 
     InitVarSnippet::Normal::ParamValues vDist(
         -58.0, // 0 - mean
@@ -196,10 +184,10 @@ void modelDefinition(NNmodel &model)
         0.0);                                   // 2 - Ipoisson
 
     // Exponential current parameters
-    GeNNModels::ExpCurr::ParamValues excitatoryExpCurrParams(
+    PostsynapticModels::ExpCurr::ParamValues excitatoryExpCurrParams(
         0.5);  // 0 - TauSyn (ms)
 
-    GeNNModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
+    PostsynapticModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
         0.5);  // 0 - TauSyn (ms)
 
     const double quantile = 0.9999;
@@ -250,9 +238,9 @@ void modelDefinition(NNmodel &model)
 
             // Make recordable on host
 #ifdef USE_ZERO_COPY
-            neuronPop->setSpikeVarMode(VarMode::LOC_ZERO_COPY_INIT_DEVICE);
+            neuronPop->setSpikeLocation(VarLocation::ZERO_COPY);
 #else
-            neuronPop->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+            neuronPop->setSpikeLocation(VarLocation::HOST_DEVICE);
 #endif
             std::cout << "\tPopulation " << popName << ": num neurons:" << popSize << ", external input rate:" << extInputRate << ", external weight:" << extWeight << ", external DC offset:" << extInputCurrent << std::endl;
             // Add number of neurons to total
@@ -288,7 +276,8 @@ void modelDefinition(NNmodel &model)
                     const unsigned int numConnections = Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop);
 
                     if(numConnections > 0) {
-                        std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << ", meanWeight=" << meanWeight << ", weightSD=" << weightSD << ", meanDelay=" << Parameters::meanDelay[srcPop] << ", delaySD=" << Parameters::delaySD[srcPop] << std::endl;
+                        const double prob = (double)numConnections / ((double)Parameters::getScaledNumNeurons(srcLayer, srcPop) * (double)Parameters::getScaledNumNeurons(trgLayer, trgPop));
+                        std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << "(" << prob << "), meanWeight=" << meanWeight << ", weightSD=" << weightSD << ", meanDelay=" << Parameters::meanDelay[srcPop] << ", delaySD=" << Parameters::delaySD[srcPop] << std::endl;
 
                         // Build parameters for fixed number total connector
                         FixedNumberTotalWithReplacement::ParamValues connectParams(
@@ -322,8 +311,8 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClippedDelay>(dDist));    // 1 - delay (ms)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, GeNNModels::ExpCurr>(
-                                synapseName, SYNAPSE_MATRIX_TYPE, NO_DELAY,
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, PostsynapticModels::ExpCurr>(
+                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 excitatoryExpCurrParams, {},
@@ -354,8 +343,8 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClippedDelay>(dDist));    // 1 - delay (ms)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, GeNNModels::ExpCurr>(
-                                synapseName, SYNAPSE_MATRIX_TYPE, NO_DELAY,
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, PostsynapticModels::ExpCurr>(
+                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
                                 srcName, trgName,
                                 {}, staticSynapseInit,
                                 inhibitoryExpCurrParams, {},
@@ -372,7 +361,4 @@ void modelDefinition(NNmodel &model)
     }
 
     std::cout << "Total neurons=" << totalNeurons << ", total synapses=" << totalSynapses << std::endl;
-
-    // Finalise model
-    model.finalize();
 }

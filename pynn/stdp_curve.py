@@ -117,7 +117,6 @@ axis.set_ylabel(r"$(\frac{\Delta w_{ij}}{w_{ij}})$", rotation = "horizontal", si
 
 if spinnaker:
     end_w = simulate_spinnaker()
-    print end_w
     delta_w = [(w - start_w) / start_w for w in end_w]
     axis.plot(delta_t, delta_w, color="red", label="SpiNNaker")
 

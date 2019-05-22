@@ -10,7 +10,7 @@ N_full = {
   '6' : {'E': 14395, 'I': 2948}
 }
 
-N_scaling = 0.5
+N_scaling = 0.1
 
 def load_spikes(filename):
     # Parse filename and use to get population name and size
@@ -18,21 +18,13 @@ def load_spikes(filename):
     name = match.group(1) + match.group(2)
     num = int(N_full[match.group(1)][match.group(2)] * N_scaling)
 
-    print name, num
-    with open(filename, "rb") as spikes_csv_file:
-        spikes_csv_reader = csv.reader(spikes_csv_file, delimiter = ",")
+    print(name, num)
+    # Read CSV spikes
+    spikes = np.loadtxt(filename, delimiter=",", skiprows=1,
+                        dtype={"names": ("time", "neuron_id"),
+                            "formats": (np.float, np.int)})
 
-        # Skip headers
-        spikes_csv_reader.next()
-
-        # Read data and zip into columns
-        spikes_data_columns = zip(*spikes_csv_reader)
-
-        # Convert CSV columns to numpy
-        spike_times = np.asarray(spikes_data_columns[0], dtype=float)
-        spike_neuron_id = np.asarray(spikes_data_columns[1], dtype=int)
-
-        return spike_times, spike_neuron_id, name, num
+    return spikes["time"], spikes["neuron_id"], name, num
 
 pop_spikes = [load_spikes("6I.csv"),
               load_spikes("6E.csv"),
@@ -67,7 +59,7 @@ axes[0].set_ylabel("Neuron number")
 
 axes[1].set_xlabel("Mean firing rate [Hz]")
 axes[1].set_yticks(np.arange(0.0, len(pop_spikes) * 1.0, 1.0))
-axes[1].set_yticklabels(zip(*pop_spikes)[2])
+axes[1].set_yticklabels(list(zip(*pop_spikes))[2])
 
 # Show plot
 plt.show()

@@ -29,7 +29,6 @@ IMPLEMENT_MODEL(IzhikevichV);
 
 void modelDefinition(NNmodel &model)
 {
-  initGeNN();
   model.setDT(0.1);
   model.setName("izk_regimes");
 
@@ -45,5 +44,4 @@ void modelDefinition(NNmodel &model)
 
   // Create population of Izhikevich neurons
   model.addNeuronPopulation<IzhikevichV>("Neurons", 4, paramValues, initValues);
-  model.finalize();
 }

@@ -27,11 +27,7 @@ IMPLEMENT_SNIPPET(FirstToFirst);
 
 void modelDefinition(NNmodel &model)
 {
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-
     // definition of tenHHRing
-    initGeNN();
     model.setDT(0.1);
     model.setName("tenHHRing");
 
@@ -61,17 +57,16 @@ void modelDefinition(NNmodel &model)
         -80.0); // 1 - Erev: Reversal potential
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCond>(
-        "Pop1self", SynapseMatrixType::RAGGED_GLOBALG, 100,
+        "Pop1self", SynapseMatrixType::SPARSE_GLOBALG, 100,
         "Pop1", "Pop1",
         {}, s_ini,
         ps_p, {},
         initConnectivity<Ring>());
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCond>(
-        "StimPop1", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "StimPop1", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "Stim", "Pop1",
         {}, s_ini,
         ps_p, {},
         initConnectivity<FirstToFirst>());
-    model.finalize();
 }

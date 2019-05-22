@@ -14,19 +14,22 @@ using namespace BoBRobotics;
 int main()
 {
     {
-        Timer<> t("Allocation:");
+        Timer<> b("Allocation:");
         allocateMem();
     }
     {
-        Timer<> t("Initialization:");
+        Timer<> b("Initialization:");
         initialize();
     }
 
     // Final setup
     {
-        Timer<> t("Sparse init:");
-        initvogels_2011();
+        Timer<> b("Sparse init:");
+        initializeSparse();
     }
+
+    // Download IE connectivity from device
+    pullIEConnectivityFromDevice();
 
     // Open CSV output files
     GeNNUtils::SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
@@ -35,33 +38,28 @@ int main()
     fprintf(weights, "Time(ms), Weight (nA)\n");
 
     {
-        Timer<> t("Simulation:");
+        Timer<> b("Simulation:");
         // Loop through timesteps
-        for(unsigned int t = 0; t < 10000; t++)
-        {
+        while(t < 10000.0f) {
             // Simulate
-#ifndef CPU_ONLY
-            stepTimeGPU();
+            stepTime();
 
             pullECurrentSpikesFromDevice();
-            //pullIEStateFromDevice();
-#else
-            stepTimeCPU();
-#endif
+            pullgIEFromDevice();
 
             spikes.record(t);
 
             float totalWeight = 0.0f;
             unsigned int numSynapses = 0;
             for(unsigned int i = 0; i < 500; i++) {
-                for(unsigned int s = 0; s < CIE.rowLength[i]; s++) {
-                    totalWeight += gIE[(i * CIE.maxRowLength) + s];
+                for(unsigned int s = 0; s < rowLengthIE[i]; s++) {
+                    totalWeight += gIE[(i * maxRowLengthIE) + s];
                     numSynapses++;
                 }
             }
 
             // Calculate mean IE weights
-            fprintf(weights, "%f, %f\n", 1.0 * (double)t, totalWeight / (double)numSynapses);
+            fprintf(weights, "%f, %f\n", 1.0 * t, totalWeight / (double)numSynapses);
         }
     }
 
