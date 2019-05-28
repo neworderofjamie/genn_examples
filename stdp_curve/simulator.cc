@@ -6,33 +6,10 @@ int main()
 {
   allocateMem();
 
-  // 14 synapses 1-1 connecting 14 stimuli to 14 neurons
-  allocatePreStimToExcitatory(NUM_NEURONS);
-  allocatePostStimToExcitatory(NUM_NEURONS);
-
   initialize();
 
-  // Loop through connections
-  for(unsigned int i = 0; i < NUM_NEURONS; i++)
-  {
-    // Each presynaptic neuron only has
-    // one postsynaptic neuron connected to it
-    CPreStimToExcitatory.indInG[i] = i;
-    CPostStimToExcitatory.indInG[i] = i;
-
-    // And this postsynaptic neuron has the same number
-    CPreStimToExcitatory.ind[i] = i;
-    CPostStimToExcitatory.ind[i] = i;
-
-    gPreStimToExcitatory[i] = 0.5;
-    gPostStimToExcitatory[i] = 8.0;
-  }
-
-  CPreStimToExcitatory.indInG[NUM_NEURONS] = NUM_NEURONS;
-  CPostStimToExcitatory.indInG[NUM_NEURONS] = NUM_NEURONS;
-
   // Setup reverse connection indices for STDP
-  initstdp_curve();
+  initializeSparse();
 
   // Spike pair configuration
   const double startTime = 200.0;
@@ -102,11 +79,10 @@ int main()
       }
     }
     // Simulate
-    stepTimeCPU();
+    stepTime();
 
     // Write spike times to file
-    for(unsigned int i = 0; i < glbSpkCntExcitatory[0]; i++)
-    {
+    for(unsigned int i = 0; i < glbSpkCntExcitatory[0]; i++) {
       fprintf(spikes, "%f, %u\n", 1.0 * (double)t, glbSpkExcitatory[i]);
     }
   }

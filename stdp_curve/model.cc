@@ -3,14 +3,11 @@
 
 #include "modelSpec.h"
 
-#include "../common/exp_curr.h"
-#include "../common/lif.h"
 #include "../common/stdp_additive.h"
 
 
 void modelDefinition(NNmodel &model)
 {
-  initGeNN();
   model.setDT(1.0);
   model.setName("stdp_curve");
 
@@ -18,7 +15,7 @@ void modelDefinition(NNmodel &model)
   // Build model
   //---------------------------------------------------------------------------
   // LIF model parameters
-  LIF::ParamValues lifParams(
+  NeuronModels::LIF::ParamValues lifParams(
       1.0,    // 0 - C
       20.0,   // 1 - TauM
       -70.0,  // 2 - Vrest
@@ -28,12 +25,12 @@ void modelDefinition(NNmodel &model)
       2.0);  // 6 - TauRefrac
 
   // LIF initial conditions
-  LIF::VarValues lifInit(
+  NeuronModels::LIF::VarValues lifInit(
       -70.0,  // 0 - V
       0.0);    // 1 - RefracTime
 
   WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
-      1.0);    // 0 - Wij (nA)
+      8.0);    // 0 - Wij (nA)
 
   // Additive STDP synapse parameters
   STDPAdditive::ParamValues additiveSTDPParams(
@@ -48,25 +45,25 @@ void modelDefinition(NNmodel &model)
       0.5);  // 0 - g
 
   // Exponential current parameters
-  ExpCurr::ParamValues expCurrParams(
+  PostsynapticModels::ExpCurr::ParamValues expCurrParams(
       5.0);  // 0 - TauSyn (ms)
 
 
   // Create IF_curr neuron
   model.addNeuronPopulation<NeuronModels::SpikeSource>("PreStim", 14, {}, {});
   model.addNeuronPopulation<NeuronModels::SpikeSource>("PostStim", 14, {}, {});
-  model.addNeuronPopulation<LIF>("Excitatory", 14, lifParams, lifInit);
+  model.addNeuronPopulation<NeuronModels::LIF>("Excitatory", 14, lifParams, lifInit);
 
   model.addSynapsePopulation<STDPAdditive, PostsynapticModels::DeltaCurr>(
           "PreStimToExcitatory", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
           "PreStim", "Excitatory",
           additiveSTDPParams,  additiveSTDPInit,
-          {}, {});
-  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+          {}, {},
+          initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
+  model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
           "PostStimToExcitatory", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
           "PostStim", "Excitatory",
           {}, staticSynapseInit,
-          expCurrParams, {});
-
-  model.finalize();
+          expCurrParams, {},
+          initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 }

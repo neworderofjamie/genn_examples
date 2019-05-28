@@ -23,22 +23,19 @@ public:
     SET_VARS({{"g", "scalar"}});
 
     SET_SIM_CODE(
-        "$(addtoinSyn) = $(g);\n"
-        "$(updatelinsyn);\n"
+        "$(addToInSyn, $(g));\n"
         "scalar dt = $(t) - $(sT_post); \n"
-        "if (dt > 0)\n"
-        "{\n"
+        "if (dt > 0) {\n"
         "    scalar timing = exp(-dt / $(tauMinus));\n"
         "    scalar newWeight = $(g) - ($(Aminus) * timing);\n"
-        "    $(g) = (newWeight < $(Wmin)) ? $(Wmin) : newWeight;\n"
+        "    $(g) = fmax($(Wmin), newWeight);\n"
         "}\n");
     SET_LEARN_POST_CODE(
         "scalar dt = $(t) - $(sT_pre);\n"
-        "if (dt > 0)\n"
-        "{\n"
+        "if (dt > 0) {\n"
         "    scalar timing = exp(-dt / $(tauPlus));\n"
         "    scalar newWeight = $(g) + ($(Aplus) * timing);\n"
-        "    $(g) = (newWeight > $(Wmax)) ? $(Wmax) : newWeight;\n"
+        "    $(g) = fmin($(Wmax), newWeight);\n"
         "}\n");
 
     SET_NEEDS_PRE_SPIKE_TIME(true);

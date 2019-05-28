@@ -2,31 +2,24 @@ import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
-with open("weights.csv", "rb") as csv_file:
-    csv_reader = csv.reader(csv_file, delimiter = ",")
 
-    # Skip headers
-    csv_reader.next()
+# Read CSV spikes
+weights = np.loadtxt("weights.csv", delimiter=",", skiprows=1,
+                     dtype={"names": ("delta_t", "weight"),
+                            "formats": (np.float, np.float)})
 
-    # Read data and zip into columns
-    data_columns = zip(*csv_reader)
+weights["weight"] = (weights["weight"] - 0.5) / 0.5
 
-    # Convert times to numpy
-    delta_t = np.asarray(data_columns[0], dtype=float)
-    weight = np.asarray(data_columns[1], dtype=float)
+# Create plot
+figure, axis = plt.subplots()
 
-    weight = (weight - 0.5) / 0.5
-
-    # Create plot
-    figure, axis = plt.subplots()
-
-    # Add axis lines
-    axis.axhline(0.0, color="black")
-    axis.axvline(0.0, color="black")
+# Add axis lines
+axis.axhline(0.0, color="black")
+axis.axvline(0.0, color="black")
 
 
-    # Plot voltages
-    axis.plot(delta_t, weight)
+# Plot voltages
+axis.plot(weights["delta_t"], weights["weight"])
 
-    # Show plot
-    plt.show()
+# Show plot
+plt.show()
