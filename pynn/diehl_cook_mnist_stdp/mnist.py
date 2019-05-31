@@ -213,7 +213,7 @@ print('time needed to load test set:', end - start)
 dt = 1.0
 
 # Architecture
-num_examples = 1000#training_images.shape[0]
+num_examples = training_images.shape[0]
 n_input = 784
 n_e = 100
 n_i = n_e
@@ -246,7 +246,7 @@ tau_gi = 2
 # STDP
 g_max = 1.0 / 1000.0
 x_tar = 0.4
-eta = 0.01
+eta = 0.0000001
 mu = 0.2
 
 # Group up parameters
@@ -324,18 +324,20 @@ model.build()
 print("Loading Model")
 model.load()
 
+frequency_view = poisson_pop.vars["frequency"].view
+time_to_spike_view = poisson_pop.vars["timeStepToSpike"].view
+spike_number_view = lif_e_pop.vars["SpikeNumber"].view
+weight_view = input_e_pop.vars["g"].view
+
 print("Simulating")
 
 # Simulate
 
-lif_e_pop.set_var("SpikeNumber",0)
+spike_number_view[:] = 0
 model.push_var_to_device("lif_e_pop", "SpikeNumber")
 
-# print(spike_number_view)
 i=0
-spike_number_view = lif_e_pop.vars["SpikeNumber"].view
-print(spike_number_view)
-assert False
+
 while model.timestep < train_timesteps:
     # Calculate the timestep within the presentation
     timestep_in_example = model.timestep % (single_example_time + resting_time)
@@ -350,18 +352,18 @@ while model.timestep < train_timesteps:
         rates_hz = training_images[example%60000] / 4.0
 
         # Scale these by timestep in seconds to get spikes per timestep
-        rates = rates_hz * (dt / 1000.0)
-
-        # Set Poisson rates
-        poisson_pop.set_var('frequency', rates)
-        poisson_pop.set_var('timeStepToSpike',0.0)
+        frequency_view[:] = rates_hz * (dt / 1000.0)
+        time_to_spike_view[:] = 0.0
         model.push_state_to_device("poisson_pop")
     # Otherwise, if this timestep is the start of the resting period
     elif timestep_in_example == single_example_time:
         # Set poisson rates to 0(ish)
-        poisson_pop.set_var('frequency', 0.000001)
-        poisson_pop.set_var('timeStepToSpike',0.0)
+        frequency_view[:] = 0.000001
+        time_to_spike_view[:] = 0.0
         model.push_state_to_device("poisson_pop")
+
+        model.pull_var_from_device("lif_e_pop", "SpikeNumber")
+        print(spike_number_view)
 
 
     # Advance simulation
@@ -371,9 +373,8 @@ model.pull_var_from_device("lif_e_pop", "SpikeNumber")
 print(spike_number_view)
 
 model.pull_var_from_device("input_e_pop", "g")
-weight_final = input_e_pop.get_var_values("g")
 
-np.save("weights.npy", weight_final)
+np.save("weights.npy", weight_view)
 
 assert(False)
 '''
