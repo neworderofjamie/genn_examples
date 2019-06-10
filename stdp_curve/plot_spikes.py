@@ -1,25 +1,16 @@
-import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
-with open("spikes.csv", "rb") as csv_file:
-    csv_reader = csv.reader(csv_file, delimiter = ",")
+# Read CSV spikes
+spikes = np.loadtxt("spikes.csv", delimiter=",", skiprows=1,
+                    dtype={"names": ("time", "neuron_id"),
+                           "formats": (np.float, np.int)})
 
-    # Skip headers
-    csv_reader.next()
+# Create plot
+figure, axis = plt.subplots()
 
-    # Read data and zip into columns
-    data_columns = zip(*csv_reader)
+# Plot voltages
+axis.scatter(spikes["time"], spikes["neuron_id"], s=2, edgecolors="none")
 
-    # Convert times to numpy
-    times = np.asarray(data_columns[0], dtype=float)
-    neuron_id = np.asarray(data_columns[1], dtype=int)
-
-    # Create plot
-    figure, axis = plt.subplots()
-
-    # Plot voltages
-    axis.scatter(times, neuron_id)
-
-    # Show plot
-    plt.show()
+# Show plot
+plt.show()

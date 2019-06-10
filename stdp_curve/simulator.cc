@@ -1,103 +1,87 @@
 #include "stdp_curve_CODE/definitions.h"
 
+// Standard C++ includes
+#include <iostream>
+
+// BoB robotics includes
+#include "genn_utils/spike_csv_recorder.h"
+
 #define NUM_NEURONS 14
+#define NUM_PAIRS 60
 
 int main()
 {
-  allocateMem();
+    allocateMem();
 
-  initialize();
+    initialize();
 
-  // Setup reverse connection indices for STDP
-  initializeSparse();
-
-  // Spike pair configuration
-  const double startTime = 200.0;
-  const double timeBetweenPairs = 1000.0;
-  const double deltaT[NUM_NEURONS] = {-100.0, -60.0, -40.0, -30.0, -20.0, -10.0, -1.0,
-    1.0, 10.0, 20.0, 30.0, 40.0, 60.0, 100.0};
-
-  // Loop through neurons
-  unsigned int preSpikeTimesteps[NUM_NEURONS][60];
-  unsigned int postSpikeTimesteps[NUM_NEURONS][60];
-  unsigned int nextPreSpikeIndex[NUM_NEURONS];
-  unsigned int nextPostSpikeIndex[NUM_NEURONS];
-  for(unsigned int n = 0; n < NUM_NEURONS; n++)
-  {
-    // Start each spike source at first spike
-    nextPreSpikeIndex[n] = 0;
-    nextPostSpikeIndex[n] = 0;
-
-    // Calculate spike timings
-    const double neuronDeltaT = deltaT[n];
-    const double prePhase = (neuronDeltaT > 0) ? (startTime + neuronDeltaT + 1.0) : (startTime + 1.0);
-    const double postPhase = (neuronDeltaT > 0) ? startTime : (startTime - neuronDeltaT);
-
-    printf("Neuron %u(%f): pre phase %f, post phase %f\n", n, neuronDeltaT, prePhase, postPhase);
-    // Fill in spike timings
-    for(unsigned int p = 0; p < 60; p++)
-    {
-      preSpikeTimesteps[n][p] = prePhase + ((double)p * timeBetweenPairs);
-      postSpikeTimesteps[n][p] = postPhase + ((double)p * timeBetweenPairs);
+    // Initialise pre and postsynaptic stimuli variables - each one should emit 60 spikes
+    for(unsigned int n = 0; n < NUM_NEURONS; n++) {
+        startSpikePostStim[n] = n * 60;
+        startSpikePreStim[n] = n * 60;
+        endSpikePostStim[n] = (n + 1) * 60;
+        endSpikePreStim[n] = (n + 1) * 60;
     }
-  }
 
-  FILE *spikes = fopen("spikes.csv", "w");
-  fprintf(spikes, "Time(ms), Neuron ID\n");
+    // Setup reverse connection indices for STDP
+    initializeSparse();
 
-  // Loop through timesteps
-  for(unsigned int t = 0; t < 60200; t++)
-  {
-    // Loop through spike sources
+    // Allocate memory for spike source array
+    allocatespikeTimesPostStim(NUM_PAIRS * NUM_NEURONS);
+    allocatespikeTimesPreStim(NUM_PAIRS * NUM_NEURONS);
+
+    // Spike pair configuration
+    const scalar startTime = 200.0;
+    const scalar timeBetweenPairs = 1000.0;
+    const scalar deltaT[NUM_NEURONS] = {-100.0, -60.0, -40.0, -30.0, -20.0, -10.0, -1.0,
+                                        1.0, 10.0, 20.0, 30.0, 40.0, 60.0, 100.0};
+
+    // Loop through neurons
     for(unsigned int n = 0; n < NUM_NEURONS; n++)
     {
-      // If there are more pre-spikes to emit and
-      // the next one should be emitted this timestep
-      if(nextPreSpikeIndex[n] < 60
-        && preSpikeTimesteps[n][nextPreSpikeIndex[n]] == t)
-      {
-        // Manually add a spike to spike source's output
-        glbSpkPreStim[glbSpkCntPreStim[0]++] = n;
+        // Calculate spike timings
+        const double neuronDeltaT = deltaT[n];
+        const double prePhase = (neuronDeltaT > 0) ? (startTime + neuronDeltaT + 1.0) : (startTime + 1.0);
+        const double postPhase = (neuronDeltaT > 0) ? startTime : (startTime - neuronDeltaT);
 
-        // **YUCK** also update the time used for post-after-pre STDP calculations
-        sTPreStim[n] = 1.0 * (double)t;
+        std::cout << "Neuron " << n << "(" << neuronDeltaT << ")): pre phase " << prePhase << " , post phase " << postPhase << std::endl;
 
-        // Go onto next pre-spike
-        nextPreSpikeIndex[n]++;
-      }
-
-      // If there are more post-spikes to emit and
-      // the next one should be emitted this timestep
-      if(nextPostSpikeIndex[n] < 60
-        && postSpikeTimesteps[n][nextPostSpikeIndex[n]] == t)
-      {
-        // Manually add a spike to spike source's output
-        glbSpkPostStim[glbSpkCntPostStim[0]++] = n;
-
-        // Go onto next post-spike
-        nextPostSpikeIndex[n]++;
-      }
+        // Fill in spike timings
+        scalar *postStimSpikes = &spikeTimesPostStim[n * 60];
+        scalar *preStimSpikes = &spikeTimesPreStim[n * 60];
+        for(unsigned int p = 0; p < 60; p++) {
+            (*postStimSpikes++) = postPhase + ((scalar)p * timeBetweenPairs);
+            (*preStimSpikes++) = prePhase + ((scalar)p * timeBetweenPairs);
+        }
     }
-    // Simulate
-    stepTime();
 
-    // Write spike times to file
-    for(unsigned int i = 0; i < glbSpkCntExcitatory[0]; i++) {
-      fprintf(spikes, "%f, %u\n", 1.0 * (double)t, glbSpkExcitatory[i]);
+    // Upload spike times
+    pushspikeTimesPostStimToDevice(NUM_PAIRS * NUM_NEURONS);
+    pushspikeTimesPreStimToDevice(NUM_PAIRS * NUM_NEURONS);
+
+    // Loop through timesteps
+    BoBRobotics::GeNNUtils::SpikeCSVRecorder spikes("spikes.csv", glbSpkCntExcitatory, glbSpkExcitatory);
+    while(iT < 60200) {
+        // Simulate
+        stepTime();
+
+        pullExcitatoryCurrentSpikesFromDevice();
+        spikes.record(t);
     }
-  }
-  fclose(spikes);
 
-  FILE *weights = fopen("weights.csv", "w");
-  fprintf(weights, "Delta T [ms], Weight\n");
+    // Download weights
+    pullgPreStimToExcitatoryFromDevice();
 
-  for(unsigned int n = 0; n < NUM_NEURONS; n++)
-  {
-    fprintf(weights, "%f, %f\n", deltaT[n], gPreStimToExcitatory[n]);
-  }
+    // Write weights to CSV
+    std::ofstream weights("weights.csv");
+    weights << "Delta T [ms], Weight" << std::endl;
+    for(unsigned int n = 0; n < NUM_NEURONS; n++) {
+        weights << deltaT[n] << ", " << gPreStimToExcitatory[n] << std::endl;
+    }
 
-  fclose(weights);
+    // Free spike times
+    freespikeTimesPostStim();
+    freespikeTimesPreStim();
 
-
-  return 0;
+    return 0;
 }
