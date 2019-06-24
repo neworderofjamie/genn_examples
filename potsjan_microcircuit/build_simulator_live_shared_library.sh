@@ -1,4 +1,4 @@
 pushd potjans_microcircuit_CODE
-make clean all
+make
 popd
-g++ simulator_live_shared_library.cc -std=c++11 -pthread `pkg-config --libs --cflags opencv` -I $CUDA_PATH/include -I $GENN_PATH/lib/include -I $BOB_ROBOTICS_PATH -ldl -o simulator_live_shared_library
+g++ simulator_live_shared_library.cc -std=c++14 -pthread `pkg-config --libs --cflags opencv` -I $BOB_ROBOTICS_PATH -I $BOB_ROBOTICS_PATH/third_party/plog/include -ldl -o simulator_live_shared_library

@@ -10,18 +10,43 @@
 // OpenCV includes
 #include <opencv2/opencv.hpp>
 
-// GeNN robotics includes
+// BoB robotics includes
 #include "common/timer.h"
-#include "genn_utils/connectors.h"
+#include "genn_utils/shared_library_model.h"
 #include "genn_utils/spike_csv_recorder.h"
-
-// Common includes
-#include "../common/shared_library_model.h"
 
 // Model parameters
 #include "parameters.h"
 
 using namespace BoBRobotics;
+
+void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnections, unsigned int *rowLengths, std::mt19937 &rng)
+{
+    // Calculate row lengths
+    // **NOTE** we are FINISHING at second from last row because all remaining connections must go in last row
+    size_t remainingConnections = numConnections;
+    size_t matrixSize = (size_t)numPre * (size_t)numPost;
+    std::generate_n(&rowLengths[0], numPre - 1,
+                    [&remainingConnections, &matrixSize, numPost, &rng]()
+                    {
+                        const double probability = (double)numPost / (double)matrixSize;
+
+                        // Create distribution to sample row length
+                        std::binomial_distribution<size_t> rowLengthDist(remainingConnections, probability);
+
+                        // Sample row length;
+                        const size_t rowLength = rowLengthDist(rng);
+
+                        // Update counters
+                        remainingConnections -= rowLength;
+                        matrixSize -= numPost;
+
+                        return (unsigned int)rowLength;
+                    });
+
+    // Insert remaining connections into last row
+    rowLengths[numPre - 1] = (unsigned int)remainingConnections;
+}
 
 //----------------------------------------------------------------------------
 // LiveVisualiser
@@ -29,7 +54,7 @@ using namespace BoBRobotics;
 class LiveVisualiser
 {
 public:
-    LiveVisualiser(SharedLibraryModelFloat &model, const cv::Size outputRes, double scale)
+    LiveVisualiser(GeNNUtils::SharedLibraryModelFloat &model, const cv::Size outputRes, double scale)
     :   m_Model(model), m_OutputImage(outputRes, CV_8UC3), m_RotatedOutput(outputRes.width, outputRes.height, CV_8UC3)/*, t
         m_VideoWriter("test.avi", cv::VideoWriter::fourcc('H', '2', '6', '4'), 33.0, outputRes, true)*/
     {
@@ -63,8 +88,8 @@ public:
                 const int neuronHeight = (unsigned int)std::ceil((double)numNeurons / (double)neuronWidth);
 
                 // Get spike count and spikes variables
-                unsigned int **spikeCount = (unsigned int**)m_Model.getSymbol("glbSpkCnt" + name);
-                unsigned int **spikes = (unsigned int**)m_Model.getSymbol("glbSpk" + name);
+                unsigned int *spikeCount = m_Model.getArray<unsigned int>("glbSpkCnt" + name);
+                unsigned int *spikes = m_Model.getArray<unsigned int>("glbSpk" + name);
 
                 // Create Rectangle of Interest where population activity will be rendered
                 cv::Rect roi(leftBorder, populationY, (int)std::round((double)neuronWidth * scale), 
@@ -76,7 +101,7 @@ public:
 
                 // Add suitable sized subimage, spike count and spikes to populations
                 m_Populations.emplace_back(cv::Mat(neuronHeight, neuronWidth, CV_8UC3),
-                                           roi, colours[m_Populations.size()], *spikeCount, *spikes);
+                                           roi, colours[m_Populations.size()], spikeCount, spikes);
 
                 // Update y position for next population
                 populationY += roi.height + verticalSpacing;
@@ -176,7 +201,7 @@ private:
     //------------------------------------------------------------------------
     // Members
     //------------------------------------------------------------------------
-    SharedLibraryModelFloat &m_Model;
+    GeNNUtils::SharedLibraryModelFloat &m_Model;
     cv::Mat m_OutputImage;
     cv::Mat m_RotatedOutput;
     //cv::VideoWriter m_VideoWriter;
@@ -227,7 +252,7 @@ void displayThreadHandler(LiveVisualiser &visualiser, std::mutex &mutex, std::at
 
 int main()
 {
-    SharedLibraryModelFloat model("potjans_microcircuit");
+    GeNNUtils::SharedLibraryModelFloat model("", "potjans_microcircuit");
     {
         Timer<> timer("Allocation:");
 
@@ -252,21 +277,17 @@ int main()
                         const std::string srcName = Parameters::getPopulationName(srcLayer, srcPop);
                         const unsigned int numSrc = Parameters::getScaledNumNeurons(srcLayer, srcPop);
 
-                        // Find sparse projection structure and allocate function associated with projection
-#ifdef RAGGED_CONNECTIVITY
-                        RaggedProjection<unsigned int> *raggedProjection = (RaggedProjection<unsigned int>*)model.getSymbol("C" + srcName + "_" + trgName, true);
-                        if(raggedProjection) {
-                            GeNNUtils::buildFixedNumberTotalWithReplacementConnector(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
-                                                                                     *raggedProjection, rng);
+                        const unsigned int numConnections = Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop);
+                        if(numConnections > 0) {
+                            const std::string synName = srcName + "_" + trgName;
+                            model.allocateExtraGlobalParam(synName, "preCalcRowLength", numSrc);
+
+                            unsigned int *preCalcRowLength = model.getArray<unsigned int>("preCalcRowLength" + synName);
+                            buildRowLengths(numSrc, numTrg,  numConnections,
+                                            preCalcRowLength, rng);                                                                                          \
+                            model.pushExtraGlobalParam(synName, "preCalcRowLength", numSrc);
                         }
-#else
-                        SparseProjection *sparseProjection = (SparseProjection*)model.getSymbol("C" + srcName + "_" + trgName, true);
-                        GeNNUtils::AllocateFn allocateFn = (GeNNUtils::AllocateFn)model.getSymbol("allocate" + srcName + "_" + trgName, true);
-                        if(sparseProjection && allocateFn) {
-                            GeNNUtils::buildFixedNumberTotalWithReplacementConnector(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
-                                                                                     *sparseProjection, allocateFn, rng);
-                        }
-#endif
+
                     }
                 }
             }
@@ -280,23 +301,7 @@ int main()
         model.initializeSparse();
     }
 
-
-
-#ifndef CPU_ONLY
-    std::vector<SharedLibraryModelFloat::VoidFunction> pullCurrentSpikesFunctions;
-    pullCurrentSpikesFunctions.reserve(Parameters::LayerMax * Parameters::PopulationMax);
-    for(unsigned int layer = 0; layer < Parameters::LayerMax; layer++) {
-        for(unsigned int pop = 0; pop < Parameters::PopulationMax; pop++) {
-            const std::string name = Parameters::getPopulationName(layer, pop);
-
-            // Get spike pull function
-            pullCurrentSpikesFunctions.push_back(
-                (SharedLibraryModelFloat::VoidFunction)model.getSymbol("pull" + name + "CurrentSpikesFromDevice"));
-        }
-    }
-#endif
     std::atomic<bool> run{true};
-    
     std::mutex mutex;
     LiveVisualiser visualiser(model, cv::Size(480, 800), 2.75);
     std::thread displayThread(displayThreadHandler, std::ref(visualiser), std::ref(mutex), std::ref(run));
@@ -309,16 +314,14 @@ int main()
         while(run)
         {
             // Simulate
-#ifndef CPU_ONLY
-            model.stepTimeGPU();
+            model.stepTime();
 
             // Pull current spikes from all populations
-            for(auto p : pullCurrentSpikesFunctions) {
-                p();
+            for(unsigned int layer = 0; layer < Parameters::LayerMax; layer++) {
+                for(unsigned int pop = 0; pop < Parameters::PopulationMax; pop++) {
+                    model.pullCurrentSpikesFromDevice(Parameters::getPopulationName(layer, pop));
+                }
             }
-#else
-            model.stepTimeCPU();
-#endif
 
             {
                 TimerAccumulate<> timer(applyMs);
