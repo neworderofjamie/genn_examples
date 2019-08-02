@@ -1,80 +1,9 @@
-#include <cmath>
-#include <vector>
-
 #include "modelSpec.h"
-
-// GeNN robotics includes
-#include "genn_utils/connectors.h"
-#include "genn_models/exp_curr.h"
-#include "genn_models/lif.h"
 
 #include "parameters.h"
 
-using namespace BoBRobotics;
-
-//----------------------------------------------------------------------------
-// FixedNumberTotalWithReplacement
-//----------------------------------------------------------------------------
-//! Initialises variable by sampling from the uniform distribution
-class FixedNumberTotalWithReplacement : public InitSparseConnectivitySnippet::Base
-{
-public:
-    DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 2);
-
-    SET_ROW_BUILD_CODE(
-        "const unsigned int rowLength = $(rowLength)[$(id_pre)];\n"
-        "const scalar u = $(gennrand_uniform);\n"
-        "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
-        "const unsigned int postIdx = (unsigned int)(x * $(numPost));\n"
-        "if(postIdx < $(numPost)) {\n"
-        "   $(addSynapse, postIdx);\n"
-        "}\n"
-        "else {\n"
-        "   $(addSynapse, $(numPost) - 1);\n"
-        "}\n"
-        "c++;\n"
-        "if(c >= rowLength) {\n"
-        "   $(endRow);\n"
-        "}\n");
-    SET_ROW_BUILD_STATE_VARS({{"x", {"scalar", 0.0}},{"c", {"unsigned int", 0}}});
-
-    SET_PARAM_NAMES({"total", "numPost"});
-    SET_EXTRA_GLOBAL_PARAMS({{"rowLength", "unsigned int*"}})
-
-    SET_CALC_MAX_ROW_LENGTH_FUNC(
-        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
-        {
-            // Calculate suitable quantile for 0.9999 change when drawing numPre times
-            const double quantile = pow(0.9999, 1.0 / (double)numPre);
-
-            // There are numConnections connections amongst the numPre*numPost possible connections.
-            // Each of the numConnections connections has an independent p=float(numPost)/(numPre*numPost)
-            // probability of being selected, and the number of synapses in the sub-row is binomially distributed
-            return binomialInverseCDF(quantile, pars[0], (double)numPost / ((double)numPre * (double)numPost));
-        });
-
-    SET_CALC_MAX_COL_LENGTH_FUNC(
-        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
-        {
-            // Calculate suitable quantile for 0.9999 change when drawing numPre times
-            const double quantile = pow(0.9999, 1.0 / (double)numPost);
-
-            // There are numConnections connections amongst the numPre*numPost possible connections.
-            // Each of the numConnections connections has an independent p=float(numPost)/(numPre*numPost)
-            // probability of being selected, and the number of synapses in the sub-row is binomially distributed
-            return binomialInverseCDF(quantile, pars[0], (double)numPre / ((double)numPre * (double)numPost));
-        });
-};
-IMPLEMENT_SNIPPET(FixedNumberTotalWithReplacement);
-
 void modelDefinition(NNmodel &model)
 {
-    // Enable new automatic initialisation mode
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
-
-    initGeNN();
     model.setDT(1.0);
     model.setName("benchmark");
     model.setTiming(true);
@@ -83,7 +12,7 @@ void modelDefinition(NNmodel &model)
     // Build model
     //---------------------------------------------------------------------------
     // LIF model parameters
-    GeNNModels::LIF::ParamValues lifParams(
+    NeuronModels::LIF::ParamValues lifParams(
         0.2,    // 0 - C
         20.0,   // 1 - TauM
         -60.0,  // 2 - Vrest
@@ -93,31 +22,37 @@ void modelDefinition(NNmodel &model)
         5.0);    // 6 - TauRefrac
 
     // LIF initial conditions
-    // **TODO** uniform random
-    GeNNModels::LIF::VarValues lifInit(
+    NeuronModels::LIF::VarValues lifInit(
         -55.0,  // 0 - V
         0.0);    // 1 - RefracTime
+
+    NeuronModels::PoissonNew::ParamValues poissonParams(
+        Parameters::inputRate);  // 0 - rate [hz]
+
+    NeuronModels::PoissonNew::VarValues poissonInit(
+        0.0);   // 0 - time to spike [ms]
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
         0.1);    // 0 - Wij (nA)
 
     // Exponential current parameters
-    GeNNModels::ExpCurr::ParamValues expCurrParams(
+    PostsynapticModels::ExpCurr::ParamValues expCurrParams(
         5.0);  // 0 - TauSyn (ms)
 
-    FixedNumberTotalWithReplacement::ParamValues connectParams(Parameters::numConnections,
-                                                               Parameters::numNeurons);
+    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(Parameters::connectionProbability); // 0 - prob
 
     // Create IF_curr neuron
-    model.addNeuronPopulation<GeNNModels::LIF>("Neurons", Parameters::numNeurons,
-                                               lifParams, lifInit);
+    model.addNeuronPopulation<NeuronModels::PoissonNew>("Poisson", Parameters::numNeurons,
+                                                        poissonParams, poissonInit);
+    model.addNeuronPopulation<NeuronModels::LIF>("Neurons", Parameters::numNeurons,
+                                                 lifParams, lifInit);
 
-    auto *syn = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>("Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
-                                                                                                 "Neurons", "Neurons",
-                                                                                                 {}, staticSynapseInit,
-                                                                                                 expCurrParams, {},
-                                                                                                 initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
-
-    model.finalize();
+    auto *syn = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        "Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
+        "Poisson", "Neurons",
+        {}, staticSynapseInit,
+        expCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    syn->setSpanType(SynapseGroup::SpanType::POSTSYNAPTIC);
 }
