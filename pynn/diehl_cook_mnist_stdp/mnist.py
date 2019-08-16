@@ -312,6 +312,7 @@ frequency_view = poisson_pop.vars["frequency"].view
 time_to_spike_view = poisson_pop.vars["timeStepToSpike"].view
 spike_number_view = lif_e_pop.vars["SpikeNumber"].view
 weight_view = input_e_pop.vars["g"].view
+theta_view = lif_e_pop.vars["theta"].view
 
 print("Simulating")
 
@@ -346,18 +347,15 @@ while model.timestep < train_timesteps:
         time_to_spike_view[:] = 0.0
         model.push_state_to_device("poisson_pop")
 
-        model.pull_var_from_device("lif_e_pop", "SpikeNumber")
-        print(spike_number_view)
-
-
     # Advance simulation
     model.step_time()
 
-model.pull_var_from_device("lif_e_pop", "SpikeNumber")
-print(spike_number_view)
+# Save theta
+model.pull_var_from_device("lif_e_pop", "theta")
+np.save("theta.npy", theta_view)
 
+# Save weights
 model.pull_var_from_device("input_e_pop", "g")
-
 np.save("weights.npy", weight_view)
 
 assert(False)
