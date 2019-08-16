@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 import time
-import pickle
 import os 
 from struct import unpack
 
@@ -102,17 +101,17 @@ poisson_model = genn_model.create_custom_neuron_class(
 # excitatory neurons
 lif_e_model = genn_model.create_custom_neuron_class(
     "lif_e_model",
-    param_names=["Tau","Erest","Vreset","Vthres","RefracPeriod","tauTheta", "thetaPlus"],
-    var_name_types=[("V","scalar"),("RefracTime","scalar"),("theta","scalar"),("SpikeNumber","unsigned int")],
+    param_names=["Tau", "Erest", "Vreset", "Vthres", "RefracPeriod", "tauTheta", "thetaPlus"],
+    var_name_types=[("V","scalar"), ("RefracTime", "scalar"), ("theta", "scalar"), ("SpikeNumber", "unsigned int")],
     sim_code="""
     if ($(RefracTime) <= 0.0) {
-        scalar alpha = $(Erest) + $(Isyn);
-        $(V) = ($(V) - alpha) * $(ExpTC);
+        const scalar alpha = ($(Isyn) * $(Tau)) + $(Erest);
+        $(V) = alpha - ($(ExpTC) * (alpha - $(V)));
     }
     else {
         $(RefracTime) -= DT;
-        $(theta) = $(theta) * $(ExpTtheta);
     }
+    $(theta) = $(theta) * $(ExpTtheta);
     """,
     reset_code="""
     $(V) = $(Vreset);
@@ -120,7 +119,7 @@ lif_e_model = genn_model.create_custom_neuron_class(
     $(SpikeNumber) += 1;
     $(theta) += $(thetaPlus);
     """,
-    threshold_condition_code="$(RefracTime) <= 0.0 && $(V) >= $(Vthres) + $(theta)",
+    threshold_condition_code="$(RefracTime) <= 0.0 && $(V) > ($(theta) + $(Vthres))",
     derived_params=[
         ("ExpTC", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
         ("ExpTtheta", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[5]))())
@@ -134,8 +133,8 @@ lif_i_model = genn_model.create_custom_neuron_class(
     var_name_types=[("V","scalar"),("RefracTime","scalar")],
     sim_code="""
     if ($(RefracTime) <= 0.0)  {
-        scalar alpha = $(Erest) + $(Isyn);
-        $(V) = ($(V) - alpha) * $(ExpTC);
+        const scalar alpha = ($(Isyn) * $(Tau)) + $(Erest);
+        $(V) = alpha - ($(ExpTC) * (alpha - $(V)));
     }
     else  {
         $(RefracTime) -= DT;
@@ -193,7 +192,6 @@ lateral_inhibition = genn_model.create_custom_init_var_snippet_class(
 #                      Data
 # ********************************************************************************
 start = time.time()
-#training = get_labeled_data('training')
 training_images, training_labels = get_training_data()
 end = time.time()
 print('time needed to load training set:', end - start)
@@ -206,8 +204,6 @@ print('time needed to load test set:', end - start)
 # ********************************************************************************
 #                      Parameters and Hyperparameters
 # ********************************************************************************
-
-# Hyperparameters
 
 # Global 
 dt = 1.0
@@ -224,24 +220,11 @@ input_intensity = 2.
 start_input_intensity = input_intensity
 
 # Neuron
-tau_e = 100
-tau_i = 10
-e_rest_e = -65
-e_rest_i = -60
 v_reset_e = -65
 v_reset_i = -45
-v_thres_e = -52
-v_thres_i = -40
-refrac_period_e = 5.0
 refrac_period_i = 2.0
 e_rev_exc = 0.0
 e_rev_inh = -100.0
-tau_theta_e = 1e7
-theta_plus_e = 0.05
-
-# Synapse
-tau_ge = 1
-tau_gi = 2
 
 # STDP
 g_max = 1.0 / 1000.0
@@ -249,33 +232,34 @@ x_tar = 0.4
 eta = 0.0000001
 mu = 0.2
 
-# Group up parameters
+# Neuron group parameters
 lif_e_params = {
-    "Tau":tau_e, 
-    "Erest":e_rest_e,
-    "Vreset":v_reset_e,
-    "Vthres":v_thres_e,
-    "RefracPeriod":refrac_period_e,
-    "tauTheta":tau_theta_e,
-    "thetaPlus":theta_plus_e
+    "Tau": 100.0, 
+    "Erest": -65.0,
+    "Vreset": -65.0,
+    "Vthres": -52.0 - 20.0,
+    "RefracPeriod": 5.0,
+    "tauTheta": 1e7,
+    "thetaPlus": 0.05
 }
 
 lif_i_params = {
-    "Tau":tau_i, 
-    "Erest":e_rest_i,
-    "Vreset":v_reset_i,
-    "Vthres":v_thres_i,
-    "RefracPeriod":refrac_period_i
-}
-lif_e_init = {"V": v_reset_e - 40.0, "RefracTime":0.0, "SpikeNumber":0, "theta":20.0}
-lif_i_init = {"V": v_reset_i - 40.0, "RefracTime":0.0}
+    "Tau": 10.0, 
+    "Erest": -60.0,
+    "Vreset": -45.0,
+    "Vthres": -40.0,
+    "RefracPeriod": 2.0}
+
+# Neuron group initial values
+lif_e_init = {"V": v_reset_e - 40.0, "RefracTime": 0.0, "SpikeNumber": 0, "theta": 20.0}
+lif_i_init = {"V": v_reset_i - 40.0, "RefracTime": 0.0}
 
 poisson_init = {
     "timeStepToSpike": 0.0,
     "frequency": 0.0}
 
-post_syn_e_params = {"tau":tau_ge, "E":e_rev_exc}
-post_syn_i_params = {"tau":tau_gi, "E":e_rev_inh}
+post_syn_e_params = {"tau": 1.0, "E":e_rev_exc}
+post_syn_i_params = {"tau": 2.0, "E":e_rev_inh}
 
 stdp_init = {"g":genn_model.init_var("Uniform",{"min":0.003 / 1000.0, "max":0.3 / 1000.0})}
 stdp_params = {"tauMinus": 20.0,"gMax": g_max,"Xtar":x_tar,"mu":mu, "eta":eta}
@@ -292,24 +276,24 @@ model = genn_model.GeNNModel("float","mnist")
 model.dT = dt
 
 # Neuron populations
-poisson_pop = model.add_neuron_population("poisson_pop",n_input,poisson_model,{},poisson_init)
+poisson_pop = model.add_neuron_population("poisson_pop", n_input, poisson_model, {}, poisson_init)
 
-lif_e_pop = model.add_neuron_population("lif_e_pop",n_e,lif_e_model,lif_e_params,lif_e_init)
+lif_e_pop = model.add_neuron_population("lif_e_pop", n_e, lif_e_model, lif_e_params, lif_e_init)
 
-lif_i_pop = model.add_neuron_population("lif_i_pop",n_i,lif_i_model,lif_i_params,lif_i_init)
+lif_i_pop = model.add_neuron_population("lif_i_pop", n_i, lif_i_model, lif_i_params, lif_i_init)
 
-input_e_pop = model.add_synapse_population("input_e_pop","DENSE_INDIVIDUALG",genn_wrapper.NO_DELAY,
+input_e_pop = model.add_synapse_population("input_e_pop", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
     poisson_pop, lif_e_pop,
     stdp_model, stdp_params, stdp_init, stdp_pre_init, {},
     "ExpCond", post_syn_e_params, {})
 
-syn_e_pop = model.add_synapse_population("syn_e_pop","SPARSE_GLOBALG",genn_wrapper.NO_DELAY,
+syn_e_pop = model.add_synapse_population("syn_e_pop", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     lif_e_pop, lif_i_pop,
     "StaticPulse", {}, static_e_init, {}, {},
     "ExpCond", post_syn_e_params, {},
     genn_model.init_connectivity("OneToOne",{}))
 
-syn_i_pop = model.add_synapse_population("syn_i_pop","DENSE_INDIVIDUALG",genn_wrapper.NO_DELAY,
+syn_i_pop = model.add_synapse_population("syn_i_pop", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
     lif_i_pop, lif_e_pop,
     "StaticPulse", {}, static_i_init, {}, {},
     "ExpCond", post_syn_i_params, {})
