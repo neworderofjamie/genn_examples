@@ -81,6 +81,9 @@ def record_current_spikes(pop, spikes, dt):
         return (np.hstack((spikes[0], current_spikes)),
                 np.hstack((spikes[1], current_spike_times)))
 
+# ----------------------------------------------------------------------------
+# Parameters
+# ----------------------------------------------------------------------------
 DT = 1.0
 INPUT_SCALE = 0.1
 
@@ -88,11 +91,55 @@ NUM_PN = 28 * 28
 NUM_KC = 10000
 NUM_MBON = 10
 NUM_PRESENT_TIMESTEPS = 20
-NUM_REST_TIMESTEPS = 100
+NUM_REST_TIMESTEPS = 1000
 
 PN_KC_SPARSITY = 0.1
-PN_KC_WEIGHT = 0.05
 
+# PN params - large refractory period so onlt spikes once per presentation
+PN_PARAMS = {
+    "C": 1.0,
+    "TauM": 20.0,
+    "Vrest": -60.0,
+    "Vreset": -60.0,
+    "Vthresh": -50.0,
+    "Ioffset": 0.0,
+    "TauRefrac": 100.0}
+
+# KC params - standard LIF neurons
+KC_PARAMS = {
+    "C": 0.2,
+    "TauM": 20.0,
+    "Vrest": -60.0,
+    "Vreset": -60.0,
+    "Vthresh": -50.0,
+    "Ioffset": 0.0,
+    "TauRefrac": 2.0}
+
+# GGN params - huge threshold so, essentially, non-spiking
+GGN_PARAMS = {
+    "C": 0.2,
+    "TauM": 20.0,
+    "Vrest": -60.0,
+    "Vreset": -60.0,
+    "Vthresh": 10000.0,
+    "Ioffset": 0.0,
+    "TauRefrac": 2.0}
+
+PN_KC_WEIGHT = 0.075
+PN_KC_TAU_SYN = 3.0
+
+KC_GGN_WEIGHT = 0.015
+KC_GGN_TAU_SYN = 5.0
+
+GGN_KC_WEIGHT = -4.0
+GGN_KC_TAU_SYN = 4.0
+GGN_KC_PARAMS = {"Vmid": -54.1,
+                 "Vslope": 1.0,
+                 "Vthresh": -60.0}
+
+# ----------------------------------------------------------------------------
+# Model
+# ----------------------------------------------------------------------------
 # Load MNIST data
 training_images, training_labels = get_training_data()
 testing_images, testing_labels = get_testing_data()
@@ -102,55 +149,49 @@ assert testing_images.shape[1] == NUM_PN
 assert np.max(training_labels) == (NUM_MBON - 1)
 assert np.max(testing_labels) == (NUM_MBON - 1)
 
-# GeNN current source model
+# Current source model, allowing current to be injected into neuron from variable
 cs_model = genn_model.create_custom_current_source_class(
     "cs_model",
     var_name_types=[("magnitude", "scalar")],
     injection_code="$(injectCurrent, $(magnitude));")
 
-pn_params = {
-    "C": 1.0,
-    "TauM": 20.0,
-    "Vrest": -60.0,
-    "Vreset": -60.0,
-    "Vthresh": -50.0,
-    "Ioffset": 0.0,
-    "TauRefrac": 100.0}
+# Model for graded synapses with exponential activation
+graded_synapse_model = genn_model.create_custom_weight_update_class(
+    "graded_synapse_model",
+    param_names=["Vmid", "Vslope", "Vthresh"],
+    var_name_types=[("g", "scalar")],
+    event_code="$(addToInSyn, DT * $(g) * max(0.0, 1.0 / (1.0 + exp(($(Vmid) - $(V_pre)) / $(Vslope)))));",
+    event_threshold_condition_code="$(V_pre) > $(Vthresh)")
 
-kc_params = {
-    "C": 0.2,
-    "TauM": 20.0,
-    "Vrest": -60.0,
-    "Vreset": -60.0,
-    "Vthresh": -50.0,
-    "Ioffset": 0.0,
-    "TauRefrac": 2.0}
-
-lif_init = {"V": -60.0, "RefracTime": 0.0}
-
-pn_kc_init = {"g": PN_KC_WEIGHT}
-
-pn_kc_fixed_prob = {"prob": PN_KC_SPARSITY}
-cs_init = {"magnitude": 0.0}
-
-post_syn_params = {"tau": 3.0}
 
 # Create model
 model = genn_model.GeNNModel("float", "mnist_mb")
 model.dT = DT
+model._model.set_seed(1337)
 
-# Create populations
-pn = model.add_neuron_population("pn", NUM_PN, "LIF", pn_params, lif_init)
-kc = model.add_neuron_population("kc", NUM_KC, "LIF", kc_params, lif_init)
+# Create neuron populations
+lif_init = {"V": -60.0, "RefracTime": 0.0}
+pn = model.add_neuron_population("pn", NUM_PN, "LIF", PN_PARAMS, lif_init)
+kc = model.add_neuron_population("kc", NUM_KC, "LIF", KC_PARAMS, lif_init)
+ggn = model.add_neuron_population("ggn", 1, "LIF", GGN_PARAMS, lif_init)
 
-pn_input = model.add_current_source("pn_input", cs_model, "pn" , {}, cs_init)
+pn_input = model.add_current_source("pn_input", cs_model, "pn" , {}, {"magnitude": 0.0})
 
 model.add_synapse_population("pn_kc", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     pn, kc,
-    "StaticPulse", {}, pn_kc_init, {}, {},
-    "ExpCurr", post_syn_params, {},
-    genn_model.init_connectivity("FixedProbabilityNoAutapse", pn_kc_fixed_prob))
+    "StaticPulse", {}, {"g": PN_KC_WEIGHT}, {}, {},
+    "ExpCurr", {"tau": PN_KC_TAU_SYN}, {},
+    genn_model.init_connectivity("FixedProbabilityNoAutapse",  {"prob": PN_KC_SPARSITY}))
 
+model.add_synapse_population("kc_ggn", "DENSE_GLOBALG", genn_wrapper.NO_DELAY,
+                             kc, ggn,
+                             "StaticPulse", {}, {"g": KC_GGN_WEIGHT}, {}, {},
+                             "ExpCurr", {"tau": KC_GGN_TAU_SYN}, {})
+
+model.add_synapse_population("ggn_kc", "DENSE_GLOBALG", genn_wrapper.NO_DELAY,
+                             ggn, kc,
+                             graded_synapse_model, GGN_KC_PARAMS, {"g": GGN_KC_WEIGHT}, {}, {},
+                             "ExpCurr", {"tau": GGN_KC_TAU_SYN}, {})
 
 model.build()
 model.load()
@@ -203,14 +244,18 @@ axes[0].scatter(pn_spikes[1], pn_spikes[0], s=1)
 axes[1].scatter(kc_spikes[1], kc_spikes[0], s=1)
 
 
-pn_spikes = np.histogram(pn_spikes[1], bins=stim_bins)[0]
-kc_spikes = np.histogram(kc_spikes[1], bins=stim_bins)[0]
-axes[2].plot(stim_bins[:-1], kc_spikes)
-axes[2].plot(stim_bins[:-1], pn_spikes)
+pn_spike_counts = np.histogram(pn_spikes[1], bins=stim_bins)[0]
+kc_spike_counts = np.histogram(kc_spikes[1], bins=stim_bins)[0]
+print("PN spikes: min=%f, max=%f, mean=%f" % (np.amin(pn_spike_counts), np.amax(pn_spike_counts), np.average(pn_spike_counts)))
+print("KC spikes: min=%f, max=%f, mean=%f" % (np.amin(kc_spike_counts), np.amax(kc_spike_counts), np.average(kc_spike_counts)))
+
+axes[2].plot(stim_bins[:-1], kc_spike_counts, label="KC")
+axes[2].plot(stim_bins[:-1], pn_spike_counts, label="PN")
 
 axes[0].vlines(stim_bins, ymin=0, ymax=NUM_PN, linestyle="--", color="gray")
 axes[1].vlines(stim_bins, ymin=0, ymax=NUM_KC, linestyle="--", color="gray")
 axes[2].vlines(stim_bins, ymin=0, ymax=np.amax(kc_spikes), linestyle="--", color="gray")
 
+axes[2].legend()
 fig.savefig("test.png")
 plt.show()
