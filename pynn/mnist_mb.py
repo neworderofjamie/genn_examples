@@ -149,15 +149,16 @@ GGN_KC_PARAMS = {"Vmid": -54.1,
                  "Vslope": 1.0,
                  "Vthresh": -60.0}
 
-KC_MBON_WEIGHT = {"mean": 0.02, "sd": 0.01}
-KC_MBON_TAU_SYN = 3.0
+KC_MBON_WEIGHT = {"min": 0.00, "max": 0.05}
+KC_MBON_TAU_SYN = 8.0
 KC_MBON_PARAMS = {"tau": 10.0,
-                  "rho": 0.4,
+                  "rho": 0.0,
                   "eta": 0.01,
                   "wMin": 0.0,
                   "wMax": 0.1}
-MBON_MBON_WEIGHT = -0.7
 
+MBON_MBON_WEIGHT = -5.0
+MBON_MBON_TAU_SYN = 3.0
 # ----------------------------------------------------------------------------
 # Model
 # ----------------------------------------------------------------------------
@@ -183,6 +184,11 @@ graded_synapse_model = genn_model.create_custom_weight_update_class(
     var_name_types=[("g", "scalar")],
     event_code="$(addToInSyn, DT * $(g) * max(0.0, 1.0 / (1.0 + exp(($(Vmid) - $(V_pre)) / $(Vslope)))));",
     event_threshold_condition_code="$(V_pre) > $(Vthresh)")
+
+lateral_inhibition = genn_model.create_custom_init_var_snippet_class(
+    "lateral_inhibition",
+    param_names=["g"],
+    var_init_code="$(value)=($(id_pre)==$(id_post)) ? 0.0 : $(g);")
 
 # STDP synapse with additive weight dependence
 symmetric_stdp = genn_model.create_custom_weight_update_class(
@@ -239,16 +245,15 @@ model.add_synapse_population("ggn_kc", "DENSE_GLOBALG", genn_wrapper.NO_DELAY,
                              graded_synapse_model, GGN_KC_PARAMS, {"g": GGN_KC_WEIGHT}, {}, {},
                              "ExpCurr", {"tau": GGN_KC_TAU_SYN}, {})
 
-model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
-                             kc, mbon,
-                             symmetric_stdp, KC_MBON_PARAMS, {"g": genn_model.init_var("Normal", KC_MBON_WEIGHT)}, {}, {},
-                             #"StaticPulse", {}, {"g": genn_model.init_var("Normal", KC_MBON_WEIGHT)}, {}, {},
-                             "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
+kc_mbon = model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+                                       kc, mbon,
+                                       symmetric_stdp, KC_MBON_PARAMS, {"g": genn_model.init_var("Uniform", KC_MBON_WEIGHT)}, {}, {},
+                                       "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
 
-model.add_synapse_population("mbob_mbon", "DENSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("mbon_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
                              mbon, mbon,
-                             "StaticPulse", {}, {"g": MBON_MBON_WEIGHT}, {}, {},
-                             "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
+                             "StaticPulse", {}, {"g": genn_model.init_var(lateral_inhibition, {"g": MBON_MBON_WEIGHT})}, {}, {},
+                             "ExpCurr", {"tau": MBON_MBON_TAU_SYN}, {})
 
 # Build model and load it
 model.build()
@@ -260,14 +265,19 @@ single_example_timesteps = NUM_PRESENT_TIMESTEPS + NUM_REST_TIMESTEPS
 pn_input_current_view = pn_input.vars["magnitude"].view
 pn_refrac_time_view = pn.vars["RefracTime"].view
 ggn_v_view = ggn.vars["V"].view
+kc_mbon_view = kc_mbon.vars["g"].view
 
+model.pull_var_from_device("kc_mbon", "g")
+before = np.copy(kc_mbon_view)
 plot = True
+
+label_spikes = np.zeros((NUM_MBON, NUM_MBON), dtype=int)
 
 pn_spikes = None
 kc_spikes = None
 mbon_spikes = None
 
-NUM_STIM = 1000
+NUM_STIM = 100
 while model.timestep < (single_example_timesteps * NUM_STIM):
     # Calculate the timestep within the presentation
     timestep_in_example = model.timestep % single_example_timesteps
@@ -300,7 +310,11 @@ while model.timestep < (single_example_timesteps * NUM_STIM):
     kc_spikes = record_current_spikes(kc, kc_spikes, model.t)
 
     model.pull_current_spikes_from_device("mbon")
+    label_spikes[training_labels[example]] += np.bincount(mbon.current_spikes, minlength=NUM_MBON)
     mbon_spikes = record_current_spikes(mbon, mbon_spikes, model.t)
+
+model.pull_var_from_device("kc_mbon", "g")
+after = np.copy(kc_mbon_view)
 
 stim_bins = np.arange(0, single_example_timesteps * NUM_STIM, single_example_timesteps)
 
@@ -317,9 +331,12 @@ if plot:
     axes[2].scatter(mbon_spikes[1], mbon_spikes[0], s=1)
 
 kc_spike_counts = np.histogram(kc_spikes[1], bins=stim_bins)[0]
-
+mbon_spike_counts = np.histogram(mbon_spikes[1], bins=stim_bins)[0]
 print("KC spikes: min=%f, max=%f, mean=%f" % (np.amin(kc_spike_counts), np.amax(kc_spike_counts), np.average(kc_spike_counts)))
+print("MBON spikes: min=%f, max=%f, mean=%f" % (np.amin(mbon_spike_counts), np.amax(mbon_spike_counts), np.average(mbon_spike_counts)))
 
+print("Before: min=%f, max=%f" % (np.amin(before), np.amax(before)))
+print("After: min=%f, max=%f" % (np.amin(after), np.amax(after)))
 if plot:
     axes[3].plot(stim_bins[:-1], kc_spike_counts)
 
@@ -327,5 +344,12 @@ if plot:
     axes[1].vlines(stim_bins, ymin=0, ymax=NUM_KC, linestyle="--", color="gray")
     axes[2].vlines(stim_bins, ymin=0, ymax=NUM_MBON, linestyle="--", color="gray")
     axes[3].vlines(stim_bins, ymin=0, ymax=np.amax(kc_spikes), linestyle="--", color="gray")
+    '''
+    axes[4].hist(before, bins=10)
+    axes[5].hist(before, bins=10)
+    for i, a in enumerate(axes[6:]):
+        a.set_title(str(i))
+        a.bar(range(NUM_MBON), label_spikes[i])
+    '''
     fig.savefig("test.png")
     plt.show()
