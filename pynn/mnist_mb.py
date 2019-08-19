@@ -82,15 +82,16 @@ def record_current_spikes(pop, spikes, dt):
                 np.hstack((spikes[1], current_spike_times)))
 
 DT = 1.0
-INPUT_SCALE = 90.0
+INPUT_SCALE = 0.1
 
 NUM_PN = 28 * 28
 NUM_KC = 10000
 NUM_MBON = 10
 NUM_PRESENT_TIMESTEPS = 20
-NUM_REST_TIMESTEPS = 10
+NUM_REST_TIMESTEPS = 100
 
-PN_KC_WEIGHT = 0.5
+PN_KC_SPARSITY = 0.1
+PN_KC_WEIGHT = 0.05
 
 # Load MNIST data
 training_images, training_labels = get_training_data()
@@ -129,7 +130,7 @@ lif_init = {"V": -60.0, "RefracTime": 0.0}
 
 pn_kc_init = {"g": PN_KC_WEIGHT}
 
-pn_kc_fixed_prob = {"prob": 10.0 / NUM_PN}
+pn_kc_fixed_prob = {"prob": PN_KC_SPARSITY}
 cs_init = {"magnitude": 0.0}
 
 post_syn_params = {"tau": 3.0}
@@ -163,14 +164,18 @@ pn_refrac_time_view = pn.vars["RefracTime"].view
 pn_spikes = None
 kc_spikes = None
 
-while model.timestep < (single_example_timesteps * 1):
+NUM_STIM = 10
+while model.timestep < (single_example_timesteps * NUM_STIM):
     # Calculate the timestep within the presentation
     timestep_in_example = model.timestep % single_example_timesteps
-    example = 5#int(model.timestep // single_example_timesteps)
+    example = int(model.timestep // single_example_timesteps)
     
     # If this is the first timestep of the presentation
     if timestep_in_example == 0:
-        input_vector = training_images[example] / float(np.sum(training_images[example]))
+        # Get image
+        input_vector = training_images[example]
+        
+        # Normalize
         pn_input_current_view[:] = input_vector * INPUT_SCALE
         model.push_var_to_device("pn_input", "magnitude")
         
@@ -190,11 +195,22 @@ while model.timestep < (single_example_timesteps * 1):
     pn_spikes = record_current_spikes(pn, pn_spikes, model.t)
     kc_spikes = record_current_spikes(kc, kc_spikes, model.t)
     
-print(len(kc_spikes[0]))
-fig, axes = plt.subplots(2, sharex=True)
+    
+stim_bins = np.arange(0, single_example_timesteps * NUM_STIM, single_example_timesteps)
+
+fig, axes = plt.subplots(3, sharex=True)
 axes[0].scatter(pn_spikes[1], pn_spikes[0], s=1)
 axes[1].scatter(kc_spikes[1], kc_spikes[0], s=1)
 
-#axes[0].vlines(np.arange(0, single_example_timesteps * 100, single_example_timesteps), ymin=0, ymax=NUM_PN)
-#axes[1].vlines(np.arange(0, single_example_timesteps * 100, single_example_timesteps), ymin=0, ymax=NUM_KC)
+
+pn_spikes = np.histogram(pn_spikes[1], bins=stim_bins)[0]
+kc_spikes = np.histogram(kc_spikes[1], bins=stim_bins)[0]
+axes[2].plot(stim_bins[:-1], kc_spikes)
+axes[2].plot(stim_bins[:-1], pn_spikes)
+
+axes[0].vlines(stim_bins, ymin=0, ymax=NUM_PN, linestyle="--", color="gray")
+axes[1].vlines(stim_bins, ymin=0, ymax=NUM_KC, linestyle="--", color="gray")
+axes[2].vlines(stim_bins, ymin=0, ymax=np.amax(kc_spikes), linestyle="--", color="gray")
+
+fig.savefig("test.png")
 plt.show()
