@@ -7,6 +7,8 @@ from gzip import decompress
 from urllib import request
 from pygenn import genn_model, genn_wrapper
 
+import sys
+
 def get_image_data(url, filename, correct_magic):
     if path.exists(filename):
         print("Loading existing data")
@@ -85,15 +87,15 @@ def record_current_spikes(pop, spikes, dt):
 # Parameters
 # ----------------------------------------------------------------------------
 DT = 1.0
-INPUT_SCALE = 0.1
+INPUT_SCALE = 0.01
 
 NUM_PN = 28 * 28
-NUM_KC = 10000
+NUM_KC = 20000
 NUM_MBON = 10
 NUM_PRESENT_TIMESTEPS = 20
 NUM_REST_TIMESTEPS = 1000
 
-PN_KC_SPARSITY = 0.1
+PN_KC_SPARSITY = float(10 * NUM_KC) / float(NUM_KC * NUM_PN)
 
 # PN params - large refractory period so onlt spikes once per presentation
 PN_PARAMS = {
@@ -125,18 +127,22 @@ GGN_PARAMS = {
     "Ioffset": 0.0,
     "TauRefrac": 2.0}
 
-PN_KC_WEIGHT = 0.075
+PN_KC_WEIGHT = 0.35
 PN_KC_TAU_SYN = 3.0
 
 KC_GGN_WEIGHT = 0.015
+#KC_GGN_WEIGHT = float(sys.argv[1])
 KC_GGN_TAU_SYN = 5.0
 
 GGN_KC_WEIGHT = -4.0
+#GGN_KC_WEIGHT = float(sys.argv[2])
 GGN_KC_TAU_SYN = 4.0
 GGN_KC_PARAMS = {"Vmid": -54.1,
                  "Vslope": 1.0,
                  "Vthresh": -60.0}
-
+#GGN_KC_PARAMS = {"Vmid": float(sys.argv[3]),
+#                 "Vslope": float(sys.argv[4]),
+#                 "Vthresh": -60.0}
 # ----------------------------------------------------------------------------
 # Model
 # ----------------------------------------------------------------------------
@@ -162,8 +168,46 @@ graded_synapse_model = genn_model.create_custom_weight_update_class(
     var_name_types=[("g", "scalar")],
     event_code="$(addToInSyn, DT * $(g) * max(0.0, 1.0 / (1.0 + exp(($(Vmid) - $(V_pre)) / $(Vslope)))));",
     event_threshold_condition_code="$(V_pre) > $(Vthresh)")
-
-
+'''
+# STDP synapse with additive weight dependence
+symmetric_stdp = genn_model.create_custom_weight_update_class(
+    "STDPAdditive",
+    param_names=["tau", "aPlus", "aMinus", "wMin", "wMax"],
+    var_name_types=[("g", "scalar")],
+    pre_var_name_types=[("preTrace", "scalar")],
+    post_var_name_types=[("postTrace", "scalar")],
+    sim_code=
+        """
+        $(addToInSyn, $(g));
+        const scalar dt = $(t) - $(sT_post);
+        if(dt > 0) {
+            const scalar timing = exp(-dt / $(tau));
+            const scalar newWeight = $(g) - ($(aMinus) * $(postTrace) * timing);
+            $(g) = min($(wMax), max($(wMin), newWeight));
+        }
+        """,
+    learn_post_code=
+        """
+        const scalar dt = $(t) - $(sT_pre);
+        if(dt > 0) {
+            const scalar timing = exp(-dt / $(tau));
+            const scalar newWeight = $(g) + ($(aMinux) * $(preTrace) * timing);
+            $(g) = min($(wMax), max($(wMin), newWeight));
+        }
+        """,
+    pre_spike_code=
+        """
+        const scalar dt = $(t) - $(sT_pre);
+        $(preTrace) = $(preTrace) * exp(-dt / $(tau)) + 1.0;
+        """,
+    post_spike_code=
+        """
+        const scalar dt = $(t) - $(sT_post);
+        $(postTrace) = $(postTrace) * exp(-dt / $(tau)) + 1.0;
+        """,
+    is_pre_spike_time_required=True,
+    is_post_spike_time_required=True)
+'''
 # Create model
 model = genn_model.GeNNModel("float", "mnist_mb")
 model.dT = DT
@@ -181,7 +225,7 @@ model.add_synapse_population("pn_kc", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     pn, kc,
     "StaticPulse", {}, {"g": PN_KC_WEIGHT}, {}, {},
     "ExpCurr", {"tau": PN_KC_TAU_SYN}, {},
-    genn_model.init_connectivity("FixedProbabilityNoAutapse",  {"prob": PN_KC_SPARSITY}))
+    genn_model.init_connectivity("FixedProbabilityNoAutapse", {"prob": PN_KC_SPARSITY}))
 
 model.add_synapse_population("kc_ggn", "DENSE_GLOBALG", genn_wrapper.NO_DELAY,
                              kc, ggn,
@@ -201,9 +245,13 @@ single_example_timesteps = NUM_PRESENT_TIMESTEPS + NUM_REST_TIMESTEPS
 # Get views to efficiently access state variables
 pn_input_current_view = pn_input.vars["magnitude"].view
 pn_refrac_time_view = pn.vars["RefracTime"].view
+ggn_v_view = ggn.vars["V"].view
+
+plot = True
 
 pn_spikes = None
 kc_spikes = None
+ggn_v = None
 
 NUM_STIM = 10
 while model.timestep < (single_example_timesteps * NUM_STIM):
@@ -230,32 +278,44 @@ while model.timestep < (single_example_timesteps * NUM_STIM):
         
     model.step_time()
     
-    model.pull_current_spikes_from_device("pn")
+    if plot:
+        model.pull_current_spikes_from_device("pn")
+        pn_spikes = record_current_spikes(pn, pn_spikes, model.t)
+
     model.pull_current_spikes_from_device("kc")
-    
-    pn_spikes = record_current_spikes(pn, pn_spikes, model.t)
     kc_spikes = record_current_spikes(kc, kc_spikes, model.t)
-    
-    
+
+
+    model.pull_var_from_device("ggn", "V")
+
+    if ggn_v is None:
+        ggn_v = np.copy(ggn_v_view)
+    else:
+        ggn_v = np.hstack((ggn_v, ggn_v_view))
+
 stim_bins = np.arange(0, single_example_timesteps * NUM_STIM, single_example_timesteps)
 
-fig, axes = plt.subplots(3, sharex=True)
-axes[0].scatter(pn_spikes[1], pn_spikes[0], s=1)
-axes[1].scatter(kc_spikes[1], kc_spikes[0], s=1)
+if plot:
+    fig, axes = plt.subplots(4, sharex=True)
+
+    axes[0].set_title("PN")
+    axes[0].scatter(pn_spikes[1], pn_spikes[0], s=1)
+
+    axes[1].set_title("KC")
+    axes[1].scatter(kc_spikes[1], kc_spikes[0], s=1)
 
 
-pn_spike_counts = np.histogram(pn_spikes[1], bins=stim_bins)[0]
 kc_spike_counts = np.histogram(kc_spikes[1], bins=stim_bins)[0]
-print("PN spikes: min=%f, max=%f, mean=%f" % (np.amin(pn_spike_counts), np.amax(pn_spike_counts), np.average(pn_spike_counts)))
+
 print("KC spikes: min=%f, max=%f, mean=%f" % (np.amin(kc_spike_counts), np.amax(kc_spike_counts), np.average(kc_spike_counts)))
 
-axes[2].plot(stim_bins[:-1], kc_spike_counts, label="KC")
-axes[2].plot(stim_bins[:-1], pn_spike_counts, label="PN")
+if plot:
+    axes[2].plot(stim_bins[:-1], kc_spike_counts)
 
-axes[0].vlines(stim_bins, ymin=0, ymax=NUM_PN, linestyle="--", color="gray")
-axes[1].vlines(stim_bins, ymin=0, ymax=NUM_KC, linestyle="--", color="gray")
-axes[2].vlines(stim_bins, ymin=0, ymax=np.amax(kc_spikes), linestyle="--", color="gray")
+    axes[0].vlines(stim_bins, ymin=0, ymax=NUM_PN, linestyle="--", color="gray")
+    axes[1].vlines(stim_bins, ymin=0, ymax=NUM_KC, linestyle="--", color="gray")
+    axes[2].vlines(stim_bins, ymin=0, ymax=np.amax(kc_spikes), linestyle="--", color="gray")
 
-axes[2].legend()
-fig.savefig("test.png")
-plt.show()
+    axes[3].plot(ggn_v)
+    fig.savefig("test.png")
+    plt.show()
