@@ -101,11 +101,11 @@ poisson_model = genn_model.create_custom_neuron_class(
 # excitatory neurons
 lif_e_model = genn_model.create_custom_neuron_class(
     "lif_e_model",
-    param_names=["Tau", "Erest", "Vreset", "Vthres", "RefracPeriod", "tauTheta", "thetaPlus"],
+    param_names=["Tau", "Vrest", "Vreset", "Vthres", "RefracPeriod", "tauTheta", "thetaPlus"],
     var_name_types=[("V","scalar"), ("RefracTime", "scalar"), ("theta", "scalar"), ("SpikeNumber", "unsigned int")],
     sim_code="""
     if ($(RefracTime) <= 0.0) {
-        const scalar alpha = ($(Isyn) * $(Tau)) + $(Erest);
+        const scalar alpha = ($(Isyn) * $(Tau)) + $(Vrest);
         $(V) = alpha - ($(ExpTC) * (alpha - $(V)));
     }
     else {
@@ -129,11 +129,11 @@ lif_e_model = genn_model.create_custom_neuron_class(
 # inhibitory neurons
 lif_i_model = genn_model.create_custom_neuron_class(
     "lif_i_model",
-    param_names=["Tau","Erest","Vreset","Vthres","RefracPeriod"],
+    param_names=["Tau","Vrest","Vreset","Vthres","RefracPeriod"],
     var_name_types=[("V","scalar"),("RefracTime","scalar")],
     sim_code="""
     if ($(RefracTime) <= 0.0)  {
-        const scalar alpha = ($(Isyn) * $(Tau)) + $(Erest);
+        const scalar alpha = ($(Isyn) * $(Tau)) + $(Vrest);
         $(V) = alpha - ($(ExpTC) * (alpha - $(V)));
     }
     else  {
@@ -220,22 +220,14 @@ input_intensity = 2.
 start_input_intensity = input_intensity
 
 # Neuron
-v_reset_e = -65
-v_reset_i = -45
-refrac_period_i = 2.0
-e_rev_exc = 0.0
-e_rev_inh = -100.0
+v_rest_e = -65.0
+v_rest_i = -60.0
 
-# STDP
-g_max = 1.0 / 1000.0
-x_tar = 0.4
-eta = 0.0000001
-mu = 0.2
 
 # Neuron group parameters
 lif_e_params = {
     "Tau": 100.0, 
-    "Erest": -65.0,
+    "Vrest": v_rest_e,
     "Vreset": -65.0,
     "Vthres": -52.0 - 20.0,
     "RefracPeriod": 5.0,
@@ -245,28 +237,28 @@ lif_e_params = {
 
 lif_i_params = {
     "Tau": 10.0, 
-    "Erest": -60.0,
+    "Vrest": v_rest_i,
     "Vreset": -45.0,
     "Vthres": -40.0,
     "RefracPeriod": 2.0}
 
 # Neuron group initial values
-lif_e_init = {"V": v_reset_e - 40.0, "RefracTime": 0.0, "SpikeNumber": 0, "theta": 20.0}
-lif_i_init = {"V": v_reset_i - 40.0, "RefracTime": 0.0}
+lif_e_init = {"V": v_rest_e - 40.0, "RefracTime": 0.0, "SpikeNumber": 0, "theta": 10.0}
+lif_i_init = {"V": v_rest_i - 40.0, "RefracTime": 0.0}
 
 poisson_init = {
     "timeStepToSpike": 0.0,
     "frequency": 0.0}
 
-post_syn_e_params = {"tau": 1.0, "E":e_rev_exc}
-post_syn_i_params = {"tau": 2.0, "E":e_rev_inh}
+post_syn_e_params = {"tau": 1.0, "E": 0.0}
+post_syn_i_params = {"tau": 2.0, "E": -100.0}
 
-stdp_init = {"g":genn_model.init_var("Uniform",{"min":0.003 / 1000.0, "max":0.3 / 1000.0})}
-stdp_params = {"tauMinus": 20.0,"gMax": g_max,"Xtar":x_tar,"mu":mu, "eta":eta}
+stdp_init = {"g": genn_model.init_var("Uniform", {"min": 0.003, "max": 0.3})}
+stdp_params = {"tauMinus": 20.0, "gMax": 1.0, "Xtar": 0.4, "mu": 0.2, "eta": 0.0001}
 stdp_pre_init = {"Xpre": 0.0}
 
-static_e_init = {"g":17.0 / 1000.0}
-static_i_init = {"g":genn_model.init_var(lateral_inhibition,{"weight":-10.0 / 1000.0})}
+static_e_init = {"g": 17.0}
+static_i_init = {"g": genn_model.init_var(lateral_inhibition,{"weight":-10.0})}
 
 # ********************************************************************************
 #                      Model Instances
