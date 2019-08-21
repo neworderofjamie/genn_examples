@@ -3,7 +3,6 @@
 
 // GeNN robotics includes
 #include "genn_models/stdp_dopamine.h"
-#include "genn_utils/connectors.h"
 
 // Model includes
 #include "parameters.h"
@@ -45,11 +44,8 @@ IMPLEMENT_MODEL(UniformNoise);
 void modelDefinition(NNmodel &model)
 {
     // Use maths intrinsics rather than accurate trancendentals
-    GENN_PREFERENCES::optimizeCode = true;
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
+    GENN_PREFERENCES.optimizeCode = true;
 
-    initGeNN();
     model.setDT(Parameters::timestepMs);
     model.setName("izhikevich_pavlovian");
     
@@ -105,48 +101,34 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(Parameters::inhWeight);
 
     // Create IF_curr neuron
-    auto e = model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
-    auto i = model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
+    model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
+    model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
 
-    auto eCurrSource = model.addCurrentSource<UniformNoise>("ECurr", "E", currSourceParams, {});
-    auto iCurrSource = model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceParams, {});
+    model.addCurrentSource<UniformNoise>("ECurr", "E", currSourceParams, {});
+    model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceParams, {});
 
-    auto ee = model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
-        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
+    model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
+        "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "E",
         dopeParams, dopeInitVars,
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto ei = model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
-        "EI", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
+    model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
+        "EI", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "I",
         dopeParams, dopeInitVars,
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "II", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhSynInit,
         {}, {}, 
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "IE", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
+        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "E",
         {}, inhSynInit,
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-
-    // Configure external input current variables so they can be uploaded from host
-    e->setVarMode("Iext", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    i->setVarMode("Iext", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
-    // Configure spike variables so they can be downloaded to host
-    e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
-    // Configure synaptic weight variables so they can be downloaded to host
-    ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    ei->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-
-    model.finalize();
 }

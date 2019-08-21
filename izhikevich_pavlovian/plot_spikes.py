@@ -12,8 +12,8 @@ bin_ms = 10
 display_time = 2000
 
 def get_masks(times):
-    return (np.where(times < 40000),
-            np.where(times > (duration_ms - 40000)))
+    return (np.where(times < 50000),
+            np.where(times > (duration_ms - 50000)))
 
 def get_csv_columns(csv_file, headers=True):
     # Create reader
@@ -70,6 +70,7 @@ with open("e_spikes.csv", "rb") as e_spikes_file, \
     reward_times_first_second, reward_times_last_second = get_masks(reward_times)
 
     # Find the earliest rewarded stimuli in first and last seconds
+    print(np.where(stimuli_id[stimuli_last_second] == 0))
     rewarded_stimuli_time_first_second = stimuli_times[stimuli_first_second][np.where(stimuli_id[stimuli_first_second] == 0)[0][0]]
     rewarded_stimuli_time_last_second = stimuli_times[stimuli_last_second][np.where(stimuli_id[stimuli_last_second] == 0)[0][0]]
 
