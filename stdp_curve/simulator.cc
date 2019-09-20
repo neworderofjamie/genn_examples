@@ -3,8 +3,8 @@
 // Standard C++ includes
 #include <iostream>
 
-// BoB robotics includes
-#include "genn_utils/spike_csv_recorder.h"
+// GeNN userproject includes
+#include "spikeRecorder.h"
 
 #define NUM_NEURONS 14
 #define NUM_PAIRS 60
@@ -60,7 +60,7 @@ int main()
     pushspikeTimesPreStimToDevice(NUM_PAIRS * NUM_NEURONS);
 
     // Loop through timesteps
-    BoBRobotics::GeNNUtils::SpikeCSVRecorder spikes("spikes.csv", glbSpkCntExcitatory, glbSpkExcitatory);
+    SpikeRecorder spikes("spikes.csv", glbSpkCntExcitatory, glbSpkExcitatory, ",", true);
     while(iT < 60200) {
         // Simulate
         stepTime();

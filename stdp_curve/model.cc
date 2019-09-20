@@ -1,10 +1,6 @@
-#include <cmath>
-#include <vector>
-
 #include "modelSpec.h"
 
 #include "../common/stdp_additive.h"
-
 
 void modelDefinition(NNmodel &model)
 {
