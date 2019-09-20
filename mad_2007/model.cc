@@ -3,12 +3,10 @@
 
 #include "modelSpec.h"
 
-// GeNN robotics includes
-#include "genn_models/alpha_curr.h"
+#include "../common/alpha_curr.h"
 
 #include "parameters.h"
 
-using namespace BoBRobotics;
 
 //----------------------------------------------------------------------------
 // STDPPower
@@ -33,8 +31,8 @@ public:
     SET_POST_VARS({{"postTrace", "scalar"}});
 
     SET_DERIVED_PARAMS({
-        {"weight0Mu", [](const vector<double> &pars, double){ return std::pow(pars[5], 1.0 - pars[4]); }},
-        {"denDelayStep", [](const vector<double> &pars, double dt){ return std::floor(pars[6] / dt) - 1.0; }}
+        {"weight0Mu", [](const std::vector<double> &pars, double){ return std::pow(pars[5], 1.0 - pars[4]); }},
+        {"denDelayStep", [](const std::vector<double> &pars, double dt){ return std::floor(pars[6] / dt) - 1.0; }}
     });
 
     SET_PRE_SPIKE_CODE(
@@ -118,11 +116,11 @@ public:
 
 
     SET_DERIVED_PARAMS({
-        {"ExpTC", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"Rmembrane", [](const vector<double> &pars, double){ return  pars[1] / pars[0]; }},
-        {"PoissonExpMinusLambda", [](const vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
-        {"IpoissonExpDecay", [](const vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
-        {"IpoissonInit", [](const vector<double> &pars, double){ return pars[8] * (std::exp(1) / pars[9]); }}});
+        {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }},
+        {"PoissonExpMinusLambda", [](const std::vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
+        {"IpoissonExpDecay", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
+        {"IpoissonInit", [](const std::vector<double> &pars, double){ return pars[8] * (std::exp(1) / pars[9]); }}});
 
     SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}, {"Ipoisson2", "scalar"}});
 };
@@ -130,20 +128,17 @@ IMPLEMENT_MODEL(LIFPoisson);
 
 void modelDefinition(NNmodel &model)
 {
-    initGeNN();
+    GENN_PREFERENCES.optimizeCode = true;
+    GENN_PREFERENCES.deviceSelectMethod = DeviceSelect::MANUAL;
+    GENN_PREFERENCES.manualDeviceID = 0;
+
     model.setDT(0.1);
     model.setTimePrecision(TimePrecision::DOUBLE);
     model.setName("mad_2007");
+    model.setDefaultVarLocation(VarLocation::DEVICE);
+    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
+    model.setTiming(Parameters::measureTiming);
 
-    GENN_PREFERENCES::optimizeCode = true;
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::autoChooseDevice = false;
-    GENN_PREFERENCES::defaultDevice = 0;
-#ifdef MEASURE_TIMING
-    model.setTiming(true);
-#endif
 
     //---------------------------------------------------------------------------
     // Build model
@@ -207,9 +202,9 @@ void modelDefinition(NNmodel &model)
         initVar<InitVarSnippet::Normal>(wDist));    // 0 - Wij (nA)
 #endif
     // Alpha current parameters
-    GeNNModels::AlphaCurr::ParamValues alphaCurrParams(
+    AlphaCurr::ParamValues alphaCurrParams(
         0.33);  // 0 - TauSyn (ms)
-    GeNNModels::AlphaCurr::VarValues alphaCurrInit(
+    AlphaCurr::VarValues alphaCurrInit(
         0.0);   // 0 - x
 
     // Create IF_curr neuron
@@ -217,8 +212,8 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<LIFPoisson>("I", Parameters::numInhibitory, lifParams, lifInit);
 
 #ifdef STATIC
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
-        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, Parameters::delayTimestep - 1,
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
+        "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, Parameters::delayTimestep - 1,
         "E", "E",
         {}, eeSynapseInit,
         alphaCurrParams, alphaCurrInit,
@@ -226,8 +221,8 @@ void modelDefinition(NNmodel &model)
 #else
     // **NOTE** in order for the weights to remain stable it is important 
     // that delay is dendritic with matching back propagation delay
-    auto *ee = model.addSynapsePopulation<STDPPower, GeNNModels::AlphaCurr>(
-        "EE", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
+    auto *ee = model.addSynapsePopulation<STDPPower, AlphaCurr>(
+        "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "E",
         stdpParams, excitatorySynapseInit, stdpPreInit, stdpPostInit,
         alphaCurrParams, alphaCurrInit,
@@ -235,19 +230,19 @@ void modelDefinition(NNmodel &model)
     ee->setMaxDendriticDelayTimesteps(Parameters::delayTimestep);
     ee->setBackPropDelaySteps(Parameters::delayTimestep - 4);
 #endif
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
-        "EI", SynapseMatrixType::RAGGED_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep - 1,
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
+        "EI", SynapseMatrixType::SPARSE_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep - 1,
         "E", "I",
         {}, excitatorySynapseInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "II", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep - 1,
         "I", "I",
         {}, inhibitorySynapseInit,
         alphaCurrParams, alphaCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::AlphaCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, AlphaCurr>(
         "IE", SynapseMatrixType::BITMASK_GLOBALG_INDIVIDUAL_PSM, Parameters::delayTimestep - 1,
         "I", "E",
         {}, inhibitorySynapseInit,
@@ -255,13 +250,12 @@ void modelDefinition(NNmodel &model)
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Configure spike variables so that they can be downloaded to host
-    e->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    i->setSpikeVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    e->setSpikeLocation(VarLocation::HOST_DEVICE);
+    i->setSpikeLocation(VarLocation::HOST_DEVICE);
 
     // Configure plastic synaptic weights so that they can be downloaded to host
 #ifndef STATIC
-    ee->setWUVarMode("g", VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
-    ee->setSparseConnectivityVarMode(VarMode::LOC_HOST_DEVICE_INIT_DEVICE);
+    ee->setWUVarLocation("g", VarLocation::HOST_DEVICE);
+    ee->setSparseConnectivityLocation(VarLocation::HOST_DEVICE);
 #endif
-    model.finalize();
 }

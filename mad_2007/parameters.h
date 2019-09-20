@@ -3,7 +3,6 @@
 // Standard C includes
 #include <cmath>
 
-#define MEASURE_TIMING
 //#define STATIC
 
 //------------------------------------------------------------------------
@@ -18,6 +17,8 @@ namespace Parameters
     const double delayMs = 1.5;
 
     const unsigned int delayTimestep = (unsigned int)(delayMs / timestep);
+
+    const bool measureTiming = true;
 
     // number of cells
     const unsigned int numExcitatory = 90000;

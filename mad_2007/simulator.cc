@@ -2,10 +2,10 @@
 #include <fstream>
 #include <random>
 
-// GeNN robotics includes
-#include "common/timer.h"
-#include "genn_utils/spike_csv_recorder.h"
-#include "third_party/path.h"
+// GeNN user project includes
+#include "timer.h"
+#include "spikeRecorder.h"
+//#include "third_party/path.h"
 
 // Model parameters
 #include "parameters.h"
@@ -13,48 +13,30 @@
 // Auto-generated model code
 #include "mad_2007_CODE/definitions.h"
 
-using namespace BoBRobotics;
-
 int main(int argc, char** argv)
 {
-    filesystem::path outputPath;
+    std::string outputPath;
     if(argc > 1) {
         outputPath = argv[1];
     }
 
-    {
-        Timer<> tim("Allocation:");
-        allocateMem();
-    }
-    {
-        Timer<> tim("Initialization:");
-        initialize();
-    }
-
-    // Final setup
-    {
-        Timer<> tim("Sparse init:");
-        initmad_2007();
-    }
-
+    allocateMem();
+    initialize();
+    initializeSparse();
     {
         // Open CSV output files
-        GeNNUtils::SpikeCSVRecorderDelayCached spikes("spikes.csv", Parameters::numExcitatory,
-                                                spkQuePtrE, glbSpkCntE, glbSpkE);
+        SpikeRecorderDelayCached spikes("spikes.csv", Parameters::numExcitatory,
+                                        spkQuePtrE, glbSpkCntE, glbSpkE, ",", true);
         {
-            Timer<> tim("Simulation:");
+            Timer tim("Simulation:");
             // Loop through timesteps
             double averageSpikes = 0.0;
             const double alpha = 0.001;
             while(t < Parameters::durationMs) {
                 // Simulate
-#ifndef CPU_ONLY
-                stepTimeGPU();
-
+                stepTime();
                 pullECurrentSpikesFromDevice();
-#else
-                stepTimeCPU();
-#endif
+
                 averageSpikes = (alpha * (double)spikeCount_E) + ((1.0 - alpha) * averageSpikes);
                 if((iT % 1000) == 0) {
 
@@ -69,35 +51,32 @@ int main(int argc, char** argv)
             }
         }
     }
-#ifdef MEASURE_TIMING
-    std::cout << "Timing:" << std::endl;
-    std::cout << "\tHost init:" << initHost_tme * 1000.0 << std::endl;
-    std::cout << "\tDevice init:" << initDevice_tme * 1000.0 << std::endl;
-    std::cout << "\tHost sparse init:" << sparseInitHost_tme * 1000.0 << std::endl;
-    std::cout << "\tDevice sparse init:" << sparseInitDevice_tme * 1000.0 << std::endl;
-    std::cout << "\tNeuron simulation:" << neuron_tme * 1000.0 << std::endl;
-    std::cout << "\tSynapse simulation:" << synapse_tme * 1000.0 << std::endl;
+
+    if(Parameters::measureTiming) {
+        std::cout << "Timing:" << std::endl;
+        std::cout << "\tInit:" << initTime * 1000.0 << std::endl;
+        std::cout << "\tSparse init:" << initSparseTime * 1000.0 << std::endl;
+        std::cout << "\tNeuron simulation:" << neuronUpdateTime * 1000.0 << std::endl;
+        std::cout << "\tSynapse simulation:" << presynapticUpdateTime * 1000.0 << std::endl;
 #ifndef STATIC
-    std::cout << "\tPostsynaptic learning:" << learning_tme * 1000.0 << std::endl;
+        std::cout << "\tPostsynaptic learning:" << postsynapticUpdateTime * 1000.0 << std::endl;
 #endif
-#endif
+    }
+
 #ifndef STATIC
     {
-        Timer<> tim("Weight analysis:");
+        Timer tim("Weight analysis:");
 
-        // Download weights
+        // Download weights and connectivity
         pullEEStateFromDevice();
-        
-        // **HACK** Download row lengths
-        extern unsigned int *d_rowLengthEE;
-        CHECK_CUDA_ERRORS(cudaMemcpy(CEE.rowLength, d_rowLengthEE, Parameters::numExcitatory * sizeof(unsigned int), cudaMemcpyDeviceToHost));
+        pullEEConnectivityFromDevice();
 
         // Write row weights to file
-        std::ofstream weights((outputPath / "weights.bin").str(), std::ios::binary);
+        std::ofstream weights(outputPath + "/weights.bin", std::ios::binary);
         for(unsigned int i = 0; i < Parameters::numExcitatory; i++) {
-            weights.write(reinterpret_cast<char*>(&gEE[i * CEE.maxRowLength]), sizeof(scalar) * CEE.rowLength[i]);
+            weights.write(reinterpret_cast<char*>(&gEE[i * maxRowLengthEE]), sizeof(scalar) * rowLengthEE[i]);
         }
     }
 #endif // !STATIC
-    return 0;
+    return EXIT_SUCCESS;
 }
