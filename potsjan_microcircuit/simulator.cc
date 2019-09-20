@@ -1,11 +1,12 @@
 // Standard C++ includes
+#include <iostream>
 #include <memory>
 #include <random>
 #include <vector>
 
-// GeNN robotics includes
-#include "common/timer.h"
-#include "genn_utils/spike_csv_recorder.h"
+// GeNN user projects includes
+#include "timer.h"
+#include "spikeRecorder.h"
 
 // Model parameters
 #include "parameters.h"
@@ -55,20 +56,14 @@ void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnec
 
 // Macro to record a population's output
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                               \
-    spikeRecorders.emplace_back(new GeNNUtils::SpikeCSVRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION))
-
-
-    using namespace BoBRobotics;
+    spikeRecorders.emplace_back(new SpikeRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION, ",", true))
 
 int main()
 {
-    {
-        Timer<> timer("Allocation:");
-        allocateMem();
-    }
+    allocateMem();
 
     {
-        Timer<> timer("Building row lengths:");
+        Timer timer("Building row lengths:");
 
         std::mt19937 rng;
         BUILD_PROJECTION(23, E, 23, E);
@@ -137,23 +132,14 @@ int main()
         BUILD_PROJECTION(6, I, 6, I);
     }
 
-    {
-        Timer<> timer("Initialization:");
-        initialize();
-    }
-
-
-    // Final setup
-    {
-        Timer<> timer("Sparse init:");
-        initializeSparse();
-    }
+    initialize();
+    initializeSparse();
 
     // Create spike recorders
     // **HACK** would be nicer to have arrays of objects rather than pointers but ofstreams
     // aren't correctly moved in GCC 4.9.4 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54316) -
     // the newest version that can be used with CUDA on Sussex HPC
-    std::vector<std::unique_ptr<GeNNUtils::SpikeCSVRecorderCached>> spikeRecorders;
+    std::vector<std::unique_ptr<SpikeRecorderCached>> spikeRecorders;
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
     ADD_SPIKE_RECORDER(23, E);
     ADD_SPIKE_RECORDER(23, I);
@@ -167,7 +153,7 @@ int main()
     double recordMs = 0.0;
 
     {
-        Timer<> timer("Simulation:");
+        Timer timer("Simulation:");
         // Loop through timesteps
         const unsigned int timesteps = round(Parameters::durationMs / DT);
         const unsigned int tenPercentTimestep = timesteps / 10;
@@ -191,7 +177,7 @@ int main()
             pull6ICurrentSpikesFromDevice();
 
             {
-                TimerAccumulate<> timer(recordMs);
+                TimerAccumulate timer(recordMs);
 
                 // Record spikes
                 for(auto &s : spikeRecorders) {
@@ -203,7 +189,7 @@ int main()
 
     // Write spike recorder cache to disk
     {
-        Timer<> timer("Writing spikes to disk:");
+        Timer timer("Writing spikes to disk:");
         for(auto &s : spikeRecorders) {
             s->writeCache();
         }

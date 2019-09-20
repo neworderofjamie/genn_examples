@@ -44,6 +44,9 @@ const char *populationNames[PopulationMax] = {
 // Should we measure timing
 const bool measureTiming = true;
 
+// Span type
+const bool presynapticParallelism = false;
+
 // Simulation timestep [ms]
 const double dtMs = 0.1;
 

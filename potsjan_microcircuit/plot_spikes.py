@@ -35,6 +35,9 @@ pop_spikes = [load_spikes("6I.csv"),
               load_spikes("23I.csv"),
               load_spikes("23E.csv")]
 
+# Find the maximum spike time and convert to seconds
+duration_s = max(np.amax(t) for t, _, _, _ in pop_spikes) / 1000.0
+
 # Create plot
 figure, axes = plt.subplots(1, 2)
 
@@ -45,7 +48,7 @@ for t, i, name, num in pop_spikes:
     actor = axes[0].scatter(t, i + start_id, s=2, edgecolors="none")
 
     # Plot bar showing rate in matching colour
-    axes[1].barh(bar_y, len(t) / float(num), align="center", color=actor.get_facecolor(), ecolor="black")
+    axes[1].barh(bar_y, len(t) / (float(num) * duration_s), align="center", color=actor.get_facecolor(), ecolor="black")
 
     # Update offset
     start_id += num
