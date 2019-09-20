@@ -1,17 +1,16 @@
 // Standard C++ includes
+#include <iostream>
 #include <random>
 
 // GeNN robotics includes
-#include "common/timer.h"
-#include "genn_utils/spike_csv_recorder.h"
+#include "timer.h"
+#include "spikeRecorder.h"
 
 // Model parameters
 #include "parameters.h"
 
 // Auto-generated model code
 #include "va_benchmark_CODE/definitions.h"
-
-using namespace BoBRobotics;
 
 int main()
 {
@@ -20,7 +19,7 @@ int main()
     initializeSparse();
 
     // Open CSV output files
-    GeNNUtils::SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
+    SpikeRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE, ",", true);
 
     while(t < 10000.0) {
         // Simulate

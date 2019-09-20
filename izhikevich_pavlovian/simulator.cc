@@ -5,18 +5,15 @@
 #include <numeric>
 #include <random>
 
-// GeNN robotics includes
-#include "common/timer.h"
-#include "genn_utils/connectors.h"
-#include "genn_utils/spike_csv_recorder.h"
+// GeNN user project includes
+#include "timer.h"
+#include "spikeRecorder.h"
 
 // GeNN generated code includes
 #include "izhikevich_pavlovian_CODE/definitions.h"
 
 // Model includes
 #include "parameters.h"
-
-using namespace BoBRobotics;
 
 //------------------------------------------------------------------------
 // Anonymous namespace
@@ -64,27 +61,15 @@ int main()
 {
     std::mt19937 gen;
 
-    {
-        Timer<> timer("Allocation:");
-        allocateMem();
-    }
-
-    {
-        Timer<> timer("Initialization:");
-        initialize();
-    }
-
-    // Final setup
-    {
-        Timer<> timer("Sparse init:");
-        initializeSparse();
-    }
+    allocateMem();
+    initialize();
+    initializeSparse();
 
     std::vector<std::vector<unsigned int>> inputSets;
     std::bitset<Parameters::numExcitatory> rewardedExcStimuliSet;
 
     {
-        Timer<> timer("Stimuli generation:");
+        Timer timer("Stimuli generation:");
 
         // Resize input sets vector
         inputSets.resize(Parameters::numStimuliSets);
@@ -112,15 +97,15 @@ int main()
     }
 
     // Open CSV output files
-    GeNNUtils::SpikeCSVRecorderCached e_spikes("e_spikes.csv", glbSpkCntE, glbSpkE);
-    GeNNUtils::SpikeCSVRecorderCached i_spikes("i_spikes.csv", glbSpkCntI, glbSpkI);
+    SpikeRecorderCached e_spikes("e_spikes.csv", glbSpkCntE, glbSpkE, ",", true);
+    SpikeRecorderCached i_spikes("i_spikes.csv", glbSpkCntI, glbSpkI, ",", true);
 
     std::ofstream stimulusStream("stimulus_times.csv");
     std::ofstream rewardStream("reward_times.csv");
     std::ofstream weightEvolutionStream("weight_evolution.csv");
 
     {
-        Timer<> timer("Simulation:");
+        Timer timer("Simulation:");
 
         // Create distribution to pick inter stimuli intervals
         std::uniform_int_distribution<> interStimuliInterval(convertMsToTimesteps(Parameters::minInterStimuliIntervalMs),

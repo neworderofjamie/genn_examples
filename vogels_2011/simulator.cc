@@ -2,43 +2,30 @@
 #include <numeric>
 #include <random>
 
-// GeNN robotics includes
-#include "common/timer.h"
-#include "genn_utils/spike_csv_recorder.h"
+// GeNN userproject includes
+#include "timer.h"
+#include "spikeRecorder.h"
 
 // Auto-generated model code
 #include "vogels_2011_CODE/definitions.h"
 
-using namespace BoBRobotics;
-
 int main()
 {
-    {
-        Timer<> b("Allocation:");
-        allocateMem();
-    }
-    {
-        Timer<> b("Initialization:");
-        initialize();
-    }
-
-    // Final setup
-    {
-        Timer<> b("Sparse init:");
-        initializeSparse();
-    }
+    allocateMem();
+    initialize();
+    initializeSparse();
 
     // Download IE connectivity from device
     pullIEConnectivityFromDevice();
 
     // Open CSV output files
-    GeNNUtils::SpikeCSVRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE);
+    SpikeRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE, ",", true);
 
     FILE *weights = fopen("weights.csv", "w");
     fprintf(weights, "Time(ms), Weight (nA)\n");
 
     {
-        Timer<> b("Simulation:");
+        Timer b("Simulation:");
         // Loop through timesteps
         while(t < 10000.0f) {
             // Simulate

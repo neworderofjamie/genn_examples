@@ -1,30 +1,18 @@
-import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
-with open("voltages.csv", "rb") as csv_file:
-    csv_reader = csv.reader(csv_file, delimiter = ",")
+state = np.loadtxt("voltages.csv", delimiter=",",
+                   dtype={"names": ("time", "v", "w"),
+                          "formats": (np.float, np.float, np.float)})
+# Create plot
+figure, axes = plt.subplots(2)
 
-    # Skip headers
-    csv_reader.next()
+# Plot voltages
+axes[0].set_title("Voltage")
+axes[0].plot(state["time"], state["v"])
 
-    # Read data and zip into columns
-    data_columns = zip(*csv_reader)
+axes[1].set_title("Adaption current")
+axes[1].plot(state["time"], state["w"])
 
-    # Convert times to numpy
-    times = np.asarray(data_columns[0], dtype=float)
-    voltage = np.asarray(data_columns[1], dtype=float)
-    current = np.asarray(data_columns[2], dtype=float)
-
-    # Create plot
-    figure, axes = plt.subplots(2)
-
-    # Plot voltages
-    axes[0].set_title("Voltage")
-    axes[0].plot(times, voltage)
-    
-    axes[1].set_title("Adaption current")
-    axes[1].plot(times, current)
-
-    # Show plot
-    plt.show()
+# Show plot
+plt.show()

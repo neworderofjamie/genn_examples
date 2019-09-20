@@ -1,14 +1,10 @@
 #include "modelSpec.h"
 
 // GeNN robotics includes
-#include "genn_models/exp_curr.h"
-#include "genn_models/adexp.h"
-
-using namespace BoBRobotics;
+#include "../common/adexp.h"
 
 void modelDefinition(NNmodel &model)
 {
-    initGeNN();
     model.setDT(0.1);
     model.setName("adexp_curr");
 
@@ -16,7 +12,7 @@ void modelDefinition(NNmodel &model)
     // Build model
     //---------------------------------------------------------------------------
     // AdExp model parameters
-    GeNNModels::AdExp::ParamValues adExpParamVals(
+    AdExp::ParamValues adExpParamVals(
         281.0,    // Membrane capacitance [pF]
         30.0,     // Leak conductance [nS]
         -70.6,    // Leak reversal potential [mV]
@@ -29,12 +25,10 @@ void modelDefinition(NNmodel &model)
         0.0805,   // Spike-triggered adaptation [nA]
         700.0);   // Offset current
     
-    GeNNModels::AdExp::VarValues adExpInitVals(
+    AdExp::VarValues adExpInitVals(
         -70.6,       // 0 - V
         0.0);        // 1 - W
 
     // Create IF_curr neuron
-    model.addNeuronPopulation<GeNNModels::AdExp>("Neurons", 1, adExpParamVals, adExpInitVals);
-    
-    model.finalize();
+    model.addNeuronPopulation<AdExp>("Neurons", 1, adExpParamVals, adExpInitVals);
 }

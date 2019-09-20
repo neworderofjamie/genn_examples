@@ -1,13 +1,15 @@
 #include "if_curr_CODE/definitions.h"
 
+// GeNN userproject includes
+#include "analogueRecorder.h"
+
 int main()
 {
     allocateMem();
     initialize();
     initializeSparse();
 
-    FILE *membraneVoltage = fopen("voltages.csv", "w");
-    fprintf(membraneVoltage, "Time(ms), Voltage (mV)\n");
+    AnalogueRecorder<float> recorder("voltages.csv", {VExcitatory, inSynStimToExcitatory}, 1, ",");
 
     unsigned int spikeTimesteps[] = {50, 150};
     const unsigned int *nextSpikeTimestep = &spikeTimesteps[0];
@@ -32,17 +34,14 @@ int main()
         }
 
         pushStimCurrentSpikesToDevice();
+
         // Simulate
         stepTime();
 
         pullVExcitatoryFromDevice();
-        // Calculate simulation time
-        const double time = 1.0 * (double)t;
-        fprintf(membraneVoltage, "%f, %f, %f\n", time, VExcitatory[0], inSynStimToExcitatory[0]);
 
+        recorder.record(t);
     }
-
-    fclose(membraneVoltage);
 
     return EXIT_SUCCESS;
 }

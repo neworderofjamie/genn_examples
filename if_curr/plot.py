@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Read CSV spikes
-data = np.loadtxt("voltages.csv", delimiter=",", skiprows=1,
+data = np.loadtxt("voltages.csv", delimiter=",",
                   dtype={"names": ("time", "voltage", "current"),
                          "formats": (np.float, np.float, np.float)})
 

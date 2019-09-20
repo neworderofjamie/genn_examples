@@ -1,26 +1,23 @@
 #include "adexp_curr_CODE/definitions.h"
 
+#include "analogueRecorder.h"
+
 int main()
 {
-  allocateMem();
-  initialize();
+    allocateMem();
+    initialize();
+    initializeSparse();
 
-  FILE *membraneVoltage = fopen("voltages.csv", "w");
-  fprintf(membraneVoltage, "Time(ms), Voltage (mV)\n");
+    AnalogueRecorder<float> voltageRecorder("voltages.csv", {VNeurons, WNeurons}, 1, ",");
 
-  // Loop through timesteps
-  for(unsigned int i = 0; i < 2000; i++)
-  {
-    // Simulate
-    stepTimeCPU();
+    while(t < 200.0) {
+        // Simulate
+        stepTime();
 
-    // Calculate simulation time
-    const double time = 1.0 * (double)t;
-    fprintf(membraneVoltage, "%f, %f, %f\n", time, VNeurons[0], WNeurons[0]);
+        pullNeuronsStateFromDevice();
 
-  }
+        voltageRecorder.record(t);
+    }
 
-  fclose(membraneVoltage);
-
-  return 0;
+    return EXIT_SUCCESS ;
 }

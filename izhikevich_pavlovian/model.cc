@@ -2,12 +2,10 @@
 #include "modelSpec.h"
 
 // GeNN robotics includes
-#include "genn_models/stdp_dopamine.h"
+#include "../common/stdp_dopamine.h"
 
 // Model includes
 #include "parameters.h"
-
-using namespace BoBRobotics;
 
 // Standard Izhikevich model with external input current
 class Izhikevich : public NeuronModels::Base
@@ -68,7 +66,7 @@ void modelDefinition(NNmodel &model)
 
     // Inhibitory model parameters
     Izhikevich::ParamValues inhParams(
-        0.1,   // a
+        0.1,    // a
         0.2,    // b
         -65.0,  // c
         2.0);   // d
@@ -76,13 +74,13 @@ void modelDefinition(NNmodel &model)
     // LIF initial conditions
     Izhikevich::VarValues izkInit(
         -65.0,  // V
-        -13.0,    // U
+        -13.0,  // U
         0.0);   // Iext
 
     UniformNoise::ParamValues currSourceParams(
         6.5);
 
-    GeNNModels::STDPDopamine::ParamValues dopeParams(
+    STDPDopamine::ParamValues dopeParams(
         20.0,                       // 0 - Potentiation time constant (ms)
         20.0,                       // 1 - Depression time constant (ms)
         1000.0,                     // 2 - Synaptic tag time constant (ms)
@@ -92,7 +90,7 @@ void modelDefinition(NNmodel &model)
         0.0,                        // 6 - Minimum weight
         Parameters::maxExcWeight);  // 7 - Maximum weight
 
-    GeNNModels::STDPDopamine::VarValues dopeInitVars(
+    STDPDopamine::VarValues dopeInitVars(
         Parameters::initExcWeight,  // Synaptic weight
         0.0,                        // Synaptic tag
         0.0);                       // Time of last synaptic tag update
@@ -107,13 +105,13 @@ void modelDefinition(NNmodel &model)
     model.addCurrentSource<UniformNoise>("ECurr", "E", currSourceParams, {});
     model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceParams, {});
 
-    model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "E",
         dopeParams, dopeInitVars,
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    model.addSynapsePopulation<GeNNModels::STDPDopamine, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EI", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "E", "I",
         dopeParams, dopeInitVars,
