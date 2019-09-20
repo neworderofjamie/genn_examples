@@ -1,4 +1,13 @@
-EXECUTABLE      := simulator
-SOURCES         := simulator.cc
-INCLUDE_FLAGS   := -I$(BOB_ROBOTICS_PATH)
-include $(GENN_PATH)/userproject/include/makefile_common_gnu.mk
+GENERATED_CODE_DIR	:=sjostrom_triplet_CODE
+GENN_PATH :=$(abspath $(dir $(shell which genn-buildmodel.sh))../userproject/include)
+CXXFLAGS 		+=-std=c++11 -Wall -Wpedantic -Wextra
+
+.PHONY: all clean generated_code
+
+all: sjostrom_triplet
+
+sjostrom_triplet: simulator.cc generated_code
+	$(CXX) $(CXXFLAGS)  -I$(GENN_PATH) simulator.cc -o sjostrom_triplet -L$(GENERATED_CODE_DIR) -lrunner -Wl,-rpath $(GENERATED_CODE_DIR)
+
+generated_code:
+	$(MAKE) -C $(GENERATED_CODE_DIR)

@@ -1,12 +1,11 @@
 #include <algorithm>
+#include <iostream>
 
 #include "sjostrom_triplet_CODE/definitions.h"
 
-#include "genn_utils/spike_csv_recorder.h"
+#include "spikeRecorder.h"
 
 #include "parameters.h"
-
-using namespace BoBRobotics;
 
 int main()
 {
@@ -15,8 +14,7 @@ int main()
 
     initialize();
 
-    // Setup reverse connection indices for STDP
-    initsjostrom_triplet();
+    initializeSparse();
 
     // Spike pair configuration
     const double startTime = 100.0;
@@ -58,18 +56,16 @@ int main()
 
     std::cout << "Sim timesteps:" << simTimesteps << std::endl;
 
-    GeNNUtils::SpikeCSVRecorder recorder("spikes.csv", glbSpkCntPre, glbSpkPre);
+    SpikeRecorder recorder("spikes.csv", glbSpkCntPre, glbSpkPre, ",", true);
 
     // Loop through timesteps
-    while(iT < simTimesteps)
-    {
+    while(iT < simTimesteps) {
         // Zero spike counts
         glbSpkCntPreStim[0] = 0;
         glbSpkCntPostStim[0] = 0;
 
         // Loop through spike sources
-        for(unsigned int n = 0; n < Parameters::numNeurons; n++)
-        {
+        for(unsigned int n = 0; n < Parameters::numNeurons; n++) {
             // If there are more pre-spikes to emit and
             // the next one should be emitted this timestep
             if(nextPreSpikeIndex[n] < numPreSpikes
@@ -96,16 +92,12 @@ int main()
         }
 
         // Simulate
-#ifndef CPU_ONLY
         pushPreStimCurrentSpikesToDevice();
         pushPostStimCurrentSpikesToDevice();
 
-        stepTimeGPU();
+        stepTime();
 
         pullPreCurrentSpikesFromDevice();
-#else
-        stepTimeCPU();
-#endif
 
         recorder.record(t);
     }
@@ -113,12 +105,10 @@ int main()
     FILE *weights = fopen("weights.csv", "w");
     fprintf(weights, "Frequency [Hz], Delta T [ms], Weight\n");
 
-#ifndef CPU_ONLY
-    pullPreToPostStateFromDevice();
-#endif
+    pullgPreToPostFromDevice();
 
-    for(unsigned int n = 0; n < Parameters::numNeurons; n++)
-    {
+
+    for(unsigned int n = 0; n < Parameters::numNeurons; n++) {
         fprintf(weights, "%f, %f, %f\n", Parameters::frequencies[n / 2], Parameters::dt[n % 2], gPreToPost[n]);
     }
 

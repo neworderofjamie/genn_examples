@@ -3,22 +3,12 @@
 
 #include "modelSpec.h"
 
-#include "genn_models/exp_curr.h"
-#include "genn_models/lif.h"
-
 #include "../common/pfister_triplet.h"
 
 #include "parameters.h"
 
-using namespace BoBRobotics;
-
 void modelDefinition(NNmodel &model)
 {
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
-    GENN_PREFERENCES::defaultSparseConnectivityMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
-
-    initGeNN();
     model.setDT(1.0);
     model.setName("sjostrom_triplet");
 
@@ -26,7 +16,7 @@ void modelDefinition(NNmodel &model)
     // Build model
     //---------------------------------------------------------------------------
     // LIF model parameters
-    GeNNModels::LIF::ParamValues lifParams(
+    NeuronModels::LIF::ParamValues lifParams(
         0.25,   // 0 - C
         10.0,   // 1 - TauM
         -65.0,  // 2 - Vrest
@@ -36,7 +26,7 @@ void modelDefinition(NNmodel &model)
         2.0);  // 6 - TauRefrac
 
     // LIF initial conditions
-    GeNNModels::LIF::VarValues lifInit(
+    NeuronModels::LIF::VarValues lifInit(
         -65.0,  // 0 - V
         0.0);    // 1 - RefracTime
 
@@ -81,7 +71,7 @@ void modelDefinition(NNmodel &model)
         0.0);   // 1 - o2
 
     // Exponential current parameters
-    GeNNModels::ExpCurr::ParamValues expCurrParams(
+    PostsynapticModels::ExpCurr::ParamValues expCurrParams(
         2.5);  // 0 - TauSyn (ms)
 
     std::cout << "Num neurons:" << Parameters::numNeurons << std::endl;
@@ -89,29 +79,27 @@ void modelDefinition(NNmodel &model)
     // Create IF_curr neuron
     model.addNeuronPopulation<NeuronModels::SpikeSource>("PreStim", Parameters::numNeurons, {}, {});
     model.addNeuronPopulation<NeuronModels::SpikeSource>("PostStim", Parameters::numNeurons, {}, {});
-    model.addNeuronPopulation<GeNNModels::LIF>("Pre", Parameters::numNeurons, lifParams, lifInit);
-    model.addNeuronPopulation<GeNNModels::LIF>("Post", Parameters::numNeurons, lifParams, lifInit);
+    model.addNeuronPopulation<NeuronModels::LIF>("Pre", Parameters::numNeurons, lifParams, lifInit);
+    model.addNeuronPopulation<NeuronModels::LIF>("Post", Parameters::numNeurons, lifParams, lifInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-            "PreStimToPre", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
-            "PreStim", "Pre",
-            {}, staticSynapseInit,
-            expCurrParams, {},
-            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        "PreStimToPre", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "PreStim", "Pre",
+        {}, staticSynapseInit,
+        expCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, GeNNModels::ExpCurr>(
-            "PostStimToPost", SynapseMatrixType::RAGGED_GLOBALG, NO_DELAY,
-            "PostStim", "Post",
-            {}, staticSynapseInit,
-            expCurrParams, {},
-            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        "PostStimToPost", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "PostStim", "Post",
+        {}, staticSynapseInit,
+        expCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 
-    model.addSynapsePopulation<PfisterTriplet, GeNNModels::ExpCurr>(
-            "PreToPost", SynapseMatrixType::RAGGED_INDIVIDUALG, NO_DELAY,
-            "Pre", "Post",
-            pfisterParams, pfisterInit, pfisterPreInit, pfisterPostInit,
-            expCurrParams, {},
-            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
-
-    model.finalize();
+    model.addSynapsePopulation<PfisterTriplet, PostsynapticModels::ExpCurr>(
+        "PreToPost", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+        "Pre", "Post",
+        pfisterParams, pfisterInit, pfisterPreInit, pfisterPostInit,
+        expCurrParams, {},
+        initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 }
