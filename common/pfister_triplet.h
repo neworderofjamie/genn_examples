@@ -39,8 +39,7 @@ public:
         "$(o2) = ($(sT_post) < 0.0) ? 0.0 : ($(o2) + 1.0) * exp(-dt / $(tauY));\n");
 
     SET_SIM_CODE(
-        "$(addtoinSyn) = $(g);\n"
-        "$(updatelinsyn);\n"
+        "$(addToInSyn, $(g));\n"
         "scalar dt = $(t) - $(sT_post); \n"
         "if (dt > 0)\n"
         "{\n"

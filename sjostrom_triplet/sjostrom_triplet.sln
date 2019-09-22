@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30501.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sjostrom_triplet", "sjostrom_triplet.vcxproj", "{6AD53001-6CE9-41DE-BE06-45E9B731ABD1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{4495B4B4-345A-461D-842A-A594839E8527} = {4495B4B4-345A-461D-842A-A594839E8527}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "runner", "sjostrom_triplet_CODE\runner.vcxproj", "{4495B4B4-345A-461D-842A-A594839E8527}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6AD53001-6CE9-41DE-BE06-45E9B731ABD1}.Debug|x64.ActiveCfg = Debug|x64
+		{6AD53001-6CE9-41DE-BE06-45E9B731ABD1}.Debug|x64.Build.0 = Debug|x64
+		{6AD53001-6CE9-41DE-BE06-45E9B731ABD1}.Release|x64.ActiveCfg = Release|x64
+		{6AD53001-6CE9-41DE-BE06-45E9B731ABD1}.Release|x64.Build.0 = Release|x64
+		{4495B4B4-345A-461D-842A-A594839E8527}.Debug|x64.ActiveCfg = Debug|x64
+		{4495B4B4-345A-461D-842A-A594839E8527}.Debug|x64.Build.0 = Debug|x64
+		{4495B4B4-345A-461D-842A-A594839E8527}.Release|x64.ActiveCfg = Release|x64
+		{4495B4B4-345A-461D-842A-A594839E8527}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

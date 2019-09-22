@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{B836261D-DA9B-42CC-BDA4-CD67EEBEBF00}</ProjectGuid>
+    <ProjectGuid>{6AD53001-6CE9-41DE-BE06-45E9B731ABD1}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="simulator.cc" />
@@ -44,7 +44,7 @@
       <FunctionLevelLinking Condition="'$(Configuration)'=='Release'">true</FunctionLevelLinking>
       <IntrinsicFunctions Condition="'$(Configuration)'=='Release'">true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>potjans_microcircuit_CODE</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>sjostrom_triplet_CODE</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{E5E5C688-CCCD-474A-9EF0-4CDA50DA1235}</ProjectGuid>
+    <ProjectGuid>{5AB6D396-9673-4845-969E-CE3B30D0F096}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="simulator.cc" />
@@ -44,8 +44,7 @@
       <FunctionLevelLinking Condition="'$(Configuration)'=='Release'">true</FunctionLevelLinking>
       <IntrinsicFunctions Condition="'$(Configuration)'=='Release'">true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>vogels_2011_CODE;$(BOB_ROBOTICS_PATH)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>vogels_2011_CODE</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -58,4 +57,14 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <Target Name="FindUserProjects" BeforeTargets="PrepareForBuild">
+    <Exec Command="where genn-buildmodel.bat" ConsoleToMsBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GeNNBuildModelPath" />
+    </Exec>
+    <ItemGroup>
+      <ClCompile>
+       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$([System.IO.Path]::GetFullPath($([System.IO.Path]::GetDirectoryName($(GeNNBuildModelPath)))\..\userproject\include))</AdditionalIncludeDirectories>
+      </ClCompile>
+    </ItemGroup>
+  </Target>
 </Project>
