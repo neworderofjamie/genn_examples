@@ -13,6 +13,6 @@ potjans_microcircuit_shared_library: simulator_shared_library.cc generated_code
 	$(CXX) $(CXXFLAGS) -I$(GENN_PATH) simulator_shared_library.cc -ldl -o potjans_microcircuit_shared_library
 
 potjans_microcircuit_live_shared_library: simulator_live_shared_library.cc generated_code
-	$(CXX) $(CXXFLAGS) -I$(GENN_PATH) simulator_live_shared_library.cc -pthread `pkg-config --libs --cflags opencv` -ldl -o potjans_microcircuit_live_shared_library.cc
+	$(CXX) $(CXXFLAGS) -I$(GENN_PATH) simulator_live_shared_library.cc -pthread `pkg-config --libs --cflags opencv` -ldl -o potjans_microcircuit_live_shared_library
 generated_code:
 	$(MAKE) -C $(GENERATED_CODE_DIR)
