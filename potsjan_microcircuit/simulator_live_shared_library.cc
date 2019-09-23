@@ -11,42 +11,13 @@
 #include <opencv2/opencv.hpp>
 
 // BoB robotics includes
-#include "common/timer.h"
-#include "genn_utils/shared_library_model.h"
-#include "genn_utils/spike_csv_recorder.h"
+#include "timer.h"
+#include "sharedLibraryModel.h"
+#include "spikeRecorder.h"
 
 // Model parameters
 #include "parameters.h"
-
-using namespace BoBRobotics;
-
-void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnections, unsigned int *rowLengths, std::mt19937 &rng)
-{
-    // Calculate row lengths
-    // **NOTE** we are FINISHING at second from last row because all remaining connections must go in last row
-    size_t remainingConnections = numConnections;
-    size_t matrixSize = (size_t)numPre * (size_t)numPost;
-    std::generate_n(&rowLengths[0], numPre - 1,
-                    [&remainingConnections, &matrixSize, numPost, &rng]()
-                    {
-                        const double probability = (double)numPost / (double)matrixSize;
-
-                        // Create distribution to sample row length
-                        std::binomial_distribution<size_t> rowLengthDist(remainingConnections, probability);
-
-                        // Sample row length;
-                        const size_t rowLength = rowLengthDist(rng);
-
-                        // Update counters
-                        remainingConnections -= rowLength;
-                        matrixSize -= numPost;
-
-                        return (unsigned int)rowLength;
-                    });
-
-    // Insert remaining connections into last row
-    rowLengths[numPre - 1] = (unsigned int)remainingConnections;
-}
+#include "utils.h"
 
 //----------------------------------------------------------------------------
 // LiveVisualiser
@@ -54,7 +25,7 @@ void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnec
 class LiveVisualiser
 {
 public:
-    LiveVisualiser(GeNNUtils::SharedLibraryModelFloat &model, const cv::Size outputRes, double scale)
+    LiveVisualiser(SharedLibraryModel<float> &model, const cv::Size outputRes, double scale)
     :   m_Model(model), m_OutputImage(outputRes, CV_8UC3), m_RotatedOutput(outputRes.width, outputRes.height, CV_8UC3)/*, t
         m_VideoWriter("test.avi", cv::VideoWriter::fourcc('H', '2', '6', '4'), 33.0, outputRes, true)*/
     {
@@ -142,7 +113,7 @@ public:
         // Clear background behind text
         cv::rectangle(m_OutputImage, cv::Point(0, m_OutputImage.rows - 20),
                       cv::Point(m_OutputImage.cols, m_OutputImage.rows),
-                      CV_RGB(0, 0, 0), CV_FILLED);
+                      CV_RGB(0, 0, 0), cv::FILLED);
         
         // Render status text
         char status[255];
@@ -201,7 +172,7 @@ private:
     //------------------------------------------------------------------------
     // Members
     //------------------------------------------------------------------------
-    GeNNUtils::SharedLibraryModelFloat &m_Model;
+    SharedLibraryModel<float> &m_Model;
     cv::Mat m_OutputImage;
     cv::Mat m_RotatedOutput;
     //cv::VideoWriter m_VideoWriter;
@@ -216,7 +187,7 @@ private:
 
 void displayThreadHandler(LiveVisualiser &visualiser, std::mutex &mutex, std::atomic<bool> &run)
 {
-    cv::namedWindow("Output", CV_WINDOW_NORMAL);
+    cv::namedWindow("Output", cv::WINDOW_NORMAL);
     cv::resizeWindow("Output", 480, 800);
 
     bool rotated = false;
@@ -252,19 +223,13 @@ void displayThreadHandler(LiveVisualiser &visualiser, std::mutex &mutex, std::at
 
 int main()
 {
-    GeNNUtils::SharedLibraryModelFloat model("", "potjans_microcircuit");
-    {
-        Timer<> timer("Allocation:");
+    SharedLibraryModel<float> model("./", "potjans_microcircuit");
 
-        model.allocateMem();
-    }
-    {
-        Timer<> timer("Initialization:");
-        model.initialize();
-    }
+    model.allocateMem();
 
     {
-        Timer<> timer("Building connectivity:");
+        Timer timer("Building row lengths:");
+
         std::mt19937 rng;
         for(unsigned int trgLayer = 0; trgLayer < Parameters::LayerMax; trgLayer++) {
             for(unsigned int trgPop = 0; trgPop < Parameters::PopulationMax; trgPop++) {
@@ -277,29 +242,28 @@ int main()
                         const std::string srcName = Parameters::getPopulationName(srcLayer, srcPop);
                         const unsigned int numSrc = Parameters::getScaledNumNeurons(srcLayer, srcPop);
 
-                        const unsigned int numConnections = Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop);
-                        if(numConnections > 0) {
-                            const std::string synName = srcName + "_" + trgName;
-                            model.allocateExtraGlobalParam(synName, "preCalcRowLength", numSrc);
+                        // If synapse group exists
+                        const std::string synapsePopName = srcName + "_" + trgName;
+                        void *rowLengths = model.getSymbol("preCalcRowLength" + synapsePopName, true);
+                        if(rowLengths) {
+                            // Allocate row lengths
+                            model.allocateExtraGlobalParam(synapsePopName, "preCalcRowLength", numSrc);
 
-                            unsigned int *preCalcRowLength = model.getArray<unsigned int>("preCalcRowLength" + synName);
-                            buildRowLengths(numSrc, numTrg,  numConnections,
-                                            preCalcRowLength, rng);                                                                                          \
-                            model.pushExtraGlobalParam(synName, "preCalcRowLength", numSrc);
+                            // Build row lengths on host
+                            buildRowLengths(numSrc, numTrg, Parameters::getScaledNumConnections(srcLayer, srcPop, trgLayer, trgPop),
+                                            *(static_cast<unsigned int**>(rowLengths)), rng);
+
+                            // Push to device
+                            model.pushExtraGlobalParam(synapsePopName, "preCalcRowLength", numSrc);
                         }
-
                     }
                 }
             }
-
         }
     }
 
-    // Final setup
-    {
-        Timer<> timer("Sparse init:");
-        model.initializeSparse();
-    }
+    model.initialize();
+    model.initializeSparse();
 
     std::atomic<bool> run{true};
     std::mutex mutex;
@@ -307,9 +271,9 @@ int main()
     std::thread displayThread(displayThreadHandler, std::ref(visualiser), std::ref(mutex), std::ref(run));
 
     
-    double applyMs = 0.0;
+    double applyS = 0.0;
     {
-        Timer<> timer("Simulation:");
+        Timer timer("Simulation:");
         // Loop through timesteps
         while(run)
         {
@@ -324,7 +288,7 @@ int main()
             }
 
             {
-                TimerAccumulate<> timer(applyMs);
+                TimerAccumulate timer(applyS);
 
                 {
                     std::lock_guard<std::mutex> lock(mutex);
@@ -334,7 +298,7 @@ int main()
         }
     }
 
-    std::cout << "Apply:" << applyMs << "ms" << std::endl;
+    std::cout << "Apply:" << applyS << "s" << std::endl;
 
     return 0;
 }
