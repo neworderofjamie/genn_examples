@@ -10,40 +10,11 @@
 
 // Model parameters
 #include "parameters.h"
+#include "utils.h"
 
 // Auto-generated model code
 #include "potjans_microcircuit_CODE/definitions.h"
 
-namespace
-{
-void buildRowLengths(unsigned int numPre, unsigned int numPost, size_t numConnections, unsigned int *rowLengths, std::mt19937 &rng)
-{
-    // Calculate row lengths
-    // **NOTE** we are FINISHING at second from last row because all remaining connections must go in last row
-    size_t remainingConnections = numConnections;
-    size_t matrixSize = (size_t)numPre * (size_t)numPost;
-    std::generate_n(&rowLengths[0], numPre - 1,
-                    [&remainingConnections, &matrixSize, numPost, &rng]()
-                    {
-                        const double probability = (double)numPost / (double)matrixSize;
-
-                        // Create distribution to sample row length
-                        std::binomial_distribution<size_t> rowLengthDist(remainingConnections, probability);
-
-                        // Sample row length;
-                        const size_t rowLength = rowLengthDist(rng);
-
-                        // Update counters
-                        remainingConnections -= rowLength;
-                        matrixSize -= numPost;
-
-                        return (unsigned int)rowLength;
-                    });
-
-    // Insert remaining connections into last row
-    rowLengths[numPre - 1] = (unsigned int)remainingConnections;
-}
-}
 // Macro to build a connection between a pair of populations
 #define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                                                \
     allocatepreCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP));        \
@@ -150,7 +121,7 @@ int main()
     ADD_SPIKE_RECORDER(6, E);
     ADD_SPIKE_RECORDER(6, I);
 
-    double recordMs = 0.0;
+    double recordS = 0.0;
 
     {
         Timer timer("Simulation:");
@@ -177,7 +148,7 @@ int main()
             pull6ICurrentSpikesFromDevice();
 
             {
-                TimerAccumulate timer(recordMs);
+                TimerAccumulate timer(recordS);
 
                 // Record spikes
                 for(auto &s : spikeRecorders) {
@@ -202,7 +173,7 @@ int main()
         std::cout << "\tNeuron simulation:" << neuronUpdateTime * 1000.0 << std::endl;
         std::cout << "\tSynapse simulation:" << presynapticUpdateTime * 1000.0 << std::endl;
     }
-    std::cout << "Record:" << recordMs << "ms" << std::endl;
+    std::cout << "Record:" << recordS << "ms" << std::endl;
 
     return 0;
 }
