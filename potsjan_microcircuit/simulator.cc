@@ -27,7 +27,7 @@
 
 // Macro to record a population's output
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                               \
-    spikeRecorders.emplace_back(new SpikeRecorderCached(#LAYER#POPULATION".csv", glbSpkCnt##LAYER##POPULATION, glbSpk##LAYER##POPULATION, ",", true))
+    spikeRecorders.emplace_back(new SpikeRecorder<SpikeWriterTextCached>(&get##LAYER##POPULATION##CurrentSpikes, &get##LAYER##POPULATION##CurrentSpikeCount, #LAYER#POPULATION".csv", ",", true))
 
 int main()
 {
@@ -110,7 +110,7 @@ int main()
     // **HACK** would be nicer to have arrays of objects rather than pointers but ofstreams
     // aren't correctly moved in GCC 4.9.4 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54316) -
     // the newest version that can be used with CUDA on Sussex HPC
-    std::vector<std::unique_ptr<SpikeRecorderCached>> spikeRecorders;
+    std::vector<std::unique_ptr<SpikeRecorder<SpikeWriterTextCached>>> spikeRecorders;
     spikeRecorders.reserve(Parameters::LayerMax * Parameters::PopulationMax);
     ADD_SPIKE_RECORDER(23, E);
     ADD_SPIKE_RECORDER(23, I);
