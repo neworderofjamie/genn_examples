@@ -19,7 +19,7 @@ int main()
     initializeSparse();
 
     // Open CSV output files
-    SpikeRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE, ",", true);
+    SpikeRecorder<> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
 
     while(t < 10000.0) {
         // Simulate
