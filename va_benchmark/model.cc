@@ -24,7 +24,9 @@ void modelDefinition(NNmodel &model)
         Parameters::probabilityConnection); // 0 - prob
 
     // LIF model parameters
-    NeuronModels::LIF::ParamValues lifParams(
+    NeuronModels::LIFAuto::VarValues lifInit(
+        initVar<InitVarSnippet::Uniform>(vDist),     // 0 - V
+        0.0,   // 1 - RefracTime
         1.0,    // 0 - C
         20.0,   // 1 - TauM
         -49.0,  // 2 - Vrest
@@ -33,10 +35,6 @@ void modelDefinition(NNmodel &model)
         0.0,    // 5 - Ioffset
         5.0);    // 6 - TauRefrac
 
-    // LIF initial conditions
-    NeuronModels::LIF::VarValues lifInit(
-        initVar<InitVarSnippet::Uniform>(vDist),     // 0 - V
-        0.0);   // 1 - RefracTime
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
@@ -53,8 +51,8 @@ void modelDefinition(NNmodel &model)
         10.0);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
-    auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
-    auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
+    auto *e = model.addNeuronPopulation<NeuronModels::LIFAuto>("E", Parameters::numExcitatory, lifInit);
+    auto *i = model.addNeuronPopulation<NeuronModels::LIFAuto>("I", Parameters::numInhibitory, lifInit);
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
