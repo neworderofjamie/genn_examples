@@ -14,7 +14,7 @@
 class LIFPoisson : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(LIFPoisson, 10, 3);
+    DECLARE_MODEL(LIFPoisson, 0, 13);
 
     SET_SIM_CODE(
         "scalar p = 1.0f;\n"
@@ -43,27 +43,26 @@ public:
         "$(V) = $(Vreset);\n"
         "$(RefracTime) = $(TauRefrac);\n");
 
-    SET_PARAM_NAMES({
-        "C",                // Membrane capacitance
-        "TauM",             // Membrane time constant [ms]
-        "Vrest",            // Resting membrane potential [mV]
-        "Vreset",           // Reset voltage [mV]
-        "Vthresh",          // Spiking threshold [mV]
-        "Ioffset",          // Offset current
-        "TauRefrac",        // Refractory time [ms]
-        "PoissonRate",      // Poisson input rate [Hz]
-        "PoissonWeight",    // How much current each poisson spike adds [nA]
-        "IpoissonTau"});     // Time constant of poisson spike integration [ms]
+    SET_VARS({{"V",             "scalar",   VarAccess::READ_WRITE},
+              {"RefracTime",    "scalar",   VarAccess::READ_WRITE},
+              {"Ipoisson",      "scalar",   VarAccess::READ_WRITE},
+              {"C",             "scalar",   VarAccess::READ_ONLY},      // Membrane capacitance
+              {"TauM",          "scalar",   VarAccess::READ_ONLY},      // Membrane time constant [ms]
+              {"Vrest",         "scalar",   VarAccess::READ_ONLY},      // Resting membrane potential [mV]
+              {"Vreset",        "scalar",   VarAccess::READ_ONLY},      // Reset voltage [mV]
+              {"Vthresh",       "scalar",   VarAccess::READ_ONLY},      // Spiking threshold [mV]
+              {"Ioffset",       "scalar",   VarAccess::READ_ONLY},      // Offset current
+              {"TauRefrac",     "scalar",   VarAccess::READ_ONLY},      // Refractory time [ms]
+              {"PoissonRate",   "scalar",   VarAccess::READ_ONLY},      // Poisson input rate [Hz]
+              {"PoissonWeight", "scalar",   VarAccess::READ_ONLY},      // How much current each poisson spike adds [nA]
+              {"IpoissonTau",   "scalar",   VarAccess::READ_ONLY}});    // Time constant of poisson spike integration [ms]
 
-
-    SET_DERIVED_PARAMS({
-        {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }},
-        {"PoissonExpMinusLambda", [](const std::vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
-        {"IpoissonExpDecay", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
-        {"IpoissonInit", [](const std::vector<double> &pars, double dt){ return pars[8] * (1.0 - std::exp(-dt / pars[9])) * (pars[9] / dt); }}});
-
-    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}});
+    SET_DERIVED_PARAMS_NAMED({
+        {"ExpTC", [](const std::map<std::string, double> &vars, double dt){ return std::exp(-dt / vars.at("TauM")); }},
+        {"Rmembrane", [](const std::map<std::string, double> &vars, double){ return vars.at("TauM") / vars.at("C"); }},
+        {"PoissonExpMinusLambda", [](const std::map<std::string, double> &vars, double dt){ return std::exp(-(vars.at("PoissonRate") / 1000.0) * dt); }},
+        {"IpoissonExpDecay", [](const std::map<std::string, double> &vars, double dt){ return std::exp(-dt / vars.at("IpoissonTau")); }},
+        {"IpoissonInit", [](const std::map<std::string, double> &vars, double dt){ return vars.at("PoissonWeight") * (1.0 - std::exp(-dt / vars.at("IpoissonTau"))) * (vars.at("IpoissonTau") / dt); }}});
 };
 IMPLEMENT_MODEL(LIFPoisson);
 
@@ -127,7 +126,7 @@ public:
         "if(c >= rowLength) {\n"
         "   $(endRow);\n"
         "}\n");
-    SET_ROW_BUILD_STATE_VARS({{"x", "scalar", 0.0},{"c", "unsigned int", 0}});
+    SET_ROW_BUILD_STATE_VARS({{"x", "scalar", 0.0}, {"c", "unsigned int", 0}});
 
     SET_PARAM_NAMES({"total"});
     SET_EXTRA_GLOBAL_PARAMS({{"preCalcRowLength", "unsigned int*"}})
@@ -163,9 +162,11 @@ class StaticPulseDendriticDelayHalf : public WeightUpdateModels::Base
 public:
     DECLARE_MODEL(StaticPulseDendriticDelayHalf, 0, 2);
 
-    SET_VARS({{"g", "scalar"},{"d", "uint8_t"}});
+    SET_VARS({{"g", "scalar", VarAccess::READ_ONLY},
+              {"d", "uint8_t", VarAccess::READ_ONLY}});
 
     SET_SIM_CODE("$(addToInSynDelay, $(g), $(d));\n");
+    //SET_SIM_CODE("$(addToInSynDelayVec, $(g.x), $(d.x), $(g.y), $(d.y));\n");
 };
 IMPLEMENT_MODEL(StaticPulseDendriticDelayHalf);
 
@@ -176,25 +177,21 @@ void modelDefinition(NNmodel &model)
     model.setTiming(Parameters::measureTiming);
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
+    //model.setDefaultNarrowSparseIndEnabled(true);
     model.setMergePostsynapticModels(true);
 
     GENN_PREFERENCES.optimizeCode = true;
+    //GENN_PREFERENCES.generateLineInfo = true;
 
     InitVarSnippet::Normal::ParamValues vDist(
         -58.0, // 0 - mean
         5.0);  // 1 - sd
 
-    // LIF initial conditions
-    LIFPoisson::VarValues lifInit(
-        initVar<InitVarSnippet::Normal>(vDist), // 0 - V
-        0.0,                                    // 1 - RefracTime
-        0.0);                                   // 2 - Ipoisson
-
     // Exponential current parameters
-    PostsynapticModels::ExpCurr::ParamValues excitatoryExpCurrParams(
+    PostsynapticModels::ExpCurrAuto::VarValues excitatoryExpCurrInit(
         0.5);  // 0 - TauSyn (ms)
 
-    PostsynapticModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
+    PostsynapticModels::ExpCurrAuto::VarValues inhibitoryExpCurrInit(
         0.5);  // 0 - TauSyn (ms)
 
     const double quantile = 0.9999;
@@ -226,22 +223,24 @@ void modelDefinition(NNmodel &model)
             assert(extInputCurrent >= 0.0);
 
             // LIF model parameters
-            LIFPoisson::ParamValues lifParams(
-                0.25,               // 0 - C
-                10.0,               // 1 - TauM
-                -65.0,              // 2 - Vrest
-                -65.0,              // 3 - Vreset
-                -50.0,              // 4 - Vthresh
-                extInputCurrent,    // 5 - Ioffset
-                2.0,                // 6 - TauRefrac
-                extInputRate,       // 7 - PoissonRate
-                extWeight,          // 8 - PoissonWeight
-                0.5);               // 9 - IpoissonTau
+            LIFPoisson::VarValues lifInit(
+                initVar<InitVarSnippet::Normal>(vDist), // 0 - V
+                0.0,                                    // 1 - RefracTime
+                0.0,                                    // 2 - Ipoisson
+                0.25,                                   // 0 - C
+                10.0,                                   // 1 - TauM
+                -65.0,                                  // 2 - Vrest
+                -65.0,                                  // 3 - Vreset
+                -50.0,                                  // 4 - Vthresh
+                extInputCurrent,                        // 5 - Ioffset
+                2.0,                                    // 6 - TauRefrac
+                extInputRate,                           // 7 - PoissonRate
+                extWeight,                              // 8 - PoissonWeight
+                0.5);                                   // 9 - IpoissonTau
 
             // Create population
             const unsigned int popSize = Parameters::getScaledNumNeurons(layer, pop);
-            auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(popName, popSize,
-                                                                    lifParams, lifInit);
+            auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(popName, popSize, lifInit);
 
             // Make recordable on host
 #ifdef USE_ZERO_COPY
@@ -318,11 +317,10 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClippedDelay>(dDist));    // 1 - delay (ms)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+                            auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurrAuto>(
+                                synapseName, SynapseMatrixConnectivity::SPARSE, NO_DELAY,
                                 srcName, trgName,
-                                {}, staticSynapseInit,
-                                excitatoryExpCurrParams, {},
+                                staticSynapseInit, excitatoryExpCurrInit,
                                 initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
 
                             // Set max dendritic delay and span type
@@ -354,11 +352,10 @@ void modelDefinition(NNmodel &model)
                                 initVar<NormalClippedDelay>(dDist));    // 1 - delay (ms)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+                            auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurrAuto>(
+                                synapseName, SynapseMatrixConnectivity::SPARSE, NO_DELAY,
                                 srcName, trgName,
-                                {}, staticSynapseInit,
-                                inhibitoryExpCurrParams, {},
+                                staticSynapseInit, inhibitoryExpCurrInit,
                                 initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
 
                             // Set max dendritic delay and span type
