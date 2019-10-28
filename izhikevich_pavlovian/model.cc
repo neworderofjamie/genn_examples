@@ -11,20 +11,29 @@
 class Izhikevich : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Izhikevich, 4, 3);
+    DECLARE_MODEL(Izhikevich, 0, 7);
 
     SET_SIM_CODE(
+        "if ($(V) >= 30.0){\n"
+        "   $(V)=$(c);\n"
+        "   $(U)+=$(d);\n"
+        "} \n"
         "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT; //at two times for numerical stability\n"
         "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT;\n"
-        "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n");
+        "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n"
+        "if ($(V) > 30.0){   //keep this to not confuse users with unrealistiv voltage values \n"
+        "  $(V)=30.0; \n"
+        "}\n");
 
-    SET_THRESHOLD_CONDITION_CODE("$(V) >= 30.0");
-    SET_RESET_CODE(
-        "$(V)=$(c);\n"
-        "$(U)+=$(d);\n");
+    SET_THRESHOLD_CONDITION_CODE("$(V) >= 29.99");
 
-    SET_PARAM_NAMES({"a", "b", "c", "d"});
-    SET_VARS({{"V","scalar"}, {"U", "scalar"}, {"Iext", "scalar"}});
+    SET_VARS({{"V",     "scalar",   VarAccess::READ_WRITE},
+              {"U",     "scalar",   VarAccess::READ_WRITE},
+              {"Iext",  "scalar",   VarAccess::READ_ONLY},
+              {"a",     "scalar",   VarAccess::READ_ONLY},
+              {"b",     "scalar",   VarAccess::READ_ONLY},
+              {"c",     "scalar",   VarAccess::READ_ONLY},
+              {"d",     "scalar",   VarAccess::READ_ONLY}});
 };
 IMPLEMENT_MODEL(Izhikevich);
 
@@ -32,10 +41,10 @@ IMPLEMENT_MODEL(Izhikevich);
 class UniformNoise : public CurrentSourceModels::Base
 {
 public:
-    DECLARE_MODEL(UniformNoise, 1, 0);
+    DECLARE_MODEL(UniformNoise, 0, 1);
 
     SET_INJECTION_CODE("$(injectCurrent, ($(gennrand_uniform) * $(n) * 2.0) - $(n));\n");
-    SET_PARAM_NAMES({"n"});
+    SET_VARS({{"n", "scalar", VarAccess::READ_ONLY}});
 };
 IMPLEMENT_MODEL(UniformNoise);
 
@@ -56,77 +65,73 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
         Parameters::probabilityConnection); // 0 - prob
-    
-    // Excitatory model parameters
-    Izhikevich::ParamValues excParams(
+
+    // LIF initial conditions
+    Izhikevich::VarValues excInit(
+        -65.0,  // V
+        -13.0,  // U
+        0.0,    // Iext
         0.02,   // a
         0.2,    // b
         -65.0,  // c
         8.0);   // d
 
-    // Inhibitory model parameters
-    Izhikevich::ParamValues inhParams(
+    // LIF initial conditions
+    Izhikevich::VarValues inhInit(
+        -65.0,  // V
+        -13.0,  // U
+        0.0,    // Iext
         0.1,    // a
         0.2,    // b
         -65.0,  // c
         2.0);   // d
 
-    // LIF initial conditions
-    Izhikevich::VarValues izkInit(
-        -65.0,  // V
-        -13.0,  // U
-        0.0);   // Iext
-
-    UniformNoise::ParamValues currSourceParams(
+    UniformNoise::VarValues currSourceInit(
         6.5);
-
-    STDPDopamine::ParamValues dopeParams(
-        20.0,                       // 0 - Potentiation time constant (ms)
-        20.0,                       // 1 - Depression time constant (ms)
-        1000.0,                     // 2 - Synaptic tag time constant (ms)
-        Parameters::tauD,           // 3 - Dopamine time constant (ms)
-        0.1,                        // 4 - Rate of potentiation
-        0.15,                       // 5 - Rate of depression
-        0.0,                        // 6 - Minimum weight
-        Parameters::maxExcWeight);  // 7 - Maximum weight
 
     STDPDopamine::VarValues dopeInitVars(
         Parameters::initExcWeight,  // Synaptic weight
         0.0,                        // Synaptic tag
-        0.0);                       // Time of last synaptic tag update
+        0.0,                        // Time of last synaptic tag update
+        20.0,                       // Potentiation time constant (ms)
+        20.0,                       // Depression time constant (ms)
+        1000.0,                     // Synaptic tag time constant (ms)
+        Parameters::tauD,           // Dopamine time constant (ms)
+        0.1,                        // Rate of potentiation
+        0.15,                       // Rate of depression
+        0.0,                        // Minimum weight
+        Parameters::maxExcWeight);  // Maximum weight
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(Parameters::inhWeight);
 
     // Create IF_curr neuron
-    model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
-    model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
+    auto *e = model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excInit);
+    auto *i = model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhInit);
+    e->setVarImplementation("Iext", VarImplementation::INDIVIDUAL);
+    i->setVarImplementation("Iext", VarImplementation::INDIVIDUAL);
 
-    model.addCurrentSource<UniformNoise>("ECurr", "E", currSourceParams, {});
-    model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceParams, {});
+    model.addCurrentSource<UniformNoise>("ECurr", "E", currSourceInit);
+    model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceInit);
 
     model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
-        "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+        "EE", SynapseMatrixConnectivity::SPARSE, NO_DELAY,
         "E", "E",
-        dopeParams, dopeInitVars,
-        {}, {},
+        dopeInitVars, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
-        "EI", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
+        "EI", SynapseMatrixConnectivity::SPARSE, NO_DELAY,
         "E", "I",
-        dopeParams, dopeInitVars,
-        {}, {},
+        dopeInitVars, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "II", SynapseMatrixConnectivity::SPARSE, NO_DELAY,
         "I", "I",
-        {}, inhSynInit,
-        {}, {}, 
+        inhSynInit, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "IE", SynapseMatrixConnectivity::SPARSE, NO_DELAY,
         "I", "E",
-        {}, inhSynInit,
-        {}, {},
+        inhSynInit, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 }
