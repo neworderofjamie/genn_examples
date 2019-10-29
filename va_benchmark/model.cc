@@ -5,6 +5,20 @@
 
 #include "parameters.h"
 
+class StaticPulseHalf : public WeightUpdateModels::Base
+{
+public:
+    DECLARE_WEIGHT_UPDATE_MODEL(StaticPulseHalf, 0, 1, 0, 0);
+
+    SET_VARS({{"g", "half", VarAccess::READ_ONLY}});
+
+    SET_SIM_CODE("$(addToInSynVec, $(g.x), $(g.y));\n");
+};
+IMPLEMENT_MODEL(StaticPulseHalf);
+
+//typedef StaticPulseHalf WUM;
+typedef WeightUpdateModels::StaticPulse WUM;
+
 void modelDefinition(NNmodel &model)
 {
     model.setDT(1.0);
@@ -12,6 +26,7 @@ void modelDefinition(NNmodel &model)
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
     model.setTiming(true);
+    //model.setDefaultNarrowSparseIndEnabled(true);
 
     //---------------------------------------------------------------------------
     // Build model
@@ -37,46 +52,42 @@ void modelDefinition(NNmodel &model)
 
 
     // Static synapse parameters
-    WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
+    WUM::VarValues excitatoryStaticSynapseInit(
         Parameters::excitatoryWeight);    // 0 - Wij (nA)
 
-    WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
+    WUM::VarValues inhibitoryStaticSynapseInit(
         Parameters::inhibitoryWeight);    // 0 - Wij (nA)
 
     // Exponential current parameters
-    PostsynapticModels::ExpCurr::ParamValues excitatoryExpCurrParams(
+    PostsynapticModels::ExpCurrAuto::VarValues excitatoryExpCurrInit(
         5.0);  // 0 - TauSyn (ms)
 
-    PostsynapticModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
+    PostsynapticModels::ExpCurrAuto::VarValues inhibitoryExpCurrInit(
         10.0);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
     auto *e = model.addNeuronPopulation<NeuronModels::LIFAuto>("E", Parameters::numExcitatory, lifInit);
     auto *i = model.addNeuronPopulation<NeuronModels::LIFAuto>("I", Parameters::numInhibitory, lifInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<WUM, PostsynapticModels::ExpCurrAuto>(
+        "EE", SynapseMatrixConnectivity::SPARSE, NO_DELAY,
         "E", "E",
-        {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {},
+        excitatoryStaticSynapseInit, excitatoryExpCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<WUM, PostsynapticModels::ExpCurrAuto>(
+        "EI", SynapseMatrixConnectivity::SPARSE, NO_DELAY,
         "E", "I",
-        {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {},
+        excitatoryStaticSynapseInit, excitatoryExpCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<WUM, PostsynapticModels::ExpCurrAuto>(
+        "II", SynapseMatrixConnectivity::SPARSE, NO_DELAY,
         "I", "I",
-        {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {},
+        inhibitoryStaticSynapseInit, inhibitoryExpCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    model.addSynapsePopulation<WUM, PostsynapticModels::ExpCurrAuto>(
+        "IE", SynapseMatrixConnectivity::SPARSE, NO_DELAY,
         "I", "E",
-        {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {},
+        inhibitoryStaticSynapseInit, inhibitoryExpCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     // Configure spike variables so that they can be downloaded to host
