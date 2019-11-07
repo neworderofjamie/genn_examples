@@ -12,7 +12,9 @@ void modelDefinition(NNmodel &model)
     // Build model
     //---------------------------------------------------------------------------
     // LIF model parameters
-    NeuronModels::LIF::ParamValues lifParams(
+    NeuronModels::LIFAuto::VarValues lifInit(
+        -55.0,  // 0 - V
+        0.0,    // 1 - RefracTime
         0.2,    // 0 - C
         20.0,   // 1 - TauM
         -60.0,  // 2 - Vrest
@@ -21,38 +23,28 @@ void modelDefinition(NNmodel &model)
         0.5,    // 5 - Ioffset
         5.0);    // 6 - TauRefrac
 
-    // LIF initial conditions
-    NeuronModels::LIF::VarValues lifInit(
-        -55.0,  // 0 - V
-        0.0);    // 1 - RefracTime
-
-    NeuronModels::PoissonNew::ParamValues poissonParams(
-        Parameters::inputRate);  // 0 - rate [hz]
-
-    NeuronModels::PoissonNew::VarValues poissonInit(
-        0.0);   // 0 - time to spike [ms]
+    NeuronModels::PoissonNewAuto::VarValues poissonInit(
+        0.0,                    // 0 - time to spike [ms]
+        Parameters::inputRate); // 1 - rate [hz]
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
         0.1);    // 0 - Wij (nA)
 
     // Exponential current parameters
-    PostsynapticModels::ExpCurr::ParamValues expCurrParams(
+    PostsynapticModels::ExpCurrAuto::VarValues expCurrInit(
         5.0);  // 0 - TauSyn (ms)
 
     InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(Parameters::connectionProbability); // 0 - prob
 
     // Create IF_curr neuron
-    model.addNeuronPopulation<NeuronModels::PoissonNew>("Poisson", Parameters::numNeurons,
-                                                        poissonParams, poissonInit);
-    model.addNeuronPopulation<NeuronModels::LIF>("Neurons", Parameters::numNeurons,
-                                                 lifParams, lifInit);
+    model.addNeuronPopulation<NeuronModels::PoissonNewAuto>("Poisson", Parameters::numNeurons, poissonInit);
+    model.addNeuronPopulation<NeuronModels::LIFAuto>("Neurons", Parameters::numNeurons, lifInit);
 
-    auto *syn = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
-        "Poisson", "Neurons",
-        {}, staticSynapseInit,
-        expCurrParams, {},
+    auto *syn = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurrAuto>(
+        "Syn", SYNAPSE_MATRIX_CONNECTIVITY, NO_DELAY,
+        "Poisson", "Neurons", staticSynapseInit, expCurrInit,
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    syn->setSpanType(SynapseGroup::SpanType::POSTSYNAPTIC);
+    //yn->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+    //syn->setNumThreadsPerSpike(8);
 }
