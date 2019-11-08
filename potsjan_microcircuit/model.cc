@@ -116,12 +116,12 @@ public:
     DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 1);
 
     SET_ROW_BUILD_CODE(
-        "const unsigned int rowLength = $(preCalcRowLength)[$(id_pre)];\n"
+        "const unsigned int rowLength = $(preCalcRowLength)[$(id)];\n"
         "const scalar u = $(gennrand_uniform);\n"
         "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
         "unsigned int postIdx = (unsigned int)(x * $(num_post));\n"
         "postIdx = (postIdx < $(num_post)) ? postIdx : ($(num_post) - 1);\n"
-        "$(addSynapse, postIdx);\n"
+        "$(addSynapse, postIdx + $(id_post_begin));\n"
         "c++;\n"
         "if(c >= rowLength) {\n"
         "   $(endRow);\n"
@@ -181,7 +181,7 @@ void modelDefinition(NNmodel &model)
     model.setMergePostsynapticModels(true);
 
     GENN_PREFERENCES.optimizeCode = true;
-    //GENN_PREFERENCES.generateLineInfo = true;
+    GENN_PREFERENCES.generateLineInfo = true;
 
     InitVarSnippet::Normal::ParamValues vDist(
         -58.0, // 0 - mean
@@ -318,7 +318,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurrAuto>(
-                                synapseName, SynapseMatrixConnectivity::SPARSE, NO_DELAY,
+                                synapseName, SynapseMatrixConnectivity::PROCEDURAL, NO_DELAY,
                                 srcName, trgName,
                                 staticSynapseInit, excitatoryExpCurrInit,
                                 initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
@@ -327,7 +327,7 @@ void modelDefinition(NNmodel &model)
                             synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
                             synPop->setSpanType(Parameters::presynapticParallelism ? SynapseGroup::SpanType::PRESYNAPTIC : SynapseGroup::SpanType::POSTSYNAPTIC);
                             if(Parameters::presynapticParallelism) {
-                                synPop->setNumThreadsPerSpike(4);
+                                synPop->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
                             }
                         }
                         // Inhibitory
@@ -353,7 +353,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurrAuto>(
-                                synapseName, SynapseMatrixConnectivity::SPARSE, NO_DELAY,
+                                synapseName, SynapseMatrixConnectivity::PROCEDURAL, NO_DELAY,
                                 srcName, trgName,
                                 staticSynapseInit, inhibitoryExpCurrInit,
                                 initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
@@ -362,7 +362,7 @@ void modelDefinition(NNmodel &model)
                             synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
                             synPop->setSpanType(Parameters::presynapticParallelism ? SynapseGroup::SpanType::PRESYNAPTIC : SynapseGroup::SpanType::POSTSYNAPTIC);
                             if(Parameters::presynapticParallelism) {
-                                synPop->setNumThreadsPerSpike(4);
+                                synPop->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
                             }
                         }
 
