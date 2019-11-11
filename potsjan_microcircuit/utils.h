@@ -10,38 +10,48 @@ inline size_t ceilDivide(size_t numerator, size_t denominator)
 inline void buildRowLengths(unsigned int numPre, unsigned int numPost, unsigned int numThreadsPerSpike, size_t numConnections,
                             unsigned int *subRowLengths, std::mt19937 &rng)
 {
+    assert(numThreadsPerSpike > 0);
+
     // Calculate row lengths
-    // **NOTE** we are FINISHING at second from last row because all remaining connections must go in last row
-    //const size_t numSubRows = numPre * numThreadsPerSpike;
     const size_t numPostPerThread = ceilDivide(numPost, numThreadsPerSpike);
     const size_t leftOverNeurons = numPost % numPostPerThread;
 
     size_t remainingConnections = numConnections;
     size_t matrixSize = (size_t)numPre * (size_t)numPost;
 
+    // Loop through rows
     for(size_t i = 0; i < numPre; i++) {
+        const bool lastPre = (i == (numPre - 1));
+
+        // Loop through subrows
         for(size_t j = 0; j < numThreadsPerSpike; j++) {
-            // Get length of this subrow
+
             const bool lastSubRow = (j == (numThreadsPerSpike - 1));
-            const unsigned int numSubRowNeurons = (leftOverNeurons != 0 && lastSubRow) ? leftOverNeurons : numPostPerThread;
 
-            const double probability = (double)numSubRowNeurons / (double)matrixSize;
+            // If this isn't the last sub-row of the matrix
+            if(!lastPre || ! lastSubRow) {
+                // Get length of this subrow
+                const unsigned int numSubRowNeurons = (leftOverNeurons != 0 && lastSubRow) ? leftOverNeurons : numPostPerThread;
 
-            // Create distribution to sample row length
-            std::binomial_distribution<size_t> rowLengthDist(remainingConnections, probability);
+                // Calculate probability
+                const double probability = (double)numSubRowNeurons / (double)matrixSize;
 
-            // Sample row length;
-            const size_t subRowLength = rowLengthDist(rng);
+                // Create distribution to sample row length
+                std::binomial_distribution<size_t> rowLengthDist(remainingConnections, probability);
 
-            // Update counters
-            remainingConnections -= subRowLength;
-            matrixSize -= numSubRowNeurons;
+                // Sample row length;
+                const size_t subRowLength = rowLengthDist(rng);
 
-            // Add row length to array
-            *subRowLengths++ = (unsigned int)subRowLength;
+                // Update counters
+                remainingConnections -= subRowLength;
+                matrixSize -= numSubRowNeurons;
+
+                // Add row length to array
+                *subRowLengths++ = (unsigned int)subRowLength;
+            }
         }
     }
 
-    // Insert remaining connections into last row
+    // Insert remaining connections into last sub-row
     *subRowLengths = (unsigned int)remainingConnections;
 }

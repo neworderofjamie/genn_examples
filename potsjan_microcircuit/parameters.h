@@ -41,14 +41,24 @@ const char *populationNames[PopulationMax] = {
     "I",
 };
 
-// Should we measure timing
+// Should we measure timing?
 const bool measureTiming = true;
 
-// Span type
+// Should we use pre or postsynaptic parallelism?
 const bool presynapticParallelism = true;
 
+// Should we use procedural rather than in-memory connectivity?
+const bool proceduralConnectivity = true;
+
+// Assert settings are valid
+static_assert(presynapticParallelism || !proceduralConnectivity,
+              "Procedural connectivity can only be use with presynaptic parallelism");
+
 // Number of threads to use for each row if using presynaptic parallelism
-const unsigned int numThreadsPerSpike = presynapticParallelism ? 4 : 0;
+const unsigned int numThreadsPerSpike = 1;
+
+// If we're using procedural connectivity, we should create a sub-row for each thread
+const unsigned int numConnectivitySubRows = proceduralConnectivity ? numThreadsPerSpike : 1;
 
 // Simulation timestep [ms]
 const double dtMs = 0.1;

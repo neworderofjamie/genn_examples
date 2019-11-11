@@ -295,6 +295,11 @@ void modelDefinition(NNmodel &model)
                         // Build unique synapse name
                         const std::string synapseName = srcName + "_" + trgName;
 
+                        // Determine matrix type
+                        const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
+                            ? SynapseMatrixType::PROCEDURAL_PROCEDURALG
+                            : SynapseMatrixType::SPARSE_INDIVIDUALG;
+
                         // Excitatory
                         if(srcPop == Parameters::PopulationE) {
                             // Build distribution for weight parameters
@@ -319,8 +324,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
-                                srcName, trgName,
+                                synapseName, matrixType, NO_DELAY, srcName, trgName,
                                 {}, staticSynapseInit,
                                 excitatoryExpCurrParams, {},
                                 initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
@@ -355,8 +359,7 @@ void modelDefinition(NNmodel &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurr>(
-                                synapseName, SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
-                                srcName, trgName,
+                                synapseName, matrixType, NO_DELAY, srcName, trgName,
                                 {}, staticSynapseInit,
                                 inhibitoryExpCurrParams, {},
                                 initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
