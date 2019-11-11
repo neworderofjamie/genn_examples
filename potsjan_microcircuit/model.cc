@@ -101,7 +101,7 @@ public:
         "{\n"
         "   normal = $(mean) + ($(gennrand_normal) * $(sd));\n"
         "} while (normal > $(max) || normal < $(min));\n"
-        "$(value) = (uint8_t)rint(normal / DT);\n");
+        "$(value) = (unsigned int)rint(normal / DT);\n");
 
     SET_PARAM_NAMES({"mean", "sd", "min", "max"});
 };
@@ -118,15 +118,15 @@ public:
 
     SET_ROW_BUILD_CODE(
         "const unsigned int rowLength = $(preCalcRowLength)[$(id)];\n"
+        "if(c >= rowLength) {\n"
+        "   $(endRow);\n"
+        "}\n"
         "const scalar u = $(gennrand_uniform);\n"
         "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
         "unsigned int postIdx = (unsigned int)(x * $(num_post));\n"
         "postIdx = (postIdx < $(num_post)) ? postIdx : ($(num_post) - 1);\n"
         "$(addSynapse, postIdx + $(id_post_begin));\n"
-        "c++;\n"
-        "if(c >= rowLength) {\n"
-        "   $(endRow);\n"
-        "}\n");
+        "c++;\n");
     SET_ROW_BUILD_STATE_VARS({{"x", "scalar", 0.0},{"c", "unsigned int", 0}});
 
     SET_PARAM_NAMES({"total"});
@@ -163,7 +163,7 @@ class StaticPulseDendriticDelayHalf : public WeightUpdateModels::Base
 public:
     DECLARE_MODEL(StaticPulseDendriticDelayHalf, 0, 2);
 
-    SET_VARS({{"g", "scalar"},{"d", "uint8_t"}});
+    SET_VARS({{"g", "scalar"},{"d", "unsigned int"}});
 
     SET_SIM_CODE("$(addToInSynDelay, $(g), $(d));\n");
 };
