@@ -117,7 +117,7 @@ public:
     DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 1);
 
     SET_ROW_BUILD_CODE(
-        "const unsigned int rowLength = $(preCalcRowLength)[$(id)];\n"
+        "const unsigned int rowLength = $(preCalcRowLength)[($(id_pre) * $(num_threads)) + $(id_thread)];\n"
         "if(c >= rowLength) {\n"
         "   $(endRow);\n"
         "}\n"
