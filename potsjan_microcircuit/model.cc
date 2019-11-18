@@ -14,7 +14,7 @@
 class LIFPoisson : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(LIFPoisson, 10, 3);
+    DECLARE_MODEL(LIFPoisson, 8, 3);
 
     SET_SIM_CODE(
         "scalar p = 1.0f;\n"
@@ -49,19 +49,18 @@ public:
         "Vrest",            // Resting membrane potential [mV]
         "Vreset",           // Reset voltage [mV]
         "Vthresh",          // Spiking threshold [mV]
-        "Ioffset",          // Offset current
         "TauRefrac",        // Refractory time [ms]
-        "PoissonRate",      // Poisson input rate [Hz]
         "PoissonWeight",    // How much current each poisson spike adds [nA]
         "IpoissonTau"});     // Time constant of poisson spike integration [ms]
-
 
     SET_DERIVED_PARAMS({
         {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
         {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }},
-        {"PoissonExpMinusLambda", [](const std::vector<double> &pars, double dt){ return std::exp(-(pars[7] / 1000.0) * dt); }},
-        {"IpoissonExpDecay", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[9]); }},
-        {"IpoissonInit", [](const std::vector<double> &pars, double dt){ return pars[8] * (1.0 - std::exp(-dt / pars[9])) * (pars[9] / dt); }}});
+        {"IpoissonExpDecay", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[7]); }},
+        {"IpoissonInit", [](const std::vector<double> &pars, double dt){ return pars[6] * (1.0 - std::exp(-dt / pars[7])) * (pars[7] / dt); }}});
+
+    SET_EXTRA_GLOBAL_PARAMS({{"Ioffset",                "scalar"},      // Offset current
+                             {"PoissonExpMinusLambda",  "scalar"}});    // Lambda for Poisson process
 
     SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}});
 };
@@ -163,7 +162,7 @@ class StaticPulseDendriticDelayHalf : public WeightUpdateModels::Base
 public:
     DECLARE_MODEL(StaticPulseDendriticDelayHalf, 0, 2);
 
-    SET_VARS({{"g", "scalar"},{"d", "unsigned int"}});
+    SET_VARS({{"g", "scalar"},{"d", "uint8_t"}});
 
     SET_SIM_CODE("$(addToInSynDelay, $(g), $(d));\n");
 };
@@ -177,6 +176,7 @@ void modelDefinition(NNmodel &model)
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
     model.setMergePostsynapticModels(true);
+    model.setDefaultNarrowSparseIndEnabled(true);
 
     GENN_PREFERENCES.optimizeCode = true;
 
@@ -215,15 +215,9 @@ void modelDefinition(NNmodel &model)
         for(unsigned int pop = 0; pop < Parameters::PopulationMax; pop++) {
             // Determine name of population
             const std::string popName = Parameters::getPopulationName(layer, pop);
-
-            // Calculate external input rate, weight and current
-            const double extInputRate = (Parameters::numExternalInputs[layer][pop] *
-                                         Parameters::connectivityScalingFactor *
-                                         Parameters::backgroundRate);
             const double extWeight = Parameters::externalW / sqrt(Parameters::connectivityScalingFactor);
 
-            const double extInputCurrent = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getFullMeanInputCurrent(layer, pop);
-            assert(extInputCurrent >= 0.0);
+
 
             // LIF model parameters
             LIFPoisson::ParamValues lifParams(
@@ -232,11 +226,9 @@ void modelDefinition(NNmodel &model)
                 -65.0,              // 2 - Vrest
                 -65.0,              // 3 - Vreset
                 -50.0,              // 4 - Vthresh
-                extInputCurrent,    // 5 - Ioffset
-                2.0,                // 6 - TauRefrac
-                extInputRate,       // 7 - PoissonRate
-                extWeight,          // 8 - PoissonWeight
-                0.5);               // 9 - IpoissonTau
+                2.0,                // 5 - TauRefrac
+                extWeight,          // 6 - PoissonWeight
+                0.5);               // 7 - IpoissonTau
 
             // Create population
             const unsigned int popSize = Parameters::getScaledNumNeurons(layer, pop);
@@ -249,7 +241,7 @@ void modelDefinition(NNmodel &model)
 #else
             neuronPop->setSpikeLocation(VarLocation::HOST_DEVICE);
 #endif
-            std::cout << "\tPopulation " << popName << ": num neurons:" << popSize << ", external input rate:" << extInputRate << ", external weight:" << extWeight << ", external DC offset:" << extInputCurrent << std::endl;
+            std::cout << "\tPopulation " << popName << ": num neurons:" << popSize << ", external weight:" << extWeight << std::endl;
             // Add number of neurons to total
             totalNeurons += popSize;
         }
