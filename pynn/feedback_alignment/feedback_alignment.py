@@ -179,21 +179,14 @@ forward_learning = genn_model.create_custom_weight_update_class(
     param_names=["nu"],
     var_name_types=[("g", "scalar")],
  
-    synapse_dynamics_code=
-        """
-        // **HACK** did presynaptic neuron spike in previous timestep
-        const scalar phiHPre = (($(t) - $(sT_pre)) < (1.5 * DT)) ? 1.0 : 0.0;
-        
-        // Update G accordingly
-        $(g) += $(nu) * phiHPre * $(PhiF_post) * $(PsiH_post);
-        """,
-        
     sim_code=
         """
         $(addToInSyn, $(g));
-        """,
-
-    is_pre_spike_time_required=True)
+        
+        // Update G
+        $(g) += $(nu) * $(PhiF_post) * $(PsiH_post);
+        """
+    )
 
 # ********************************************************************************
 #                      Data
@@ -215,7 +208,7 @@ print("time needed to load test set:%f" % (end - start))
 dt = 1.0
 
 # Architecture
-num_examples = 20#training_images.shape[0]
+num_examples = training_images.shape[0]
 layer_sizes = [784, 1500, 1500, 1500, 1000]
 single_example_time = 5
 train_timesteps = num_examples * single_example_time
@@ -252,18 +245,18 @@ for i, size in enumerate(layer_sizes[1:-1]):
 layers.append(model.add_neuron_population("output_layer", layer_sizes[-1], output_layer_model, 
                                           output_hidden_params, output_init))
 
-# Loop through hidden layers (layer 0 is input layer)
-for i, size in enumerate(layer_sizes[1:]):
+# Loop through pairs or layers
+for pre, post in zip(layers[:-1], layers[1:]):
     # Add forward synapse population
-    model.add_synapse_population("forward_%u_%u" % (i, i + 1), "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
-                                 layers[-2], layers[-1],
+    model.add_synapse_population("forward_%s_%s" % (pre.name, post.name), "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+                                 pre, post,
                                  forward_learning, forward_params, forward_init, {}, {},
                                  "DeltaCurr", {}, {})
                                  
     # Add backwards synapse population
-    if i != 0:
-        model.add_synapse_population("backward_%u_%u" % (i + 1, i), "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
-                                     layers[-1], layers[-2],
+    if pre.name != "input_layer":
+        model.add_synapse_population("backward_%s_%s" % (post.name, pre.name), "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+                                     post, pre,
                                      backward_continuous, {}, backward_init, {}, {},
                                      backwards_delta, {}, {})
 
