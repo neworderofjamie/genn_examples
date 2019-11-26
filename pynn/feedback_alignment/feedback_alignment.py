@@ -98,8 +98,8 @@ def accuracy(predictions, y_list):
 # Neurons for input layer
 input_model = genn_model.create_custom_neuron_class(
     "input",
-    var_name_types=[("Image", "scalar")],
-    threshold_condition_code="$(gennrand_uniform) < $(Image)",
+    extra_global_params=[("ImageData", "float*"), ("ImageOffset", "unsigned int*")],
+    threshold_condition_code="$(gennrand_uniform) < $(ImageData)[$(ImageOffset)[0] + $(id)]",
     is_auto_refractory_required=False
 )
 
@@ -133,12 +133,22 @@ hidden_layer_model = genn_model.create_custom_neuron_class(
 # Neurons for output layer
 output_layer_model = genn_model.create_custom_neuron_class(
     "output_layer",
-    param_names=["Tau"],
-    var_name_types=[("V", "scalar"), ("U", "scalar"), ("PhiF", "scalar"), ("PsiH", "scalar"), ("PhiStar", "scalar")],
+    extra_global_params=[("LabelData", "unsigned int*"), ("LabelOffset", "unsigned int*")],
+    param_names=["Tau", "NeuronsPerLabel"],
+    var_name_types=[("V", "scalar"), ("U", "scalar"), ("PhiF", "scalar"), ("PsiH", "scalar")],
     derived_params=[
         ("OneMinusTau", genn_model.create_dpf_class(lambda pars, dt: 1.0 - pars[0])())
     ], 
     sim_code="""
+        // Determine what label this neuron SHOULD be representing
+        const unsigned int neuronLabel = $(id) / (unsigned int)$(NeuronsPerLabel);
+        
+        // Determine correct label
+        const unsigned int correctLabel = $(LabelData)[$(LabelOffset)[0]];
+        
+        // Thus calculate Phi*
+        const scalar phiStar = (neuronLabel == correctLabel) ? 1.0 : 0.0;
+        
         // Update voltage
         $(V) = ($(OneMinusTau) * $(V)) + ($(Tau) * $(Isyn));
         
@@ -151,7 +161,7 @@ output_layer_model = genn_model.create_custom_neuron_class(
         
         // Thus calculate U 
         const scalar phiH = spike ? 1.0 : 0.0;
-        $(U) = ($(OneMinusTau) * $(U)) + ($(Tau) * (phiH - $(PhiStar)));
+        $(U) = ($(OneMinusTau) * $(U)) + ($(Tau) * (phiH - phiStar));
         
         // Calculate sigmoid of U
         $(PhiF) = 1.0 / (1.0 + exp(-$(U)));
@@ -215,12 +225,11 @@ train_timesteps = num_examples * single_example_time
 max_input = 0.95
 
 # Neuron group parameters
-output_hidden_params = {"Tau": 0.95}
+hidden_params = {"Tau": 0.95}
+output_params = {"Tau": 0.95, "NeuronsPerLabel": 100}
 
 # Neuron group initial values
-input_init = {"Image": None}
-hidden_init = {"V": 0.0, "U": 0.0, "PhiF": 0.0, "PsiH": 0.0}
-output_init = {"V": 0.0, "U": 0.0, "PhiF": 0.0, "PsiH": 0.0, "PhiStar": None}
+output_hidden_init = {"V": 0.0, "U": 0.0, "PhiF": 0.0, "PsiH": 0.0}
 
 # Weight update
 forward_params = {"nu": 1E-03}
@@ -232,18 +241,19 @@ backward_init = {"g": genn_model.init_var("Uniform", {"min": -0.1, "max": 0.1})}
 # ********************************************************************************
 model = genn_model.GeNNModel("float","mnist")
 model.dT = dt
+model.timing_enabled = True
 
 # Add input layer (layer 0)
 layers = [model.add_neuron_population("input_layer", layer_sizes[0], input_model, 
-                                      {}, input_init)]
+                                      {}, {})]
 
 # Add hidden layers
 for i, size in enumerate(layer_sizes[1:-1]):
     layers.append(model.add_neuron_population("hidden_layer%u" % i, size, hidden_layer_model, 
-                                              output_hidden_params, hidden_init))
+                                              hidden_params, output_hidden_init))
 # Add output layer
 layers.append(model.add_neuron_population("output_layer", layer_sizes[-1], output_layer_model, 
-                                          output_hidden_params, output_init))
+                                          output_params, output_hidden_init))
 
 # Loop through pairs or layers
 for pre, post in zip(layers[:-1], layers[1:]):
@@ -260,6 +270,15 @@ for pre, post in zip(layers[:-1], layers[1:]):
                                      backward_continuous, {}, backward_init, {}, {},
                                      backwards_delta, {}, {})
 
+# Upload all image data and labels to EGPs
+layers[0].add_extra_global_param("ImageData", training_images.flatten())
+layers[-1].add_extra_global_param("LabelData", training_labels)
+
+# Initially set offsets into images and labels to zero
+# **YUCK** should be able to use scalar types here but this whole API needs more thought
+layers[0].add_extra_global_param("ImageOffset", [0])
+layers[-1].add_extra_global_param("LabelOffset", [0])
+
 # ********************************************************************************
 #                      Building and Simulation
 # ********************************************************************************
@@ -269,14 +288,16 @@ model.build()
 print("Loading Model")
 model.load()
 
-input_image_view = layers[0].vars["Image"].view
-phi_star_view = layers[-1].vars["PhiStar"].view
+# Get views to EGPs used fr
+input_image_offset_view = layers[0].extra_global_params["ImageOffset"].view
+output_label_offset_view = layers[-1].extra_global_params["LabelOffset"].view
 
 print("Simulating")
 
 # Create arrays to hold spikes for each layer
 layer_spikes = [[np.asarray([]), np.asarray([])] for _ in layers]
 
+start = time.time()
 while model.timestep < train_timesteps:
     # Calculate the timestep within the presentation
     timestep_in_example = model.timestep % single_example_time
@@ -287,15 +308,14 @@ while model.timestep < train_timesteps:
         example = int(model.timestep // single_example_time)
         print("Example %u" % example)
 
-        # Use these as input
-        input_image_view[:] = training_images[example % 60000] 
-        model.push_var_to_device(layers[0].name, "Image")
-    
+        # Set offset and upload
+        # **YUCK** upload wouldn't be required if we could use scalar
+        input_image_offset_view[:] = (example % 60000) * (28 * 28)
+        model._slm.push_extra_global_param(layers[0].name, "ImageOffset", 1)
+        
         # Set Phi* to 1 for 100 neurons representing selected labels and 0 otherwise
-        label = training_labels[example % 60000]
-        phi_star_view[:] = 0.0
-        phi_star_view[label * 100:(label + 1) * 100] = 1.0
-        model.push_var_to_device(layers[-1].name, "PhiStar")
+        output_label_offset_view[:] = training_labels[example % 60000]
+        model._slm.push_extra_global_param(layers[-1].name, "LabelOffset", 1)
         
     # Advance simulation
     model.step_time()
@@ -311,6 +331,12 @@ while model.timestep < train_timesteps:
         # Add to data structure
         s[0] = np.hstack((s[0], l.current_spikes))
         s[1] = np.hstack((s[1], spike_times))
+
+end = time.time()
+print("time to simulate:%f" % (end - start))
+print("neuron_update_time:%f, init_time:%f, presynaptic_update_time:%f, postsynaptic_update_time:%f, synapse_dynamics_time:%f, init_sparse_time:%f"
+      % (model.neuron_update_time, model.init_time, model.presynaptic_update_time, 
+         model.postsynaptic_update_time, model.synapse_dynamics_time, model.init_sparse_time))
 
 fig, axes = plt.subplots(len(layers), sharex=True)
 
