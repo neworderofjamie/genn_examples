@@ -46,8 +46,6 @@ int main()
     SET_EXTRA_GLOBAL_PARAMS(6, E);
     SET_EXTRA_GLOBAL_PARAMS(6, I);
 
-    allocateMem();
-
     {
         Timer timer("Building row lengths:");
 
@@ -118,6 +116,7 @@ int main()
         BUILD_PROJECTION(6, I, 6, I);
     }
 
+    allocateMem();
     initialize();
     initializeSparse();
 
