@@ -101,8 +101,11 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
         
     // Add neuron populations for each variable state
     //sudoku.build_domains_pops()
-    // sudoku.build_stimulation_pops(1, full=True, stim_ratio=1.)
-    // sudoku.build_dissipation_pops()
+    // sudoku.build_stimulation_pops(1, shrink=1.0,stim_ratio=1.,rate=(20.0, 20.0),full=True, phase=0.0, clue_size=None))
+    // > poisson for each neuron (random start and stop)
+    // > poisson for each clue
+    // sudoku.build_dissipation_pops(d_populations=1, shrink=1.0, stim_ratio=1.0, rate=20.0, full=True, phase=0.0)
+    // > dissipative poisson for each neuron (random start and stop) - SEEMS disabled
     // sudoku.stimulate_cores(w_range=[1.4, 1.6], d_range=[1.0, 1.0], w_clues=[1.8, 2.0]) # , w_clues=[1.5, 1.9])
     
     for(size_t y = 0; y < S; y++) {
@@ -205,6 +208,8 @@ void modelDefinition(ModelSpec &model)
     model.setDT(1.0);
     model.setName("potjans_sudoku");
     model.setMergePostsynapticModels(true);
+    model.setDefaultVarLocation(VarLocation::DEVICE);
+    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
     
     buildModel(model, Puzzles::easy);
 }
