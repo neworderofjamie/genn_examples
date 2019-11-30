@@ -63,11 +63,6 @@ public:
 };
 IMPLEMENT_MODEL(LIFPoisson);
 
-std::string getPopName(size_t x, size_t y, size_t d)
-{
-    return std::to_string(x) + "_" + std::to_string(y) + "_" + std::to_string(d);
-}
-
 template<size_t S>
 void buildModel(ModelSpec &model, const Puzzle<S> &puzzle) 
 {
@@ -111,7 +106,8 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
     for(size_t y = 0; y < S; y++) {
         for(size_t x = 0; x < S; x++) {
             for(size_t d = 1; d < 10; d++) {
-                model.addNeuronPopulation<LIFPoisson>(getPopName(x, y, d), Parameters::coreSize, lifParams, lifInit);
+                auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(Parameters::getPopName(x, y, d), Parameters::coreSize, lifParams, lifInit);
+                neuronPop->setSpikeLocation(VarLocation::HOST_DEVICE);
                 
                 // If this variable state is a clue
                 if(puzzle.puzzle[y][x] == d) {
@@ -138,9 +134,9 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
     for(size_t y = 0; y < S; y++) {
         for(size_t x = 0; x < S; x++) {
             for(size_t dPre = 1; dPre < 10; dPre++) {
-                const std::string preName = getPopName(x, y, dPre);
+                const std::string preName = Parameters::getPopName(x, y, dPre);
                 for(size_t dPost = 1; dPost < 10; dPost++) {
-                    const std::string postName = getPopName(x, y, dPost);
+                    const std::string postName = Parameters::getPopName(x, y, dPost);
                     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
                         "internalInhibition_" + preName + "_" + postName, SynapseMatrixType::DENSE_INDIVIDUALG, Parameters::delay, preName, postName,
                         {}, internalInhibitionInit,
@@ -171,8 +167,8 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
                         // If there should be a horizontal or vertical constraint
                         if((xPre == xPost || yPre == yPost)) {
                             for(size_t d = 1; d < 10; d++) {
-                                const std::string preName = getPopName(xPre, yPre, d);
-                                const std::string postName = getPopName(xPost, yPost, d);
+                                const std::string preName = Parameters::getPopName(xPre, yPre, d);
+                                const std::string postName = Parameters::getPopName(xPost, yPost, d);
                                 model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
                                     "lineConstraint_" + preName + "_" + postName, SynapseMatrixType::DENSE_INDIVIDUALG, Parameters::delay, preName, postName,
                                     {}, constraintInit,
@@ -185,8 +181,8 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
                             && (xPre != xPost) && (yPre != yPost))
                         {
                             for(size_t d = 1; d < 10; d++) {
-                                const std::string preName = getPopName(xPre, yPre, d);
-                                const std::string postName = getPopName(xPost, yPost, d);
+                                const std::string preName = Parameters::getPopName(xPre, yPre, d);
+                                const std::string postName = Parameters::getPopName(xPost, yPost, d);
                                 model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
                                     "subConstraint_" + preName + "_" + postName, SynapseMatrixType::DENSE_INDIVIDUALG, Parameters::delay, preName, postName,
                                     {}, constraintInit,
@@ -206,7 +202,7 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
 void modelDefinition(ModelSpec &model)
 {
     model.setDT(1.0);
-    model.setName("potjans_sudoku");
+    model.setName("sudoku");
     model.setMergePostsynapticModels(true);
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
