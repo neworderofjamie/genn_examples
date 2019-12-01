@@ -9,15 +9,15 @@
 namespace Parameters
 {
     // Number of neurons per variables (note < blockzise is a bit wasteful)
-    const unsigned int coreSize = 25;
+    constexpr unsigned int coreSize = 25;
     
     // Runtime of simulation
-    const double runTimeMs = 60000.0;
+    constexpr double runTimeMs = 60000.0;
     
-    const unsigned int delay = 0;
+    constexpr unsigned int delay = 0;
 
-    inline std::string getPopName(size_t x, size_t y, size_t d)
+    inline std::string getPopName(size_t x, size_t y)
     {
-        return std::to_string(x) + "_" + std::to_string(y) + "_" + std::to_string(d);
+        return std::to_string(x) + "_" + std::to_string(y);
     }
 }   // namespace Parameters

@@ -63,6 +63,71 @@ public:
 };
 IMPLEMENT_MODEL(LIFPoisson);
 
+//----------------------------------------------------------------------------
+// DomainToDomain
+//----------------------------------------------------------------------------
+//! Connects neurons in same domain together
+class DomainToDomain : public InitSparseConnectivitySnippet::Base
+{
+public:
+    DECLARE_SNIPPET(DomainToDomain, 1);
+
+    SET_ROW_BUILD_CODE(
+        "const unsigned int coreSize = (unsigned int)$(CoreSize);\n"
+        "if($(c) >= coreSize) {\n"
+        "   $(endRow);\n"
+        "}\n"
+        "const unsigned int postDomainStart = $(id_pre) / coreSize;\n"
+        "$(addSynapse, postDomainStart + c);\n"
+        "c++;\n");
+
+    SET_PARAM_NAMES({"CoreSize"});
+    SET_ROW_BUILD_STATE_VARS({{"c", "unsigned int", 0}});
+    
+    SET_CALC_MAX_ROW_LENGTH_FUNC(
+        [](unsigned int, unsigned int, const std::vector<double> &pars)
+        {
+            return (unsigned int)pars[0];
+        });
+};
+IMPLEMENT_SNIPPET(DomainToDomain);
+
+//----------------------------------------------------------------------------
+// DomainToNotDomain
+//----------------------------------------------------------------------------
+//! Connects neurons in one domain to all neurons not in same domain
+class DomainToNotDomain : public InitSparseConnectivitySnippet::Base
+{
+public:
+    DECLARE_SNIPPET(DomainToNotDomain, 1);
+
+    SET_ROW_BUILD_CODE(
+        "const unsigned int coreSize = (unsigned int)$(CoreSize);\n"
+        "const unsigned int notCoreSize = $(num_post) - coreSize;\n"
+        "if($(c) >= notCoreSize) {\n"
+        "   $(endRow);\n"
+        "}\n"
+        "const unsigned int postDomainStart = $(id_pre) / coreSize;\n"
+        "const unsigned int postDomainEnd = postDomainStart + coreSize;\n"
+        "if(c < postDomainStart) {\n"
+        "    $(addSynapse, c);\n"
+        "}\n"
+        "else {\n"
+        "    $(addSynapse, postDomainEnd + c);\n"
+        "}\n"
+        "c++;\n");
+
+    SET_PARAM_NAMES({"CoreSize"});
+    SET_ROW_BUILD_STATE_VARS({{"c", "unsigned int", 0}});
+    
+    SET_CALC_MAX_ROW_LENGTH_FUNC(
+        [](unsigned int, unsigned int numPost, const std::vector<double> &pars)
+        {
+            return (numPost - (unsigned int)pars[0]);
+        });
+};
+IMPLEMENT_SNIPPET(DomainToNotDomain);
+
 template<size_t S>
 void buildModel(ModelSpec &model, const Puzzle<S> &puzzle) 
 {
@@ -105,23 +170,16 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
     
     for(size_t y = 0; y < S; y++) {
         for(size_t x = 0; x < S; x++) {
-            for(size_t d = 1; d < 10; d++) {
-                auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(Parameters::getPopName(x, y, d), Parameters::coreSize, lifParams, lifInit);
-                neuronPop->setSpikeLocation(VarLocation::HOST_DEVICE);
-                
-                // If this variable state is a clue
-                if(puzzle.puzzle[y][x] == d) {
-                }
-                
-                
+            auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(Parameters::getPopName(x, y), Parameters::coreSize * 9, lifParams, lifInit);
+            neuronPop->setSpikeLocation(VarLocation::HOST_DEVICE);
+            
+            // If this variable state is a clue
+            if(puzzle.puzzle[y][x] != 0) {
             }
-            
-            
         }
     }
     
     // sudoku.internal_inhibition(w_range=[-0.2/2.5, 0.0])
-    
     // Uniformly distribute weights
     InitVarSnippet::Uniform::ParamValues internalInhibitionGDist(
         -0.2 / 2.5, // 0 - min
@@ -129,25 +187,22 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
     
     WeightUpdateModels::StaticPulse::VarValues internalInhibitionInit(
         initVar<InitVarSnippet::Uniform>(internalInhibitionGDist)); // g
-        
-    // Connect all domain populations for a variable together
+    
+    DomainToNotDomain::ParamValues internalInhibitionParams(Parameters::coreSize);
+    
+    // Add recurrent inhibition between each variable domain
     for(size_t y = 0; y < S; y++) {
         for(size_t x = 0; x < S; x++) {
-            for(size_t dPre = 1; dPre < 10; dPre++) {
-                const std::string preName = Parameters::getPopName(x, y, dPre);
-                for(size_t dPost = 1; dPost < 10; dPost++) {
-                    const std::string postName = Parameters::getPopName(x, y, dPost);
-                    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-                        "internalInhibition_" + preName + "_" + postName, SynapseMatrixType::DENSE_INDIVIDUALG, Parameters::delay, preName, postName,
-                        {}, internalInhibitionInit,
-                        expCurrParams, {});
-                }
-            }
+            const std::string popName = Parameters::getPopName(x, y);
+            model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+                "internalInhibition_" + popName, SynapseMatrixType::SPARSE_INDIVIDUALG, Parameters::delay, popName, popName,
+                {}, internalInhibitionInit,
+                expCurrParams, {},
+                initConnectivity<DomainToNotDomain>(internalInhibitionParams));
         }
     }
     
     // sudoku.apply_constraints(w_range=[-0.2/2.5, 0.0])*/
-    
     // Uniformly distribute weights
     InitVarSnippet::Uniform::ParamValues constraintGDist(
         -0.2 / 2.5, // 0 - min
@@ -156,38 +211,36 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
     WeightUpdateModels::StaticPulse::VarValues constraintInit(
         initVar<InitVarSnippet::Uniform>(constraintGDist)); // g
     
+    DomainToDomain::ParamValues constraintParams(Parameters::coreSize);
     size_t pre = 0;
     for(size_t yPre = 0; yPre < S; yPre++) {
         for(size_t xPre = 0; xPre < S; xPre++) {
+            const std::string preName = Parameters::getPopName(xPre, yPre);
             size_t post = 0;
             for(size_t yPost = 0; yPost < S; yPost++) {
                 for(size_t xPost = 0; xPost < S; xPost++) {
+                    const std::string postName = Parameters::getPopName(xPost, yPost);
+                    
                     // **TODO** more elegant way of achieving triangle
                     if(post > pre) {
                         // If there should be a horizontal or vertical constraint
                         if((xPre == xPost || yPre == yPost)) {
-                            for(size_t d = 1; d < 10; d++) {
-                                const std::string preName = Parameters::getPopName(xPre, yPre, d);
-                                const std::string postName = Parameters::getPopName(xPost, yPost, d);
-                                model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-                                    "lineConstraint_" + preName + "_" + postName, SynapseMatrixType::DENSE_INDIVIDUALG, Parameters::delay, preName, postName,
-                                    {}, constraintInit,
-                                    expCurrParams, {});
-                            }
+                            model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+                                "lineConstraint_" + preName + "_" + postName, SynapseMatrixType::SPARSE_INDIVIDUALG, Parameters::delay, preName, postName,
+                                {}, constraintInit,
+                                expCurrParams, {},
+                                initConnectivity<DomainToDomain>(constraintParams));
                         }
                         
                         // If variables are in same 3X3 square & (different row & different column)
                         if(((xPre / subSize) == (xPost / subSize)) && ((yPre / subSize) == (yPost / subSize))
                             && (xPre != xPost) && (yPre != yPost))
                         {
-                            for(size_t d = 1; d < 10; d++) {
-                                const std::string preName = Parameters::getPopName(xPre, yPre, d);
-                                const std::string postName = Parameters::getPopName(xPost, yPost, d);
-                                model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-                                    "subConstraint_" + preName + "_" + postName, SynapseMatrixType::DENSE_INDIVIDUALG, Parameters::delay, preName, postName,
-                                    {}, constraintInit,
-                                    expCurrParams, {});
-                            }
+                            model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+                                "subConstraint_" + preName + "_" + postName, SynapseMatrixType::SPARSE_INDIVIDUALG, Parameters::delay, preName, postName,
+                                {}, constraintInit,
+                                expCurrParams, {},
+                                initConnectivity<DomainToDomain>(constraintParams));
                         }
                     }
                     post++;

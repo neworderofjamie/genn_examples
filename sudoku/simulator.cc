@@ -32,15 +32,14 @@ public:
         // Loop through populations
         for(size_t x = 0; x < S; x++) {
             for(size_t y = 0; y < S; y++) {
-                for(size_t d = 0; d < 9; d++) {
-                    auto &popSpikes = m_PopulationSpikes[x][y][d];
+                auto &popSpikes = m_PopulationSpikes[x][y];
 
-                    // Zero spike count
-                    std::get<0>(popSpikes) = 0;
-
-                    // Get function pointer for get current spike count function
-                    std::get<1>(popSpikes) = (GetCurrentSpikeCountFunc)m_Model.getSymbol("get" + Parameters::getPopName(x, y, d - 1) + "CurrentSpikes");
-                }
+                // Zero spike counts
+                std::fill(std::get<0>(popSpikes).begin(), std::get<0>(popSpikes).end(), 0);
+                
+                // Get function pointers for get current spike count function
+                std::get<1>(popSpikes) = (GetCurrentSpikeCountFunc)m_Model.getSymbol("get" + Parameters::getPopName(x, y) + "CurrentSpikeCount");
+                std::get<2>(popSpikes) = (GetCurrentSpikesFunc)m_Model.getSymbol("get" + Parameters::getPopName(x, y) + "CurrentSpikes");                
             }
         }
     }
@@ -53,11 +52,19 @@ public:
         // Loop through populations
         for(size_t x = 0; x < S; x++) {
             for(size_t y = 0; y < S; y++) {
-                for(size_t d = 0; d < 9; d++) {
-                    auto &popSpikes = m_PopulationSpikes[x][y][d];
+                auto &popSpikes = m_PopulationSpikes[x][y];
 
-                    // Add spike count
-                    std::get<0>(popSpikes) += std::get<1>(popSpikes)();
+                // Get total spike count and spikes from all domains
+                const unsigned int numSpikes = std::get<1>(popSpikes)();
+                const unsigned int *spikes = std::get<2>(popSpikes)();
+
+                // Loop through spikes
+                for(unsigned int i = 0; i < numSpikes; i++) {
+                    // Calculate which domain spike is from
+                    const unsigned int domain = spikes[i] / Parameters::coreSize;
+                 
+                    // Increment count
+                    std::get<0>(popSpikes)[domain]++;
                 }
             }
         }
@@ -87,14 +94,11 @@ public:
         // Loop through cells
         for(size_t x = 0; x < S; x++) {
             for(size_t y = 0; y < S; y++) {
-                // Find domain population with most spikes
-                auto maxSpikes = std::max_element(&m_PopulationSpikes[x][y][0], &m_PopulationSpikes[x][y][9],
-                                                  [](const PopulationSpikes &a, const PopulationSpikes &b)
-                                                  {
-                                                      return (std::get<0>(a) < std::get<0>(b));
-                                                  });
+                auto &popSpikes = m_PopulationSpikes[x][y];
 
-                const size_t bestNumber = std::distance(&m_PopulationSpikes[x][y][0], maxSpikes);
+                // Find domain population with most spikes
+                auto maxSpikes = std::max_element(std::get<0>(popSpikes).begin(), std::get<0>(popSpikes).end());
+                const size_t bestNumber = std::distance(std::get<0>(popSpikes).begin(), maxSpikes);
 
                 // If there is a 
                 
@@ -103,6 +107,9 @@ public:
                 const std::string number = std::to_string(bestNumber + 1);
                 cv::putText(m_OutputImage, number.c_str(), cv::Point(x * m_SquareSize, y * m_SquareSize),
                             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(255, 255, 255));
+
+                // Zero spike counts
+                std::fill(std::get<0>(popSpikes).begin(), std::get<0>(popSpikes).end(), 0);
             }
         }
 
@@ -110,9 +117,12 @@ public:
     }
 
 private:
+    //------------------------------------------------------------------------
     // Typedefines
+    //------------------------------------------------------------------------
     typedef unsigned int &(*GetCurrentSpikeCountFunc)(void);
-    typedef std::tuple<unsigned int, GetCurrentSpikeCountFunc> PopulationSpikes;
+    typedef unsigned int *(*GetCurrentSpikesFunc)(void);
+    typedef std::tuple<std::array<unsigned int, 10>, GetCurrentSpikeCountFunc, GetCurrentSpikesFunc> PopulationSpikes;
 
     //------------------------------------------------------------------------
     // Members
@@ -124,14 +134,12 @@ private:
     
     cv::Mat m_OutputImage;
     
-    //cv::VideoWriter m_VideoWriter;
-    
     // Times used for tracking real vs simulated time
     std::chrono::time_point<std::chrono::high_resolution_clock> m_LastRealTime;
     unsigned long long m_LastSimTimestep;
 
     // Accumulated spike counts and functions to get current for each population
-    PopulationSpikes m_PopulationSpikes[S][S][10];
+    PopulationSpikes m_PopulationSpikes[S][S];
 
 };
 
@@ -167,7 +175,6 @@ int main()
     model.initialize();
     model.initializeSparse();
 
-    
 
     std::atomic<bool> run{true};
     std::mutex mutex;
@@ -189,9 +196,7 @@ int main()
             // **TODO** copyCurrentSpikesFromDevice should be exposed in SLM 
             for(size_t y = 0; y < 9; y++) {
                 for(size_t x = 0; x < 9; x++) {
-                    for(size_t d = 1; d < 10; d++) {
-                        model.pullCurrentSpikesFromDevice(Parameters::getPopName(x, y, d));
-                    }
+                    model.pullCurrentSpikesFromDevice(Parameters::getPopName(x, y));
                 }
             }
 
