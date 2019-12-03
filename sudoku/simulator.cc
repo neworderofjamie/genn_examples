@@ -76,7 +76,7 @@ public:
         auto realTime = std::chrono::high_resolution_clock::now();
 
         std::chrono::duration<double, std::milli> realMs = realTime - m_LastRealTime;
-        const double simMs = (double)(simTimestep - m_LastSimTimestep) * 0.1;
+        const double simMs = (double)(simTimestep - m_LastSimTimestep);
 
         m_LastRealTime = realTime;
         m_LastSimTimestep = simTimestep;
