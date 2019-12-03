@@ -27,7 +27,8 @@ class LiveVisualiser
 {
 public:
     LiveVisualiser(SharedLibraryModel<float> &model, const Puzzle<S> &puzzle, int squareSize)
-    :   m_Model(model), m_Puzzle(puzzle), m_OutputImage(S * squareSize, S * squareSize, CV_8UC3), m_SquareSize(squareSize)
+    :   m_Model(model), m_Puzzle(puzzle), m_OutputImage((S * squareSize) + 10, S * squareSize, CV_8UC3), 
+        m_SquareSize(squareSize), m_SubSize((size_t)std::sqrt(S))
     {
         // Loop through populations
         for(size_t x = 0; x < S; x++) {
@@ -86,9 +87,10 @@ public:
         
         // Render status text
         char status[255];
-        sprintf(status, "Speed:%.2fx realtime", simMs / realMs.count());
+        sprintf(status, "Time:%.0lf, Speed:%.2fx realtime", m_Model.getTime(), simMs / realMs.count());
         
-        cv::putText(m_OutputImage, status, cv::Point(0, m_OutputImage.rows - 5),
+        const auto statusSize = cv::getTextSize(status, cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, 1, nullptr);
+        cv::putText(m_OutputImage, status, cv::Point(0, m_OutputImage.rows - statusSize.height),
                     cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(255, 255, 255));
 
         // Loop through cells
@@ -97,22 +99,49 @@ public:
                 auto &popSpikes = m_PopulationSpikes[x][y];
 
                 // Find domain population with most spikes
+                // **NOTE** add one to go from 0-8 to 1-9
                 auto maxSpikes = std::max_element(std::get<0>(popSpikes).begin(), std::get<0>(popSpikes).end());
-                const size_t bestNumber = std::distance(std::get<0>(popSpikes).begin(), maxSpikes);
+                const size_t bestNumber = std::distance(std::get<0>(popSpikes).begin(), maxSpikes) + 1;
 
-                // If there is a 
+                // Determine size of text string and thus position to centre it in square
+                const std::string bestNumberString = std::to_string(bestNumber);
+                const auto numberSize = cv::getTextSize(bestNumberString, cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, 1, nullptr);
+                const int xCentre = (m_SquareSize - numberSize.width) / 2;
+                const int yCentre = (m_SquareSize - numberSize.height) / 2;
+
+                // If there is a clue at this location, show number in while
+                cv::Scalar colour;
+                if(m_Puzzle.puzzle[y][x] != 0) {
+                    //assert(bestNumber == m_Puzzle.puzzle[y][x]);
+                    colour = CV_RGB(255, 255, 255);
+                }
+                // Otherwise, if number matches solution, show number in green
+                else if(m_Puzzle.solution[y][x] == bestNumber) {
+                    colour = CV_RGB(0, 255, 0);
+                }
+                // Otherwise, show it in red
+                else {
+                    colour = CV_RGB(255, 0, 0);
+                }
                 
-                //if(m_Puzzle.solution[y][x] != 0) {
-                //}
-                const std::string number = std::to_string(bestNumber + 1);
-                cv::putText(m_OutputImage, number.c_str(), cv::Point(x * m_SquareSize, y * m_SquareSize),
-                            cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(255, 255, 255));
+                // Render text
+                cv::putText(m_OutputImage, bestNumberString,
+                            cv::Point((x * m_SquareSize) + xCentre, (y * m_SquareSize) + yCentre),
+                            cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, colour);
 
                 // Zero spike counts
                 std::fill(std::get<0>(popSpikes).begin(), std::get<0>(popSpikes).end(), 0);
             }
         }
 
+        // Draw horizontal and vertical lines
+        for(size_t i = 0; i < m_SubSize; i++) {
+            const int pos = i * m_SubSize * m_SquareSize;
+            cv::line(m_OutputImage, cv::Point(pos, 0), cv::Point(pos, S * m_SquareSize), CV_RGB(255, 255, 255));
+            cv::line(m_OutputImage, cv::Point(0, pos), cv::Point(S * m_SquareSize, pos), CV_RGB(255, 255, 255));
+        }
+
+        // Show image
         cv::imshow(windowName, m_OutputImage);
     }
 
@@ -131,6 +160,8 @@ private:
     const Puzzle<S> &m_Puzzle;
 
     const int m_SquareSize;
+
+    const size_t m_SubSize;
     
     cv::Mat m_OutputImage;
     
@@ -147,7 +178,7 @@ template<size_t S>
 void displayThreadHandler(LiveVisualiser<S> &visualiser, std::mutex &mutex, std::atomic<bool> &run)
 {
     cv::namedWindow("Output", cv::WINDOW_NORMAL);
-    cv::resizeWindow("Output", 50 * S, 50 * S);
+    cv::resizeWindow("Output", 50 * S, (50 * S) + 10);
 
     while(true) {
         {
