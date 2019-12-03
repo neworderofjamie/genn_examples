@@ -91,10 +91,10 @@ public:
 
     SET_ROW_BUILD_CODE(
         "const unsigned int coreSize = (unsigned int)$(CoreSize);\n"
-        "if($(c) >= coreSize) {\n"
+        "if(c >= coreSize) {\n"
         "   $(endRow);\n"
         "}\n"
-        "const unsigned int postDomainStart = $(id_pre) / coreSize;\n"
+        "const unsigned int postDomainStart = coreSize * ($(id_pre) / coreSize);\n"
         "$(addSynapse, postDomainStart + c);\n"
         "c++;\n");
 
@@ -121,16 +121,15 @@ public:
     SET_ROW_BUILD_CODE(
         "const unsigned int coreSize = (unsigned int)$(CoreSize);\n"
         "const unsigned int notCoreSize = $(num_post) - coreSize;\n"
-        "if($(c) >= notCoreSize) {\n"
+        "if(c >= notCoreSize) {\n"
         "   $(endRow);\n"
         "}\n"
-        "const unsigned int postDomainStart = $(id_pre) / coreSize;\n"
-        "const unsigned int postDomainEnd = postDomainStart + coreSize;\n"
+        "const unsigned int postDomainStart = coreSize * ($(id_pre) / coreSize);\n"
         "if(c < postDomainStart) {\n"
         "    $(addSynapse, c);\n"
         "}\n"
         "else {\n"
-        "    $(addSynapse, postDomainEnd + c);\n"
+        "    $(addSynapse, c + coreSize);\n"
         "}\n"
         "c++;\n");
 
