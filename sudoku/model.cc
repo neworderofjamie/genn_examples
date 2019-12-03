@@ -5,6 +5,51 @@
 #include "puzzles.h"
 
 //----------------------------------------------------------------------------
+// LIFSpikeCount
+//----------------------------------------------------------------------------
+class LIFSpikeCount : public NeuronModels::Base
+{
+public:
+    DECLARE_MODEL(LIFSpikeCount, 7, 3);
+
+    SET_PARAM_NAMES({
+        "C",            // Membrane capacitance
+        "TauM",         // Membrane time constant [ms]
+        "Vrest",        // Resting membrane potential [mV]
+        "Vreset",       // Reset voltage [mV]
+        "Vthresh",      // Spiking threshold [mV]
+        "Ioffset",      // Offset current
+        "TauRefrac"});  // Refractory time [ms]
+
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
+        {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
+
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"SpikeCount", "unsigned int"}});
+    
+    SET_SIM_CODE(
+        "if ($(RefracTime) <= 0.0) {\n"
+        "  scalar alpha = (($(Isyn) + $(Ioffset)) * $(Rmembrane)) + $(Vrest);\n"
+        "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
+        "}\n"
+        "else {\n"
+        "  $(RefracTime) -= DT;\n"
+        "}\n"
+    );
+
+    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
+
+    SET_RESET_CODE(
+        "$(V) = $(Vreset);\n"
+        "$(RefracTime) = $(TauRefrac);\n"
+        "$(SpikeCount)++;\n");
+    
+
+    SET_NEEDS_AUTO_REFRACTORY(false);
+};
+IMPLEMENT_MODEL(LIFSpikeCount);
+
+//----------------------------------------------------------------------------
 // PoissonCurrentSource
 //----------------------------------------------------------------------------
 class PoissonCurrentSource : public CurrentSourceModels::Base
@@ -154,7 +199,7 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
         -55.0); // 1 - max
     
     // Parameters for LIF neurons
-    NeuronModels::LIF::ParamValues lifParams(
+    LIFSpikeCount::ParamValues lifParams(
         0.25,   // Membrane capacitance
         20.0,   // Membrane time constant [ms]
         -65.0,  // Resting membrane potential [mV]
@@ -164,9 +209,10 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
         2.0);   // Refractory time [ms]
 
     // Initial values for LIF neurons
-    NeuronModels::LIF::VarValues lifInit(
+    LIFSpikeCount::VarValues lifInit(
         initVar<InitVarSnippet::Uniform>(vDist),    // V
-        0.0);                                       // RefracTime
+        0.0,                                        // RefracTime
+        0);                                         // Spike count
     
     // Parameters for exponentially-shaped synapses
     PostsynapticModels::ExpCurr::ParamValues expCurrParams(
@@ -208,8 +254,8 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
         for(size_t x = 0; x < S; x++) {
             // Create neuron population
             const std::string popName = Parameters::getPopName(x, y);
-            auto *neuronPop = model.addNeuronPopulation<NeuronModels::LIF>(popName, Parameters::coreSize * 9, lifParams, lifInit);
-            neuronPop->setSpikeLocation(VarLocation::HOST_DEVICE);
+            auto *neuronPop = model.addNeuronPopulation<LIFSpikeCount>(popName, Parameters::coreSize * 9, lifParams, lifInit);
+            neuronPop->setVarLocation("SpikeCount", VarLocation::HOST_DEVICE);
         
             // If this variable state is a clue, add a permanent Poisson current input to strongly excite it
             if(puzzle.puzzle[y][x] != 0) {

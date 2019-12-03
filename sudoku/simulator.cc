@@ -3,6 +3,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <random>
 #include <thread>
 #include <vector>
@@ -36,11 +37,10 @@ public:
                 auto &popSpikes = m_PopulationSpikes[x][y];
 
                 // Zero spike counts
-                std::fill(std::get<0>(popSpikes).begin(), std::get<0>(popSpikes).end(), 0);
+                std::get<0>(popSpikes) = 0;
                 
-                // Get function pointers for get current spike count function
-                std::get<1>(popSpikes) = (GetCurrentSpikeCountFunc)m_Model.getSymbol("get" + Parameters::getPopName(x, y) + "CurrentSpikeCount");
-                std::get<2>(popSpikes) = (GetCurrentSpikesFunc)m_Model.getSymbol("get" + Parameters::getPopName(x, y) + "CurrentSpikes");                
+                // Get pointer to spike count array
+                std::get<1>(popSpikes) = m_Model.getArray<unsigned int>("SpikeCount" + Parameters::getPopName(x, y));
             }
         }
     }
@@ -55,18 +55,26 @@ public:
             for(size_t y = 0; y < S; y++) {
                 auto &popSpikes = m_PopulationSpikes[x][y];
 
-                // Get total spike count and spikes from all domains
-                const unsigned int numSpikes = std::get<1>(popSpikes)();
-                const unsigned int *spikes = std::get<2>(popSpikes)();
+                // Loop through domains
+                std::get<0>(popSpikes) = 0;
+                unsigned int maxSpikes = 0;
+                for(size_t d = 0; d < 9; d++) {
+                    // Get pointers to start and stop of this domains spike counts
+                    unsigned int *domainStart = &std::get<1>(popSpikes)[d * Parameters::coreSize];
+                    unsigned int *domainEnd = domainStart + Parameters::coreSize;
 
-                // Loop through spikes
-                for(unsigned int i = 0; i < numSpikes; i++) {
-                    // Calculate which domain spike is from
-                    const unsigned int domain = spikes[i] / Parameters::coreSize;
-                 
-                    // Increment count
-                    std::get<0>(popSpikes)[domain]++;
+                    // Sum all spikes in domain
+                    const unsigned int numSpikes = std::accumulate(domainStart, domainEnd, 0u);
+
+                    // If this is an improvement on current best, update best domain
+                    if(numSpikes > maxSpikes) {
+                        std::get<0>(popSpikes) = d + 1;
+                        maxSpikes = numSpikes;
+                    }
                 }
+
+                // Zero spike counts
+                std::fill_n(std::get<1>(popSpikes), 9 * Parameters::coreSize, 0);
             }
         }
     }
@@ -98,13 +106,8 @@ public:
             for(size_t y = 0; y < S; y++) {
                 auto &popSpikes = m_PopulationSpikes[x][y];
 
-                // Find domain population with most spikes
-                // **NOTE** add one to go from 0-8 to 1-9
-                auto maxSpikes = std::max_element(std::get<0>(popSpikes).begin(), std::get<0>(popSpikes).end());
-                const size_t bestNumber = std::distance(std::get<0>(popSpikes).begin(), maxSpikes) + 1;
-
                 // Determine size of text string and thus position to centre it in square
-                const std::string bestNumberString = std::to_string(bestNumber);
+                const std::string bestNumberString = std::to_string(std::get<0>(popSpikes));
                 const auto numberSize = cv::getTextSize(bestNumberString, cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, 1, nullptr);
                 const int xCentre = (m_SquareSize - numberSize.width) / 2;
                 const int yCentre = (m_SquareSize - numberSize.height) / 2;
@@ -112,11 +115,11 @@ public:
                 // If there is a clue at this location, show number in while
                 cv::Scalar colour;
                 if(m_Puzzle.puzzle[y][x] != 0) {
-                    //assert(bestNumber == m_Puzzle.puzzle[y][x]);
+                    assert(std::get<0>(popSpikes) == m_Puzzle.puzzle[y][x]);
                     colour = CV_RGB(255, 255, 255);
                 }
                 // Otherwise, if number matches solution, show number in green
-                else if(m_Puzzle.solution[y][x] == bestNumber) {
+                else if(m_Puzzle.solution[y][x] == std::get<0>(popSpikes)) {
                     colour = CV_RGB(0, 255, 0);
                 }
                 // Otherwise, show it in red
@@ -128,9 +131,6 @@ public:
                 cv::putText(m_OutputImage, bestNumberString,
                             cv::Point((x * m_SquareSize) + xCentre, (y * m_SquareSize) + yCentre),
                             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, colour);
-
-                // Zero spike counts
-                std::fill(std::get<0>(popSpikes).begin(), std::get<0>(popSpikes).end(), 0);
             }
         }
 
@@ -149,9 +149,7 @@ private:
     //------------------------------------------------------------------------
     // Typedefines
     //------------------------------------------------------------------------
-    typedef unsigned int &(*GetCurrentSpikeCountFunc)(void);
-    typedef unsigned int *(*GetCurrentSpikesFunc)(void);
-    typedef std::tuple<std::array<unsigned int, 10>, GetCurrentSpikeCountFunc, GetCurrentSpikesFunc> PopulationSpikes;
+    typedef std::tuple<unsigned int, unsigned int*> PopulationSpikes;
 
     //------------------------------------------------------------------------
     // Members
@@ -177,13 +175,13 @@ private:
 template<size_t S>
 void displayThreadHandler(LiveVisualiser<S> &visualiser, std::mutex &mutex, std::atomic<bool> &run)
 {
-    cv::namedWindow("Output", cv::WINDOW_NORMAL);
-    cv::resizeWindow("Output", 50 * S, (50 * S) + 10);
+    cv::namedWindow("Sudoku", cv::WINDOW_NORMAL);
+    cv::resizeWindow("Sudoku", 50 * S, (50 * S) + 10);
 
     while(true) {
         {
             std::lock_guard<std::mutex> lock(mutex);
-            visualiser.render("Output");
+            visualiser.render("Sudoku");
         }
 
         const auto key = cv::waitKey(33);
@@ -206,14 +204,12 @@ int main()
     model.initialize();
     model.initializeSparse();
 
-
     std::atomic<bool> run{true};
     std::mutex mutex;
     LiveVisualiser<9> visualiser(model, puzzle, 50);
     std::thread displayThread(displayThreadHandler<9>, std::ref(visualiser), std::ref(mutex), std::ref(run));
 
     
-    double applyS = 0.0;
     {
         Timer timer("Simulation:");
         
@@ -223,26 +219,34 @@ int main()
             // Simulate
             model.stepTime();
 
-            // Pull current spikes from all populations
-            // **TODO** copyCurrentSpikesFromDevice should be exposed in SLM 
-            for(size_t y = 0; y < 9; y++) {
-                for(size_t x = 0; x < 9; x++) {
-                    model.pullCurrentSpikesFromDevice(Parameters::getPopName(x, y));
+            // If 200 time steps have passed
+            if((model.getTimestep() % 200) == 0) {
+                // Loop through populations and get each neuron's spike count
+                for(size_t y = 0; y < 9; y++) {
+                    for(size_t x = 0; x < 9; x++) {
+                        model.pullVarFromDevice(Parameters::getPopName(x, y), "SpikeCount");
+                    }
                 }
-            }
 
-            {
-                TimerAccumulate timer(applyS);
-
+                // Apply spikes to visualizer
                 {
                     std::lock_guard<std::mutex> lock(mutex);
                     visualiser.applySpikes();
                 }
+
+                // Loop through populations and re-upload zeroed spike counts
+                for(size_t y = 0; y < 9; y++) {
+                    for(size_t x = 0; x < 9; x++) {
+                        model.pushVarToDevice(Parameters::getPopName(x, y), "SpikeCount");
+                    }
+                }
             }
+
         }
     }
 
-    std::cout << "Apply:" << applyS << "s" << std::endl;
+    // Join display thread - will wait for it to die
+    displayThread.join();
 
     return 0;
 }
