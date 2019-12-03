@@ -11,6 +11,8 @@
 # Ignore Visual Studio intermediate directories
 **/obj/
 **/obj_generate/
+**/x64/
+**/.vs/
 
 # Ignore generator executables
 **/generateALL_CPU_ONLY
