@@ -97,8 +97,8 @@ int main()
     }
 
     // Open CSV output files
-    SpikeRecorderCached e_spikes("e_spikes.csv", glbSpkCntE, glbSpkE, ",", true);
-    SpikeRecorderCached i_spikes("i_spikes.csv", glbSpkCntI, glbSpkI, ",", true);
+    SpikeRecorder<SpikeWriterTextCached> e_spikes(&getECurrentSpikes, &getECurrentSpikeCount, "e_spikes.csv", ",", true);
+    SpikeRecorder<SpikeWriterTextCached> i_spikes(&getICurrentSpikes, &getICurrentSpikeCount, "i_spikes.csv", ",", true);
 
     std::ofstream stimulusStream("stimulus_times.csv");
     std::ofstream rewardStream("reward_times.csv");
