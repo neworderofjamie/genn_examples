@@ -31,7 +31,7 @@
     spikeRecorders.emplace_back(new SpikeRecorder<SpikeWriterTextCached>(&get##LAYER##POPULATION##CurrentSpikes, &get##LAYER##POPULATION##CurrentSpikeCount, #LAYER#POPULATION".csv", ",", true))
 
 #define SET_EXTRA_GLOBAL_PARAMS(LAYER, POPULATION)                                                                                                                                                                                                          \
-    Ioffset##LAYER##POPULATION = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getFullMeanInputCurrent(Parameters::Layer##LAYER, Parameters::Population##POPULATION);                                                     \
+    Ioffset##LAYER##POPULATION = 0.001f * 0.5f * (1.0f - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getFullMeanInputCurrent(Parameters::Layer##LAYER, Parameters::Population##POPULATION);                                                     \
     PoissonExpMinusLambda##LAYER##POPULATION = std::exp(-((Parameters::numExternalInputs[Parameters::Layer##LAYER][Parameters::Population##POPULATION] * Parameters::connectivityScalingFactor * Parameters::backgroundRate) / 1000.0) * Parameters::dtMs)
 
 int main()
