@@ -352,6 +352,8 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
 
 void modelDefinition(ModelSpec &model)
 {
+    GENN_PREFERENCES.useConstantCacheForMergedStructs = false;
+    
     model.setDT(1.0);
     model.setName("sudoku");
     model.setMergePostsynapticModels(true);
