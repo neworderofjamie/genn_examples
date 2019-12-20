@@ -14,7 +14,7 @@ namespace Parameters
     // Runtime of simulation
     constexpr double runTimeMs = 60000.0;
     
-    constexpr unsigned int delay = 0;
+    constexpr unsigned int delay = 1;
 
     inline std::string getPopName(size_t x, size_t y)
     {

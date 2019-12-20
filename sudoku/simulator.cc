@@ -36,11 +36,11 @@ public:
             for(size_t y = 0; y < S; y++) {
                 auto &popSpikes = m_PopulationSpikes[x][y];
 
-                // Zero spike counts
-                std::get<0>(popSpikes) = 0;
-                
+                // Zero probabilities
+                std::get<0>(popSpikes).fill(0.0f);
+
                 // Get pointer to spike count array
-                std::get<1>(popSpikes) = m_Model.getArray<unsigned int>("SpikeCount" + Parameters::getPopName(x, y));
+                std::get<2>(popSpikes) = m_Model.getArray<unsigned int>("SpikeCount" + Parameters::getPopName(x, y));
             }
         }
     }
@@ -56,25 +56,35 @@ public:
                 auto &popSpikes = m_PopulationSpikes[x][y];
 
                 // Loop through domains
-                std::get<0>(popSpikes) = 0;
-                unsigned int maxSpikes = 0;
+                std::array<unsigned int, 9> numSpikes{0};
                 for(size_t d = 0; d < 9; d++) {
                     // Get pointers to start and stop of this domains spike counts
-                    unsigned int *domainStart = &std::get<1>(popSpikes)[d * Parameters::coreSize];
+                    unsigned int *domainStart = &std::get<2>(popSpikes)[d * Parameters::coreSize];
                     unsigned int *domainEnd = domainStart + Parameters::coreSize;
 
                     // Sum all spikes in domain
-                    const unsigned int numSpikes = std::accumulate(domainStart, domainEnd, 0u);
-
-                    // If this is an improvement on current best, update best domain
-                    if(numSpikes > maxSpikes) {
-                        std::get<0>(popSpikes) = d + 1;
-                        maxSpikes = numSpikes;
-                    }
+                    numSpikes[d] = std::accumulate(domainStart, domainEnd, 0u);
                 }
 
+                // Accumulate current spikes into propabilities
+                std::transform(numSpikes.cbegin(), numSpikes.cend(), std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).begin(),
+                               [](unsigned int currNumSpikes, float currProp)
+                               {
+                                   return currNumSpikes + (unsigned int)std::round(currProp * 0.97);
+                               });
+
+                // Calculate total probability and normalize (so probabilities are actual probabilities)
+                const float totalProbability = std::accumulate(std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).cend(), 0.0f);
+                assert(totalProbability > 0.0f);
+                std::transform(std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).cend(),std::get<0>(popSpikes).begin(),
+                               [totalProbability](float prob){ return prob / totalProbability; });
+
+                // Find largest probability and thus solution
+                const auto maxProbability = std::max_element(std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).cend());
+                std::get<1>(popSpikes) = 1 + std::distance(std::get<0>(popSpikes).cbegin(), maxProbability);
+
                 // Zero spike counts
-                std::fill_n(std::get<1>(popSpikes), 9 * Parameters::coreSize, 0);
+                std::fill_n(std::get<2>(popSpikes), 9 * Parameters::coreSize, 0);
             }
         }
     }
@@ -92,11 +102,11 @@ public:
 
         // Clear background
         m_OutputImage.setTo(CV_RGB(0, 0, 0));
-        
+
         // Render status text
         char status[255];
         sprintf(status, "Time:%.0lf, Speed:%.2fx realtime", m_Model.getTime(), simMs / realMs.count());
-        
+
         const auto statusSize = cv::getTextSize(status, cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, 1, nullptr);
         cv::putText(m_OutputImage, status, cv::Point(0, m_OutputImage.rows - statusSize.height),
                     cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(255, 255, 255));
@@ -107,7 +117,7 @@ public:
                 auto &popSpikes = m_PopulationSpikes[x][y];
 
                 // Determine size of text string and thus position to centre it in square
-                const std::string bestNumberString = std::to_string(std::get<0>(popSpikes));
+                const std::string bestNumberString = std::to_string(std::get<1>(popSpikes));
                 const auto numberSize = cv::getTextSize(bestNumberString, cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, 1, nullptr);
                 const int xCentre = (m_SquareSize - numberSize.width) / 2;
                 const int yCentre = (m_SquareSize - numberSize.height) / 2;
@@ -115,18 +125,18 @@ public:
                 // If there is a clue at this location, show number in while
                 cv::Scalar colour;
                 if(m_Puzzle.puzzle[y][x] != 0) {
-                    assert(std::get<0>(popSpikes) == m_Puzzle.puzzle[y][x]);
+                    //assert(std::get<1>(popSpikes) == m_Puzzle.puzzle[y][x]);
                     colour = CV_RGB(255, 255, 255);
                 }
                 // Otherwise, if number matches solution, show number in green
-                else if(m_Puzzle.solution[y][x] == std::get<0>(popSpikes)) {
+                else if(m_Puzzle.solution[y][x] == std::get<1>(popSpikes)) {
                     colour = CV_RGB(0, 255, 0);
                 }
                 // Otherwise, show it in red
                 else {
                     colour = CV_RGB(255, 0, 0);
                 }
-                
+
                 // Render text
                 cv::putText(m_OutputImage, bestNumberString,
                             cv::Point((x * m_SquareSize) + xCentre, (y * m_SquareSize) + yCentre),
@@ -149,7 +159,7 @@ private:
     //------------------------------------------------------------------------
     // Typedefines
     //------------------------------------------------------------------------
-    typedef std::tuple<unsigned int, unsigned int*> PopulationSpikes;
+    typedef std::tuple<std::array<float, 9>, unsigned int, unsigned int*> PopulationSpikes;
 
     //------------------------------------------------------------------------
     // Members
@@ -160,9 +170,9 @@ private:
     const int m_SquareSize;
 
     const size_t m_SubSize;
-    
+
     cv::Mat m_OutputImage;
-    
+
     // Times used for tracking real vs simulated time
     std::chrono::time_point<std::chrono::high_resolution_clock> m_LastRealTime;
     unsigned long long m_LastSimTimestep;
@@ -209,10 +219,10 @@ int main()
     LiveVisualiser<9> visualiser(model, puzzle, 50);
     std::thread displayThread(displayThreadHandler<9>, std::ref(visualiser), std::ref(mutex), std::ref(run));
 
-    
+
     {
         Timer timer("Simulation:");
-        
+
         // Loop through timesteps
         while(run)
         {
@@ -235,6 +245,7 @@ int main()
                 }
 
                 // Loop through populations and re-upload zeroed spike counts
+                // **TODO** could be done in neuron model
                 for(size_t y = 0; y < 9; y++) {
                     for(size_t x = 0; x < 9; x++) {
                         model.pushVarToDevice(Parameters::getPopName(x, y), "SpikeCount");
