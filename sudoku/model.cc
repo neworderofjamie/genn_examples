@@ -245,9 +245,7 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
     // sudoku.build_stimulation_pops(1, shrink=1.0,stim_ratio=1.,rate=(20.0, 20.0),full=True, phase=0.0, clue_size=None))
     // > poisson for each neuron (random start and stop)
     // > poisson for each clue
-    // sudoku.build_dissipation_pops(d_populations=1, shrink=1.0, stim_ratio=1.0, rate=20.0, full=True, phase=0.0)
-    // > dissipative poisson for each neuron (random start and stop) - SEEMS disabled
-    // sudoku.stimulate_cores(w_range=[1.4, 1.6], d_range=[1.0, 1.0], w_clues=[1.8, 2.0]) # , w_clues=[1.5, 1.9])
+    // sudoku.stimulate_cores(w_range=[1.4, 1.6], d_range=[1.0, 1.0], w_clues=[1.8, 2.0])
     for(size_t y = 0; y < S; y++) {
         for(size_t x = 0; x < S; x++) {
             // Create neuron population
@@ -258,11 +256,12 @@ void buildModel(ModelSpec &model, const Puzzle<S> &puzzle)
             // If this variable state is a clue, add a permanent Poisson current input to strongly excite it
             if(puzzle.puzzle[y][x] != 0) {
                 // Parameters for clue noise input
+                //**NOTE** these are connected all-to-all in original model so rate is multiplied by core size
                 CluePoissonCurrentSource::ParamValues clueStimParams(
-                    5.0,                    // Tau [ms]
-                    20.0,                   // Rate [Hz]
-                    puzzle.puzzle[y][x],    // Clue
-                    Parameters::coreSize);  // Core size
+                    5.0,                            // Tau [ms]
+                    20.0 * Parameters::coreSize,    // Rate [Hz]
+                    puzzle.puzzle[y][x],            // Clue
+                    Parameters::coreSize);          // Core size
 
                 model.addCurrentSource<CluePoissonCurrentSource>("clue_" + popName, popName, 
                                                                  clueStimParams, clueStimInitVals);

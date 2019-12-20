@@ -56,7 +56,7 @@ public:
                 auto &popSpikes = m_PopulationSpikes[x][y];
 
                 // Loop through domains
-                std::array<unsigned int, 9> numSpikes{0};
+                std::array<unsigned int, 9> numSpikes;
                 for(size_t d = 0; d < 9; d++) {
                     // Get pointers to start and stop of this domains spike counts
                     unsigned int *domainStart = &std::get<2>(popSpikes)[d * Parameters::coreSize];
@@ -67,21 +67,23 @@ public:
                 }
 
                 // Accumulate current spikes into propabilities
-                std::transform(numSpikes.cbegin(), numSpikes.cend(), std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).begin(),
+                /*std::transform(numSpikes.cbegin(), numSpikes.cend(), std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).begin(),
                                [](unsigned int currNumSpikes, float currProp)
                                {
-                                   return currNumSpikes + (unsigned int)std::round(currProp * 0.97);
+                                   return (float)currNumSpikes + (currProp * 0.97f);
                                });
 
                 // Calculate total probability and normalize (so probabilities are actual probabilities)
                 const float totalProbability = std::accumulate(std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).cend(), 0.0f);
                 assert(totalProbability > 0.0f);
                 std::transform(std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).cend(),std::get<0>(popSpikes).begin(),
-                               [totalProbability](float prob){ return prob / totalProbability; });
+                               [totalProbability](float prob){ return prob / totalProbability; });*/
 
                 // Find largest probability and thus solution
-                const auto maxProbability = std::max_element(std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).cend());
-                std::get<1>(popSpikes) = 1 + std::distance(std::get<0>(popSpikes).cbegin(), maxProbability);
+                //const auto maxProbability = std::max_element(std::get<0>(popSpikes).cbegin(), std::get<0>(popSpikes).cend());
+                //std::get<1>(popSpikes) = 1 + std::distance(std::get<0>(popSpikes).cbegin(), maxProbability);
+                const auto maxNumSpikes = std::max_element(numSpikes.cbegin(), numSpikes.cend());
+                std::get<1>(popSpikes) = 1 + std::distance(numSpikes.cbegin(), maxNumSpikes);
 
                 // Zero spike counts
                 std::fill_n(std::get<2>(popSpikes), 9 * Parameters::coreSize, 0);
@@ -199,7 +201,7 @@ void displayThreadHandler(LiveVisualiser<S> &visualiser, std::mutex &mutex, std:
             break;
         }
     }
-    
+
     // Clear run flag
     run = false;
 }
