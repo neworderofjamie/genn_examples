@@ -12,10 +12,6 @@ from time import perf_counter
 # Layer names
 LAYER_NAMES = ["23", "4", "5", "6"]
 
-MEASURE_TIMING = True
-
-BUILD_MODEL = True
-
 # Population names
 POPULATION_NAMES = ["E", "I"]
 
@@ -24,6 +20,12 @@ DT_MS = 0.1
 
 # Simulation duration [ms]
 DURATION_MS = 1000.0
+
+# Should kernel timing be measured
+MEASURE_TIMING = True
+
+# Should we rebuild the model rather than loading previous version
+BUILD_MODEL = True
 
 # Scaling factors for number of neurons and synapses
 NEURON_SCALING_FACTOR = 1.0
