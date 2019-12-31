@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from pygenn import genn_model, genn_wrapper
 from scipy.stats import binom, norm
-from six import itervalues
+from six import iteritems, itervalues
 
 # ----------------------------------------------------------------------------
 # Parameters
@@ -257,8 +257,8 @@ fixed_num_total_with_replacement_model = genn_model.create_custom_sparse_connect
 model = genn_model.GeNNModel("float", "potjans_microcircuit")
 model.dT = DT_MS
 model._model.set_merge_postsynaptic_models(True)
-model._model.set_default_var_location(genn_wrapper.VarLocation_DEVICE)
-model._model.set_default_sparse_connectivity_location(genn_wrapper.VarLocation_DEVICE)
+model.default_var_location = genn_wrapper.VarLocation_DEVICE
+model.default_sparse_connectivity_location = genn_wrapper.VarLocation_DEVICE
 
 lif_init = {"V": genn_model.init_var("Normal", {"mean": -58.0, "sd": 5.0}),
             "RefracTime": 0.0, "Ipoisson": 0.0}
@@ -405,15 +405,19 @@ for trg_layer in LAYER_NAMES:
                         #}
 print("Total neurons=%u, total synapses=%u" % (total_neurons, total_synapses))
 
-print("Building Model")
-model.build()
+#print("Building Model")
+#model.build()
 print("Loading Model")
 model.load()
 
 print("Simulating")
 duration_timesteps = int(round(DURATION_MS / DT_MS))
 ten_percent_timestep = duration_timesteps // 10
-        
+
+# Create dictionary to hold spikes for each population
+pop_spikes = [[pop, np.empty(0), np.empty(0)] 
+              for pop in itervalues(neuron_populations)]
+
 # Loop through timesteps
 while model.t < DURATION_MS:
     # Advance simulation
@@ -422,3 +426,42 @@ while model.t < DURATION_MS:
     # Indicate every 10%
     if (model.timestep % ten_percent_timestep) == 0:
         print("%u%%" % (model.timestep / 100))
+    
+    for i, spikes in enumerate(pop_spikes):
+        # Download spikes
+        model.pull_current_spikes_from_device(spikes[0].name)
+
+        # Add to data structure
+        spike_times = np.ones_like(spikes[0].current_spikes) * model.t
+        pop_spikes[i][1] = np.hstack((pop_spikes[i][1], spikes[0].current_spikes))
+        pop_spikes[i][2] = np.hstack((pop_spikes[i][2], spike_times))
+
+# Create plot
+figure, axes = plt.subplots(1, 2)
+
+start_id = 0
+bar_y = 0.0
+for pop, i, t in reversed(pop_spikes):
+    # Plot spikes
+    actor = axes[0].scatter(t, i + start_id, s=2, edgecolors="none")
+
+    # Plot bar showing rate in matching colour
+    axes[1].barh(bar_y, len(t) / (float(pop.size) * DURATION_MS / 1000.0), 
+                 align="center", color=actor.get_facecolor(), ecolor="black")
+
+    # Update offset
+    start_id += pop.size
+
+    # Update bar pos
+    bar_y += 1.0
+
+
+axes[0].set_xlabel("Time [ms]")
+axes[0].set_ylabel("Neuron number")
+
+axes[1].set_xlabel("Mean firing rate [Hz]")
+axes[1].set_yticks(np.arange(0.0, len(pop_spikes) * 1.0, 1.0))
+axes[1].set_yticklabels([s[0].name for s in pop_spikes])
+
+# Show plot
+plt.show()
