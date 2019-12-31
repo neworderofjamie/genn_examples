@@ -1,14 +1,20 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
+
 from pygenn import genn_model, genn_wrapper
 from scipy.stats import binom, norm
 from six import iteritems, itervalues
+from time import perf_counter
 
 # ----------------------------------------------------------------------------
 # Parameters
 # ----------------------------------------------------------------------------
 # Layer names
 LAYER_NAMES = ["23", "4", "5", "6"]
+
+MEASURE_TIMING = True
+
+BUILD_MODEL = True
 
 # Population names
 POPULATION_NAMES = ["E", "I"]
@@ -20,8 +26,8 @@ DT_MS = 0.1
 DURATION_MS = 1000.0
 
 # Scaling factors for number of neurons and synapses
-NEURON_SCALING_FACTOR = 0.1
-CONNECTIVITY_SCALING_FACTOR = 0.1
+NEURON_SCALING_FACTOR = 1.0
+CONNECTIVITY_SCALING_FACTOR = 1.0
 
 # Background rate per synapse
 BACKGROUND_RATE = 8.0  # spikes/s
@@ -257,6 +263,7 @@ fixed_num_total_with_replacement_model = genn_model.create_custom_sparse_connect
 model = genn_model.GeNNModel("float", "potjans_microcircuit")
 model.dT = DT_MS
 model._model.set_merge_postsynaptic_models(True)
+model.timing_enabled = MEASURE_TIMING
 model.default_var_location = genn_wrapper.VarLocation_DEVICE
 model.default_sparse_connectivity_location = genn_wrapper.VarLocation_DEVICE
 
@@ -405,8 +412,9 @@ for trg_layer in LAYER_NAMES:
                         #}
 print("Total neurons=%u, total synapses=%u" % (total_neurons, total_synapses))
 
-#print("Building Model")
-#model.build()
+if BUILD_MODEL:
+    print("Building Model")
+    model.build()
 print("Loading Model")
 model.load()
 
@@ -419,6 +427,7 @@ pop_spikes = [[pop, np.empty(0), np.empty(0)]
               for pop in itervalues(neuron_populations)]
 
 # Loop through timesteps
+sim_start_time = perf_counter()
 while model.t < DURATION_MS:
     # Advance simulation
     model.step_time()
@@ -435,6 +444,17 @@ while model.t < DURATION_MS:
         spike_times = np.ones_like(spikes[0].current_spikes) * model.t
         pop_spikes[i][1] = np.hstack((pop_spikes[i][1], spikes[0].current_spikes))
         pop_spikes[i][2] = np.hstack((pop_spikes[i][2], spike_times))
+
+sim_end_time =  perf_counter()
+
+print("Timing:")
+print("\tSimulation:%f" % ((sim_end_time - sim_start_time) * 1000.0))
+    
+if MEASURE_TIMING:
+    print("\tInit:%f" % (1000.0 * model.init_time))
+    print("\tSparse init:%f" % (1000.0 * model.init_sparse_time))
+    print("\tNeuron simulation:%f" % (1000.0 * model.neuron_update_time))
+    print("\tSynapse simulation:%f" % (1000.0 * model.presynaptic_update_time))
 
 # Create plot
 figure, axes = plt.subplots(1, 2)
