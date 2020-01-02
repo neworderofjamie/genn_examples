@@ -19,17 +19,22 @@ int main()
     initializeSparse();
 
     // Open CSV output files
-    SpikeRecorder<> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
+    SpikeRecorder<SpikeWriterTextCached> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
 
-    while(t < 10000.0) {
-        // Simulate
-        stepTime();
+    {
+        Timer a("Simulation wall clock:");
+        while(t < 10000.0) {
+            // Simulate
+            stepTime();
 
-        pullECurrentSpikesFromDevice();
+            pullECurrentSpikesFromDevice();
 
 
-        spikes.record(t);
+            spikes.record(t);
+        }
     }
+
+    spikes.writeCache();
 
     std::cout << "Init:" << initTime << std::endl;
     std::cout << "Init sparse:" << initSparseTime << std::endl;

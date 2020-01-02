@@ -56,32 +56,53 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    // Configure spike variables so that they can be downloaded to host
+    e->setSpikeLocation(VarLocation::HOST_DEVICE);
+    i->setSpikeLocation(VarLocation::HOST_DEVICE);
+
+    // Determine matrix type
+    const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
+        ? SynapseMatrixType::PROCEDURAL_GLOBALG
+        : (Parameters::bitmaskConnectivity ? SynapseMatrixType::BITMASK_GLOBALG : SynapseMatrixType::SPARSE_GLOBALG);
+
+    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        "EE", matrixType, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        "EI", matrixType, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        "II", matrixType, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "IE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        "IE", matrixType, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
-    // Configure spike variables so that they can be downloaded to host
-    e->setSpikeLocation(VarLocation::HOST_DEVICE);
-    i->setSpikeLocation(VarLocation::HOST_DEVICE);
+    if(Parameters::presynapticParallelism) {
+        // Set span type
+        ee->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+        ei->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+        ii->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+        ie->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+
+        // Set threads per spike
+        ee->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
+        ei->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
+        ii->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
+        ie->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
+
+
+    }
 }

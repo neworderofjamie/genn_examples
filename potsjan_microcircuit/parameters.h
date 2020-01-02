@@ -41,11 +41,24 @@ const char *populationNames[PopulationMax] = {
     "I",
 };
 
-// Should we measure timing
+// Should we measure timing?
 const bool measureTiming = true;
 
-// Span type
-const bool presynapticParallelism = false;
+// Should we use pre or postsynaptic parallelism?
+const bool presynapticParallelism = true;
+
+// Should we use procedural rather than in-memory connectivity?
+const bool proceduralConnectivity = true;
+
+// Assert settings are valid
+static_assert(presynapticParallelism || !proceduralConnectivity,
+              "Procedural connectivity can only be use with presynaptic parallelism");
+
+// Number of threads to use for each row if using presynaptic parallelism
+const unsigned int numThreadsPerSpike = 1;
+
+// If we're using procedural connectivity, we should create a sub-row for each thread
+const unsigned int numConnectivitySubRows = proceduralConnectivity ? numThreadsPerSpike : 1;
 
 // Simulation timestep [ms]
 const double dtMs = 0.1;
@@ -54,8 +67,8 @@ const double dtMs = 0.1;
 const double durationMs = 1000.0;
 
 // Scaling factors for number of neurons and synapses
-const double neuronScalingFactor = 0.1;
-const double connectivityScalingFactor = 0.1;
+const double neuronScalingFactor = 0.5;
+const double connectivityScalingFactor = 0.5;
 
 // Background rate per synapse
 const double backgroundRate = 8.0;  // spikes/s
