@@ -25,7 +25,7 @@ DURATION_MS = 1000.0
 MEASURE_TIMING = True
 
 # Should we use procedural rather than in-memory connectivity?
-PROCEDURAL_CONNECTIVITY = True
+PROCEDURAL_CONNECTIVITY = False
 
 # Should we rebuild the model rather than loading previous version
 BUILD_MODEL = True
@@ -196,17 +196,18 @@ lif_model = genn_model.create_custom_neuron_class(
         "Vthresh",          # Spiking threshold [mV]
         "Ioffset",          # Offset current
         "TauRefrac",        # Refractory time [ms]
-        "PoissonRate",      # Poisson input rate [Hz]
         "PoissonWeight",    # How much current each poisson spike adds [nA]
         "IpoissonTau"],     # Time constant of poisson spike integration [ms]],
-        
+    
+    extra_global_params=[
+        ("PoissonExpMinusLambda", "scalar")],
+    
     var_name_types=[("V","scalar"), ("RefracTime", "scalar"), ("Ipoisson", "scalar")],
     derived_params=[
         ("ExpTC",                   genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
         ("Rmembrane",               genn_model.create_dpf_class(lambda pars, dt: pars[1] / pars[0])()),
-        ("PoissonExpMinusLambda",   genn_model.create_dpf_class(lambda pars, dt: np.exp(-(pars[7] / 1000.0) * dt))()),
-        ("IpoissonExpDecay",        genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[9]))()),
-        ("IpoissonInit",            genn_model.create_dpf_class(lambda pars, dt: pars[8] * (1.0 - np.exp(-dt / pars[9])) * (pars[9] / dt))()),
+        ("IpoissonExpDecay",        genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[8]))()),
+        ("IpoissonInit",            genn_model.create_dpf_class(lambda pars, dt: pars[7] * (1.0 - np.exp(-dt / pars[8])) * (pars[8] / dt))()),
     ],
     
     sim_code="""
@@ -322,13 +323,17 @@ for layer in LAYER_NAMES:
         assert ext_input_current >= 0.0
             
         lif_params = {"C": 0.25, "TauM": 10.0, "Vrest": -65.0, "Vreset": -65.0, "Vthresh" : -50.0,
-                      "Ioffset": ext_input_current, "TauRefrac": 2.0, "PoissonRate": ext_input_rate, 
-                      "PoissonWeight": ext_weight, "IpoissonTau": 0.5}
+                      "Ioffset": ext_input_current, "TauRefrac": 2.0, "PoissonWeight": ext_weight, 
+                      "IpoissonTau": 0.5}
         
         pop_size = get_scaled_num_neurons(layer, pop)
         neuron_pop = model.add_neuron_population(pop_name, pop_size, lif_model, lif_params, lif_init)
         
+        # Set spike location so they can be accessed on host
         neuron_pop.pop.set_spike_location(genn_wrapper.VarLocation_HOST_DEVICE)
+        
+        # Set EGP containing lambda value for external input Poisson process
+        neuron_pop.add_extra_global_param("PoissonExpMinusLambda", np.exp(-(ext_input_rate / 1000.0) * DT_MS))
         
         print("\tPopulation %s: num neurons:%u, external input rate:%f, external weight:%f, external DC offset:%f" % (pop_name, pop_size, ext_input_rate, ext_weight, ext_input_current))
         
