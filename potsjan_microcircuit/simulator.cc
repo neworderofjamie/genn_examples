@@ -30,9 +30,21 @@
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                               \
     spikeRecorders.emplace_back(new SpikeRecorder<SpikeWriterTextCached>(&get##LAYER##POPULATION##CurrentSpikes, &get##LAYER##POPULATION##CurrentSpikeCount, #LAYER#POPULATION".csv", ",", true))
 
+#define SET_EXTRA_GLOBAL_PARAMS(LAYER, POPULATION)                                                                                                                                                                                                          \
+    Ioffset##LAYER##POPULATION = 0.001f * 0.5f * (1.0f - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getFullMeanInputCurrent(Parameters::Layer##LAYER, Parameters::Population##POPULATION);                                                     \
+    PoissonExpMinusLambda##LAYER##POPULATION = std::exp(-((Parameters::numExternalInputs[Parameters::Layer##LAYER][Parameters::Population##POPULATION] * Parameters::connectivityScalingFactor * Parameters::backgroundRate) / 1000.0) * Parameters::dtMs)
+
 int main()
 {
-    allocateMem();
+    // In order to make the neuron groups more mergable, heterogeneous parameters are implemented via extra global parameters - implement them here!
+    SET_EXTRA_GLOBAL_PARAMS(23, E);
+    SET_EXTRA_GLOBAL_PARAMS(23, I);
+    SET_EXTRA_GLOBAL_PARAMS(4, E);
+    SET_EXTRA_GLOBAL_PARAMS(4, I);
+    SET_EXTRA_GLOBAL_PARAMS(5, E);
+    SET_EXTRA_GLOBAL_PARAMS(5, I);
+    SET_EXTRA_GLOBAL_PARAMS(6, E);
+    SET_EXTRA_GLOBAL_PARAMS(6, I);
 
     {
         Timer timer("Building row lengths:");
@@ -104,6 +116,7 @@ int main()
         BUILD_PROJECTION(6, I, 6, I);
     }
 
+    allocateMem();
     initialize();
     initializeSparse();
 

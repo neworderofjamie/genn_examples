@@ -19,7 +19,7 @@ int main()
     pullIEConnectivityFromDevice();
 
     // Open CSV output files
-    SpikeRecorder spikes("spikes.csv", glbSpkCntE, glbSpkE, ",", true);
+    SpikeRecorder<SpikeWriterTextCached> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
 
     FILE *weights = fopen("weights.csv", "w");
     fprintf(weights, "Time(ms), Weight (nA)\n");
