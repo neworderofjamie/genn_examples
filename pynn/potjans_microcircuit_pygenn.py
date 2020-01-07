@@ -289,6 +289,7 @@ fixed_num_total_with_replacement_model = genn_model.create_custom_sparse_connect
 model = genn_model.GeNNModel("float", "potjans_microcircuit")
 model.dT = DT_MS
 model._model.set_merge_postsynaptic_models(True)
+model._model.set_default_narrow_sparse_ind_enabled(True)
 model.timing_enabled = MEASURE_TIMING
 model.default_var_location = genn_wrapper.VarLocation_DEVICE
 model.default_sparse_connectivity_location = genn_wrapper.VarLocation_DEVICE
