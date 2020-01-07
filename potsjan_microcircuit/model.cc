@@ -72,8 +72,8 @@ void modelDefinition(NNmodel &model)
                 -65.0,              // 2 - Vrest
                 -65.0,              // 3 - Vreset
                 -50.0,              // 4 - Vthresh
-                2.0,                // 5 - TauRefrac
-                extInputCurrent);   // 6 - Ioffset
+                extInputCurrent,    // 5 - Ioffset
+                2.0);               // 6 - TauRefrac
 
             CurrentSourceModels::PoissonExp::ParamValues poissonParams(
                 extWeight,      // 0 - Weight
