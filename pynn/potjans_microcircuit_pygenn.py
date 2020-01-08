@@ -183,107 +183,6 @@ def build_row_lengths(num_pre, num_post, num_sub_rows, num_connections):
     return sub_row_lengths
 
 # ----------------------------------------------------------------------------
-# Models
-# ----------------------------------------------------------------------------
-# LIF neuron model
-lif_model = genn_model.create_custom_neuron_class(
-    "lif",
-    param_names=[
-        "C",                # Membrane capacitance
-        "TauM",             # Membrane time constant [ms]
-        "Vrest",            # Resting membrane potential [mV]
-        "Vreset",           # Reset voltage [mV]
-        "Vthresh",          # Spiking threshold [mV]
-        "Ioffset",          # Offset current
-        "TauRefrac",        # Refractory time [ms]
-        "PoissonWeight",    # How much current each poisson spike adds [nA]
-        "IpoissonTau"],     # Time constant of poisson spike integration [ms]],
-    
-    extra_global_params=[
-        ("PoissonExpMinusLambda", "scalar")],
-    
-    var_name_types=[("V","scalar"), ("RefracTime", "scalar"), ("Ipoisson", "scalar")],
-    derived_params=[
-        ("ExpTC",                   genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
-        ("Rmembrane",               genn_model.create_dpf_class(lambda pars, dt: pars[1] / pars[0])()),
-        ("IpoissonExpDecay",        genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[8]))()),
-        ("IpoissonInit",            genn_model.create_dpf_class(lambda pars, dt: pars[7] * (1.0 - np.exp(-dt / pars[8])) * (pars[8] / dt))()),
-    ],
-    
-    sim_code="""
-    scalar p = 1.0f;
-    unsigned int numPoissonSpikes = 0;
-    do
-    {
-        numPoissonSpikes++;
-        p *= $(gennrand_uniform);
-    } while (p > $(PoissonExpMinusLambda));
-    $(Ipoisson) += $(IpoissonInit) * (scalar)(numPoissonSpikes - 1);
-    if ($(RefracTime) <= 0.0)
-    {
-      scalar alpha = (($(Isyn) + $(Ioffset) + $(Ipoisson)) * $(Rmembrane)) + $(Vrest);
-      $(V) = alpha - ($(ExpTC) * (alpha - $(V)));
-    }
-    else
-    {
-      $(RefracTime) -= DT;
-    }
-    $(Ipoisson) *= $(IpoissonExpDecay);
-    """,
-    
-    reset_code="""
-    $(V) = $(Vreset);
-    $(RefracTime) = $(TauRefrac);
-    """,
-    threshold_condition_code="$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)")
-
-normal_clipped_model = genn_model.create_custom_init_var_snippet_class(
-    "normal_clipped",
-    param_names=["mean", "sd", "min", "max"],
-    var_init_code="""
-    scalar normal;
-    do
-    {
-       normal = $(mean) + ($(gennrand_normal) * $(sd));
-    } while (normal > $(max) || normal < $(min));
-    $(value) = normal;
-    """)
-
-normal_clipped_delay_model = genn_model.create_custom_init_var_snippet_class(
-    "normal_clipped_delay",
-    param_names=["mean", "sd", "min", "max"],
-    var_init_code="""
-    scalar normal;
-    do
-    {
-       normal = $(mean) + ($(gennrand_normal) * $(sd));
-    } while (normal > $(max) || normal < $(min));
-    $(value) = rint(normal / DT);
-    """)
-    
-fixed_num_total_with_replacement_model = genn_model.create_custom_sparse_connect_init_snippet_class(
-    "fixed_num_total_with_replacement",
-    param_names=["total"],
-    row_build_state_vars=[("x", "scalar", 0.0), ("c", "unsigned int", 0)],
-    extra_global_params=[("preCalcRowLength", "unsigned int*")],
-    calc_max_row_len_func=genn_model.create_cmlf_class(
-        lambda num_pre, num_post, pars: int(binom.ppf(0.9999**(1.0 / num_pre), n=pars[0], p=float(num_post) / (num_pre * num_post))))(),
-    calc_max_col_len_func=genn_model.create_cmlf_class(
-        lambda num_pre, num_post, pars: int(binom.ppf(0.9999**(1.0 / num_post), n=pars[0], p=float(num_pre) / (num_pre * num_post))))(),
-    row_build_code="""
-    const unsigned int rowLength = $(preCalcRowLength)[($(id_pre) * $(num_threads)) + $(id_thread)];
-    if(c >= rowLength) {
-       $(endRow);
-    }
-    const scalar u = $(gennrand_uniform);
-    x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));
-    unsigned int postIdx = (unsigned int)(x * $(num_post));
-    postIdx = (postIdx < $(num_post)) ? postIdx : ($(num_post) - 1);
-    $(addSynapse, postIdx + $(id_post_begin));
-    c++;
-    """)
-
-# ----------------------------------------------------------------------------
 # Network creation
 # ----------------------------------------------------------------------------
 model = genn_model.GeNNModel("float", "potjans_microcircuit")
@@ -294,8 +193,8 @@ model.timing_enabled = MEASURE_TIMING
 model.default_var_location = genn_wrapper.VarLocation_DEVICE
 model.default_sparse_connectivity_location = genn_wrapper.VarLocation_DEVICE
 
-lif_init = {"V": genn_model.init_var("Normal", {"mean": -58.0, "sd": 5.0}),
-            "RefracTime": 0.0, "Ipoisson": 0.0}
+lif_init = {"V": genn_model.init_var("Normal", {"mean": -58.0, "sd": 5.0}), "RefracTime": 0.0}
+poisson_init = {"current": 0.0}
 
 exp_curr_params = {"tau": 0.5}
 
@@ -324,17 +223,15 @@ for layer in LAYER_NAMES:
         assert ext_input_current >= 0.0
             
         lif_params = {"C": 0.25, "TauM": 10.0, "Vrest": -65.0, "Vreset": -65.0, "Vthresh" : -50.0,
-                      "Ioffset": ext_input_current, "TauRefrac": 2.0, "PoissonWeight": ext_weight, 
-                      "IpoissonTau": 0.5}
-        
+                      "Ioffset": ext_input_current, "TauRefrac": 2.0}
+        poisson_params = {"weight": ext_weight, "tauSyn": 0.5, "rate": ext_input_rate}
+
         pop_size = get_scaled_num_neurons(layer, pop)
-        neuron_pop = model.add_neuron_population(pop_name, pop_size, lif_model, lif_params, lif_init)
-        
+        neuron_pop = model.add_neuron_population(pop_name, pop_size, "LIF", lif_params, lif_init)
+        model.add_current_source(pop_name + "_poisson", "PoissonExp", pop_name, poisson_params, poisson_init)
+
         # Set spike location so they can be accessed on host
         neuron_pop.pop.set_spike_location(genn_wrapper.VarLocation_HOST_DEVICE)
-        
-        # Set EGP containing lambda value for external input Poisson process
-        neuron_pop.add_extra_global_param("PoissonExpMinusLambda", np.exp(-(ext_input_rate / 1000.0) * DT_MS))
         
         print("\tPopulation %s: num neurons:%u, external input rate:%f, external weight:%f, external DC offset:%f" % (pop_name, pop_size, ext_input_rate, ext_weight, ext_input_current))
         
@@ -396,20 +293,20 @@ for trg_layer in LAYER_NAMES:
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": 0.0, "max": float(np.finfo(np.float32).max)}
                         
                         # Create weight parameters
-                        static_synapse_init = {"g": genn_model.init_var(normal_clipped_model, w_dist),
-                                               "d": genn_model.init_var(normal_clipped_delay_model, d_dist)}
+                        static_synapse_init = {"g": genn_model.init_var("NormalClipped", w_dist),
+                                               "d": genn_model.init_var("NormalClippedDelay", d_dist)}
 
                         # Add synapse population
                         syn_pop = model.add_synapse_population(synapse_name, matrix_type, genn_wrapper.NO_DELAY,
                             neuron_populations[src_name], neuron_populations[trg_name],
                             "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
                             "ExpCurr", exp_curr_params, {},
-                            genn_model.init_connectivity(fixed_num_total_with_replacement_model, connect_params))
+                            genn_model.init_connectivity("FixedNumberTotalWithReplacement", connect_params))
                         
                         # Add extra global parameter with row lengths
                         syn_pop.add_connectivity_extra_global_param(
                             "preCalcRowLength", build_row_lengths(num_src_neurons, num_trg_neurons, num_sub_rows, num_connections))
-                                                       
+
                         # Set max dendritic delay and span type
                         syn_pop.pop.set_max_dendritic_delay_timesteps(max_dendritic_delay_slots)
 
@@ -423,15 +320,15 @@ for trg_layer in LAYER_NAMES:
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": float(-np.finfo(np.float32).max), "max": 0.0}
                         
                         # Create weight parameters
-                        static_synapse_init = {"g": genn_model.init_var(normal_clipped_model, w_dist),
-                                               "d": genn_model.init_var(normal_clipped_delay_model, d_dist)}
+                        static_synapse_init = {"g": genn_model.init_var("NormalClipped", w_dist),
+                                               "d": genn_model.init_var("NormalClippedDelay", d_dist)}
                         
                         # Add synapse population
                         syn_pop = model.add_synapse_population(synapse_name, matrix_type, genn_wrapper.NO_DELAY,
                             neuron_populations[src_name], neuron_populations[trg_name],
                             "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
                             "ExpCurr", exp_curr_params, {},
-                            genn_model.init_connectivity(fixed_num_total_with_replacement_model, connect_params))
+                            genn_model.init_connectivity("FixedNumberTotalWithReplacement", connect_params))
                         
                         # Add extra global parameter with row lengths
                         syn_pop.add_connectivity_extra_global_param(
