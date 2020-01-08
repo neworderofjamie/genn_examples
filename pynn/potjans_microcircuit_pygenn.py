@@ -2,9 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 from pygenn import genn_model, genn_wrapper
-from scipy.stats import binom, norm
+from scipy.stats import norm
 from six import iteritems, itervalues
 from time import perf_counter
+
+from pygenn.genn_wrapper.FixedNumberTotalPreCalc import pre_calc_row_lengths, create_mt_19937
 
 # ----------------------------------------------------------------------------
 # Parameters
@@ -146,42 +148,6 @@ def get_full_mean_input_current(layer, pop):
     assert mean_input_current >= 0.0
     return mean_input_current
 
-def build_row_lengths(num_pre, num_post, num_sub_rows, num_connections):
-    assert num_sub_rows > 0
-    
-    num_post_per_sub_row = (num_post + num_sub_rows - 1) // num_sub_rows
-    num_post_remainder = num_post % num_post_per_sub_row
-    
-    remaining_connections = num_connections
-    matrix_size = num_pre * num_post
-    
-    sub_row_lengths = np.empty(num_pre * num_sub_rows, dtype=np.uint32)
-    for i in range(num_pre):
-        last_pre = (i == (num_pre - 1))
-        
-        for j in range(num_sub_rows):
-            last_sub_row = (j == (num_sub_rows - 1))
-            
-            if not last_pre or not last_sub_row:
-                num_sub_row_neurons = (num_post_remainder 
-                                       if num_post_remainder != 0 and last_sub_row 
-                                       else num_post_per_sub_row)
-                
-                probability = float(num_sub_row_neurons) / float(matrix_size)
-                
-                # Sample row length;
-                length = binom.rvs(remaining_connections, probability)
-                
-                # Update counters
-                remaining_connections -= length
-                matrix_size -= num_sub_row_neurons
-                
-                sub_row_lengths[(i * num_sub_rows) + j] = length
-        
-    # Insert remaining connections into last row
-    sub_row_lengths[-1] = remaining_connections
-    return sub_row_lengths
-
 # ----------------------------------------------------------------------------
 # Network creation
 # ----------------------------------------------------------------------------
@@ -241,6 +207,9 @@ for layer in LAYER_NAMES:
         # Add neuron population to dictionary
         neuron_populations[pop_name] = neuron_pop
  
+ # Create RNG to use for row length distribution
+rng = create_mt_19937()
+
 # Loop through target populations and layers
 print("Creating synapse populations:")
 total_synapses = 0
@@ -286,6 +255,9 @@ for trg_layer in LAYER_NAMES:
 
                     matrix_type = "PROCEDURAL_PROCEDURALG" if PROCEDURAL_CONNECTIVITY else "SPARSE_INDIVIDUALG"
 
+                    # Pre-calculate row lengths
+                    row_lengths = pre_calc_row_lengths(num_src_neurons, num_trg_neurons, num_connections, rng, num_sub_rows)
+
                     # Excitatory
                     if src_pop == "E":
                         # Build distribution for weight parameters
@@ -302,10 +274,9 @@ for trg_layer in LAYER_NAMES:
                             "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
                             "ExpCurr", exp_curr_params, {},
                             genn_model.init_connectivity("FixedNumberTotalWithReplacement", connect_params))
-                        
+
                         # Add extra global parameter with row lengths
-                        syn_pop.add_connectivity_extra_global_param(
-                            "preCalcRowLength", build_row_lengths(num_src_neurons, num_trg_neurons, num_sub_rows, num_connections))
+                        syn_pop.add_connectivity_extra_global_param("preCalcRowLength", row_lengths)
 
                         # Set max dendritic delay and span type
                         syn_pop.pop.set_max_dendritic_delay_timesteps(max_dendritic_delay_slots)
@@ -331,8 +302,7 @@ for trg_layer in LAYER_NAMES:
                             genn_model.init_connectivity("FixedNumberTotalWithReplacement", connect_params))
                         
                         # Add extra global parameter with row lengths
-                        syn_pop.add_connectivity_extra_global_param(
-                            "preCalcRowLength", build_row_lengths(num_src_neurons, num_trg_neurons, num_sub_rows, num_connections))
+                        syn_pop.add_connectivity_extra_global_param("preCalcRowLength", row_lengths)
 
                         # Set max dendritic delay and span type
                         syn_pop.pop.set_max_dendritic_delay_timesteps(max_dendritic_delay_slots)
