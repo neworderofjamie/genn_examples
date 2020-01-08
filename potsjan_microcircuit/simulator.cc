@@ -5,12 +5,12 @@
 #include <vector>
 
 // GeNN user projects includes
+#include "fixedNumberTotalPreCalc.h"
 #include "timer.h"
 #include "spikeRecorder.h"
 
 // Model parameters
 #include "parameters.h"
-#include "utils.h"
 
 // Auto-generated model code
 #include "potjans_microcircuit_CODE/definitions.h"
@@ -18,12 +18,11 @@
 // Macro to build a connection between a pair of populations
 #define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                                                                                    \
     allocatepreCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP) * Parameters::numConnectivitySubRows);       \
-    buildRowLengths(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),                                                                                                 \
-                    Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                                                                                                 \
-                    Parameters::numConnectivitySubRows,                                                                                                                                                             \
-                    Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,                                                                                              \
-                                                        Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                                                                                             \
-                    preCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng);                                                                                                                              \
+    preCalcRowLengths(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),                                                                                               \
+                      Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                                                                                               \
+                      Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,                                                                                            \
+                                                          Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                                                                                           \
+                      preCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng, Parameters::numConnectivitySubRows);                                                                                        \
     pushpreCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP##ToDevice(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP) * Parameters::numConnectivitySubRows)  \
 
 // Macro to record a population's output
