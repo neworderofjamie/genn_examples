@@ -6,8 +6,6 @@ from scipy.stats import norm
 from six import iteritems, itervalues
 from time import perf_counter
 
-from pygenn.genn_wrapper.FixedNumberTotalPreCalc import pre_calc_row_lengths, create_mt_19937
-
 # ----------------------------------------------------------------------------
 # Parameters
 # ----------------------------------------------------------------------------
@@ -181,13 +179,13 @@ neuron_populations = {}
 for layer in LAYER_NAMES:
     for pop in POPULATION_NAMES:
         pop_name = layer + pop
-        
+
         # Calculate external input rate, weight and current
         ext_input_rate = NUM_EXTERNAL_INPUTS[layer][pop] * CONNECTIVITY_SCALING_FACTOR * BACKGROUND_RATE
         ext_weight = EXTERNAL_W / np.sqrt(CONNECTIVITY_SCALING_FACTOR)
         ext_input_current = 0.001 * 0.5 * (1.0 - np.sqrt(CONNECTIVITY_SCALING_FACTOR)) * get_full_mean_input_current(layer, pop)
         assert ext_input_current >= 0.0
-            
+
         lif_params = {"C": 0.25, "TauM": 10.0, "Vrest": -65.0, "Vreset": -65.0, "Vthresh" : -50.0,
                       "Ioffset": ext_input_current, "TauRefrac": 2.0}
         poisson_params = {"weight": ext_weight, "tauSyn": 0.5, "rate": ext_input_rate}
@@ -198,17 +196,14 @@ for layer in LAYER_NAMES:
 
         # Set spike location so they can be accessed on host
         neuron_pop.pop.set_spike_location(genn_wrapper.VarLocation_HOST_DEVICE)
-        
+
         print("\tPopulation %s: num neurons:%u, external input rate:%f, external weight:%f, external DC offset:%f" % (pop_name, pop_size, ext_input_rate, ext_weight, ext_input_current))
-        
+
         # Add number of neurons to total
         total_neurons += pop_size
-        
+
         # Add neuron population to dictionary
         neuron_populations[pop_name] = neuron_pop
- 
- # Create RNG to use for row length distribution
-rng = create_mt_19937()
 
 # Loop through target populations and layers
 print("Creating synapse populations:")
@@ -217,7 +212,7 @@ num_sub_rows = NUM_THREADS_PER_SPIKE if PROCEDURAL_CONNECTIVITY else 1
 for trg_layer in LAYER_NAMES:
     for trg_pop in POPULATION_NAMES:
         trg_name = trg_layer + trg_pop
-        
+
         # Loop through source populations and layers
         for src_layer in LAYER_NAMES:
             for src_pop in POPULATION_NAMES:
@@ -231,39 +226,36 @@ for trg_layer in LAYER_NAMES:
                     weight_sd = mean_weight * LAYER_23_4_RELW
                 else:
                     weight_sd = abs(mean_weight * REL_W)
-                
+
                 # Calculate number of connections
                 num_connections = get_scaled_num_connections(src_layer, src_pop, trg_layer, trg_pop)
 
                 if num_connections > 0:
                     num_src_neurons = get_scaled_num_neurons(src_layer, src_pop)
                     num_trg_neurons = get_scaled_num_neurons(trg_layer, trg_pop)
-               
+
                     print("\tConnection between '%s' and '%s': numConnections=%u, meanWeight=%f, weightSD=%f, meanDelay=%f, delaySD=%f" 
                           % (src_name, trg_name, num_connections, mean_weight, weight_sd, MEAN_DELAY[src_pop], DELAY_SD[src_pop]))
 
                     # Build parameters for fixed number total connector
                     connect_params = {"total": num_connections}
-                    
+
                     # Build distribution for delay parameters
                     d_dist = {"mean": MEAN_DELAY[src_pop], "sd": DELAY_SD[src_pop], "min": 0.0, "max": max_delay[src_pop]}
 
                     total_synapses += num_connections
-                    
+
                     # Build unique synapse name
                     synapse_name = src_name + "_" + trg_name
 
                     matrix_type = "PROCEDURAL_PROCEDURALG" if PROCEDURAL_CONNECTIVITY else "SPARSE_INDIVIDUALG"
-
-                    # Pre-calculate row lengths
-                    row_lengths = pre_calc_row_lengths(num_src_neurons, num_trg_neurons, num_connections, rng, num_sub_rows)
 
                     # Excitatory
                     if src_pop == "E":
                         # Build distribution for weight parameters
                         # **HACK** np.float32 doesn't seem to automatically cast 
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": 0.0, "max": float(np.finfo(np.float32).max)}
-                        
+
                         # Create weight parameters
                         static_synapse_init = {"g": genn_model.init_var("NormalClipped", w_dist),
                                                "d": genn_model.init_var("NormalClippedDelay", d_dist)}
@@ -274,9 +266,6 @@ for trg_layer in LAYER_NAMES:
                             "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
                             "ExpCurr", exp_curr_params, {},
                             genn_model.init_connectivity("FixedNumberTotalWithReplacement", connect_params))
-
-                        # Add extra global parameter with row lengths
-                        syn_pop.add_connectivity_extra_global_param("preCalcRowLength", row_lengths)
 
                         # Set max dendritic delay and span type
                         syn_pop.pop.set_max_dendritic_delay_timesteps(max_dendritic_delay_slots)
@@ -289,24 +278,21 @@ for trg_layer in LAYER_NAMES:
                         # Build distribution for weight parameters
                         # **HACK** np.float32 doesn't seem to automatically cast 
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": float(-np.finfo(np.float32).max), "max": 0.0}
-                        
+
                         # Create weight parameters
                         static_synapse_init = {"g": genn_model.init_var("NormalClipped", w_dist),
                                                "d": genn_model.init_var("NormalClippedDelay", d_dist)}
-                        
+
                         # Add synapse population
                         syn_pop = model.add_synapse_population(synapse_name, matrix_type, genn_wrapper.NO_DELAY,
                             neuron_populations[src_name], neuron_populations[trg_name],
                             "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
                             "ExpCurr", exp_curr_params, {},
                             genn_model.init_connectivity("FixedNumberTotalWithReplacement", connect_params))
-                        
-                        # Add extra global parameter with row lengths
-                        syn_pop.add_connectivity_extra_global_param("preCalcRowLength", row_lengths)
 
                         # Set max dendritic delay and span type
                         syn_pop.pop.set_max_dendritic_delay_timesteps(max_dendritic_delay_slots)
-                        
+
                         if PROCEDURAL_CONNECTIVITY:
                             syn_pop.pop.set_span_type(genn_wrapper.SynapseGroup.SpanType_PRESYNAPTIC)
                             syn_pop.pop.set_num_threads_per_spike(NUM_THREADS_PER_SPIKE)
@@ -331,11 +317,11 @@ sim_start_time = perf_counter()
 while model.t < DURATION_MS:
     # Advance simulation
     model.step_time()
-    
+
     # Indicate every 10%
     if (model.timestep % ten_percent_timestep) == 0:
         print("%u%%" % (model.timestep / 100))
-    
+
     for i, spikes in enumerate(pop_spikes):
         # Download spikes
         model.pull_current_spikes_from_device(spikes[0].name)
@@ -349,7 +335,7 @@ sim_end_time =  perf_counter()
 
 print("Timing:")
 print("\tSimulation:%f" % ((sim_end_time - sim_start_time) * 1000.0))
-    
+
 if MEASURE_TIMING:
     print("\tInit:%f" % (1000.0 * model.init_time))
     print("\tSparse init:%f" % (1000.0 * model.init_sparse_time))
