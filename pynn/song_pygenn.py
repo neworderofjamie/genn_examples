@@ -22,7 +22,7 @@ stdp_additive = genn_model.create_custom_weight_update_class(
         if(dt > 0) {
             const scalar timing = exp(-dt / $(tauMinus));
             const scalar newWeight = $(g) - ($(aMinusScaled) * $(postTrace) * timing);
-            $(g) = min($(wMax), max($(wMin), newWeight));
+            $(g) = fmin($(wMax), fmax($(wMin), newWeight));
         }
         """,
 
@@ -32,7 +32,7 @@ stdp_additive = genn_model.create_custom_weight_update_class(
         if(dt > 0) {
             const scalar timing = exp(-dt / $(tauPlus));
             const scalar newWeight = $(g) + ($(aPlusScaled) * $(preTrace) * timing);
-            $(g) = min($(wMax), max($(wMin), newWeight));
+            $(g) = fmin($(wMax), fmax($(wMin), newWeight));
         }
         """,
 
