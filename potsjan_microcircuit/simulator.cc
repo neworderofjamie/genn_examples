@@ -10,112 +10,16 @@
 
 // Model parameters
 #include "parameters.h"
-#include "utils.h"
 
 // Auto-generated model code
 #include "potjans_microcircuit_CODE/definitions.h"
-
-// Macro to build a connection between a pair of populations
-#define BUILD_PROJECTION(SRC_LAYER, SRC_POP, TRG_LAYER, TRG_POP)                                                                                                                                                    \
-    allocatepreCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP) * Parameters::numConnectivitySubRows);       \
-    buildRowLengths(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP),                                                                                                 \
-                    Parameters::getScaledNumNeurons(Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                                                                                                 \
-                    Parameters::numConnectivitySubRows,                                                                                                                                                             \
-                    Parameters::getScaledNumConnections(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP,                                                                                              \
-                                                        Parameters::Layer##TRG_LAYER, Parameters::Population##TRG_POP),                                                                                             \
-                    preCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP, rng);                                                                                                                              \
-    pushpreCalcRowLength##SRC_LAYER##SRC_POP##_##TRG_LAYER##TRG_POP##ToDevice(Parameters::getScaledNumNeurons(Parameters::Layer##SRC_LAYER, Parameters::Population##SRC_POP) * Parameters::numConnectivitySubRows)  \
 
 // Macro to record a population's output
 #define ADD_SPIKE_RECORDER(LAYER, POPULATION)                                                                                                               \
     spikeRecorders.emplace_back(new SpikeRecorder<SpikeWriterTextCached>(&get##LAYER##POPULATION##CurrentSpikes, &get##LAYER##POPULATION##CurrentSpikeCount, #LAYER#POPULATION".csv", ",", true))
 
-#define SET_EXTRA_GLOBAL_PARAMS(LAYER, POPULATION)                                                                                                                                                                                                          \
-    Ioffset##LAYER##POPULATION = 0.001f * 0.5f * (1.0f - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getFullMeanInputCurrent(Parameters::Layer##LAYER, Parameters::Population##POPULATION);                                                     \
-    PoissonExpMinusLambda##LAYER##POPULATION = std::exp(-((Parameters::numExternalInputs[Parameters::Layer##LAYER][Parameters::Population##POPULATION] * Parameters::connectivityScalingFactor * Parameters::backgroundRate) / 1000.0) * Parameters::dtMs)
-
 int main()
 {
-    // In order to make the neuron groups more mergable, heterogeneous parameters are implemented via extra global parameters - implement them here!
-    SET_EXTRA_GLOBAL_PARAMS(23, E);
-    SET_EXTRA_GLOBAL_PARAMS(23, I);
-    SET_EXTRA_GLOBAL_PARAMS(4, E);
-    SET_EXTRA_GLOBAL_PARAMS(4, I);
-    SET_EXTRA_GLOBAL_PARAMS(5, E);
-    SET_EXTRA_GLOBAL_PARAMS(5, I);
-    SET_EXTRA_GLOBAL_PARAMS(6, E);
-    SET_EXTRA_GLOBAL_PARAMS(6, I);
-
-    {
-        Timer timer("Building row lengths:");
-
-        std::mt19937 rng;
-        BUILD_PROJECTION(23, E, 23, E);
-        BUILD_PROJECTION(23, E, 23, I);
-        BUILD_PROJECTION(23, E, 4, E);
-        BUILD_PROJECTION(23, E, 4, I);
-        BUILD_PROJECTION(23, E, 5, E);
-        BUILD_PROJECTION(23, E, 5, I);
-        BUILD_PROJECTION(23, E, 6, E);
-        BUILD_PROJECTION(23, E, 6, I);
-        BUILD_PROJECTION(23, I, 23, E);
-        BUILD_PROJECTION(23, I, 23, I);
-        BUILD_PROJECTION(23, I, 4, E);
-        BUILD_PROJECTION(23, I, 4, I);
-        BUILD_PROJECTION(23, I, 5, E);
-        BUILD_PROJECTION(23, I, 5, I);
-        BUILD_PROJECTION(23, I, 6, E);
-        BUILD_PROJECTION(23, I, 6, I);
-        BUILD_PROJECTION(4, E, 23, E);
-        BUILD_PROJECTION(4, E, 23, I);
-        BUILD_PROJECTION(4, E, 4, E);
-        BUILD_PROJECTION(4, E, 4, I);
-        BUILD_PROJECTION(4, E, 5, E);
-        BUILD_PROJECTION(4, E, 5, I);
-        BUILD_PROJECTION(4, E, 6, E);
-        BUILD_PROJECTION(4, E, 6, I);
-        BUILD_PROJECTION(4, I, 23, E);
-        BUILD_PROJECTION(4, I, 23, I);
-        BUILD_PROJECTION(4, I, 4, E);
-        BUILD_PROJECTION(4, I, 4, I);
-        BUILD_PROJECTION(4, I, 5, E);
-        BUILD_PROJECTION(4, I, 5, I);
-        BUILD_PROJECTION(4, I, 6, E);
-        BUILD_PROJECTION(4, I, 6, I);
-        BUILD_PROJECTION(5, E, 23, E);
-        BUILD_PROJECTION(5, E, 23, I);
-        BUILD_PROJECTION(5, E, 4, E);
-        BUILD_PROJECTION(5, E, 4, I);
-        BUILD_PROJECTION(5, E, 5, E);
-        BUILD_PROJECTION(5, E, 5, I);
-        BUILD_PROJECTION(5, E, 6, E);
-        BUILD_PROJECTION(5, E, 6, I);
-        //BUILD_PROJECTION(5, I, 23, E);
-        //BUILD_PROJECTION(5, I, 23, I);
-        BUILD_PROJECTION(5, I, 4, E);
-        //BUILD_PROJECTION(5, I, 4, I);
-        BUILD_PROJECTION(5, I, 5, E);
-        BUILD_PROJECTION(5, I, 5, I);
-        BUILD_PROJECTION(5, I, 6, E);
-        BUILD_PROJECTION(5, I, 6, I);
-        BUILD_PROJECTION(6, E, 23, E);
-        BUILD_PROJECTION(6, E, 23, I);
-        BUILD_PROJECTION(6, E, 4, E);
-        BUILD_PROJECTION(6, E, 4, I);
-        BUILD_PROJECTION(6, E, 5, E);
-        BUILD_PROJECTION(6, E, 5, I);
-        BUILD_PROJECTION(6, E, 6, E);
-        BUILD_PROJECTION(6, E, 6, I);
-        //BUILD_PROJECTION(6, I, 23, E);
-        //BUILD_PROJECTION(6, I, 23, I);
-        //BUILD_PROJECTION(6, I, 4, E);
-        //BUILD_PROJECTION(6, I, 4, I);
-        //BUILD_PROJECTION(6, I, 5, E);
-        //BUILD_PROJECTION(6, I, 5, I);
-        BUILD_PROJECTION(6, I, 6, E);
-        BUILD_PROJECTION(6, I, 6, I);
-    }
-
     allocateMem();
     initialize();
     initializeSparse();

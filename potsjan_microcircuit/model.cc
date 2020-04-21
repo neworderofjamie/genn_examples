@@ -7,167 +7,6 @@
 // Model includes
 #include "parameters.h"
 
-//----------------------------------------------------------------------------
-// LIFPoisson
-//----------------------------------------------------------------------------
-//! Leaky integrate-and-fire neuron solved algebraically
-class LIFPoisson : public NeuronModels::Base
-{
-public:
-    DECLARE_MODEL(LIFPoisson, 8, 3);
-
-    SET_SIM_CODE(
-        "scalar p = 1.0f;\n"
-        "unsigned int numPoissonSpikes = 0;\n"
-        "do\n"
-        "{\n"
-        "    numPoissonSpikes++;\n"
-        "    p *= $(gennrand_uniform);\n"
-        "} while (p > $(PoissonExpMinusLambda));\n"
-        "$(Ipoisson) += $(IpoissonInit) * (scalar)(numPoissonSpikes - 1);\n"
-        "if ($(RefracTime) <= 0.0)\n"
-        "{\n"
-        "  scalar alpha = (($(Isyn) + $(Ioffset) + $(Ipoisson)) * $(Rmembrane)) + $(Vrest);\n"
-        "  $(V) = alpha - ($(ExpTC) * (alpha - $(V)));\n"
-        "}\n"
-        "else\n"
-        "{\n"
-        "  $(RefracTime) -= DT;\n"
-        "}\n"
-        "$(Ipoisson) *= $(IpoissonExpDecay);\n"
-    );
-
-    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
-
-    SET_RESET_CODE(
-        "$(V) = $(Vreset);\n"
-        "$(RefracTime) = $(TauRefrac);\n");
-
-    SET_PARAM_NAMES({
-        "C",                // Membrane capacitance
-        "TauM",             // Membrane time constant [ms]
-        "Vrest",            // Resting membrane potential [mV]
-        "Vreset",           // Reset voltage [mV]
-        "Vthresh",          // Spiking threshold [mV]
-        "TauRefrac",        // Refractory time [ms]
-        "PoissonWeight",    // How much current each poisson spike adds [nA]
-        "IpoissonTau"});     // Time constant of poisson spike integration [ms]
-
-    SET_DERIVED_PARAMS({
-        {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }},
-        {"IpoissonExpDecay", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[7]); }},
-        {"IpoissonInit", [](const std::vector<double> &pars, double dt){ return pars[6] * (1.0 - std::exp(-dt / pars[7])) * (pars[7] / dt); }}});
-
-    SET_EXTRA_GLOBAL_PARAMS({{"Ioffset",                "scalar"},      // Offset current
-                             {"PoissonExpMinusLambda",  "scalar"}});    // Lambda for Poisson process
-
-    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}, {"Ipoisson", "scalar"}});
-};
-IMPLEMENT_MODEL(LIFPoisson);
-
-//----------------------------------------------------------------------------
-// NormalClipped
-//----------------------------------------------------------------------------
-class NormalClipped : public InitVarSnippet::Base
-{
-public:
-    DECLARE_SNIPPET(NormalClipped, 4);
-
-    SET_CODE(
-        "scalar normal;\n"
-        "do\n"
-        "{\n"
-        "   normal = $(mean) + ($(gennrand_normal) * $(sd));\n"
-        "} while (normal > $(max) || normal < $(min));\n"
-        "$(value) = normal;\n");
-
-    SET_PARAM_NAMES({"mean", "sd", "min", "max"});
-};
-IMPLEMENT_SNIPPET(NormalClipped);
-
-//----------------------------------------------------------------------------
-// NormalClippedDelay
-//----------------------------------------------------------------------------
-class NormalClippedDelay : public InitVarSnippet::Base
-{
-public:
-    DECLARE_SNIPPET(NormalClippedDelay, 4);
-
-    SET_CODE(
-        "scalar normal;\n"
-        "do\n"
-        "{\n"
-        "   normal = $(mean) + ($(gennrand_normal) * $(sd));\n"
-        "} while (normal > $(max) || normal < $(min));\n"
-        "$(value) = (unsigned int)rint(normal / DT);\n");
-
-    SET_PARAM_NAMES({"mean", "sd", "min", "max"});
-};
-IMPLEMENT_SNIPPET(NormalClippedDelay);
-
-//----------------------------------------------------------------------------
-// FixedNumberTotalWithReplacement
-//----------------------------------------------------------------------------
-//! Initialises variable by sampling from the uniform distribution
-class FixedNumberTotalWithReplacement : public InitSparseConnectivitySnippet::Base
-{
-public:
-    DECLARE_SNIPPET(FixedNumberTotalWithReplacement, 1);
-
-    SET_ROW_BUILD_CODE(
-        "const unsigned int rowLength = $(preCalcRowLength)[($(id_pre) * $(num_threads)) + $(id_thread)];\n"
-        "if(c >= rowLength) {\n"
-        "   $(endRow);\n"
-        "}\n"
-        "const scalar u = $(gennrand_uniform);\n"
-        "x += (1.0 - x) * (1.0 - pow(u, 1.0 / (scalar)(rowLength - c)));\n"
-        "unsigned int postIdx = (unsigned int)(x * $(num_post));\n"
-        "postIdx = (postIdx < $(num_post)) ? postIdx : ($(num_post) - 1);\n"
-        "$(addSynapse, postIdx + $(id_post_begin));\n"
-        "c++;\n");
-    SET_ROW_BUILD_STATE_VARS({{"x", "scalar", 0.0},{"c", "unsigned int", 0}});
-
-    SET_PARAM_NAMES({"total"});
-    SET_EXTRA_GLOBAL_PARAMS({{"preCalcRowLength", "unsigned int*"}})
-
-    SET_CALC_MAX_ROW_LENGTH_FUNC(
-        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
-        {
-            // Calculate suitable quantile for 0.9999 change when drawing numPre times
-            const double quantile = pow(0.9999, 1.0 / (double)numPre);
-
-            // There are numConnections connections amongst the numPre*numPost possible connections.
-            // Each of the numConnections connections has an independent p=float(numPost)/(numPre*numPost)
-            // probability of being selected, and the number of synapses in the sub-row is binomially distributed
-            return binomialInverseCDF(quantile, pars[0], (double)numPost / ((double)numPre * (double)numPost));
-        });
-
-    SET_CALC_MAX_COL_LENGTH_FUNC(
-        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
-        {
-            // Calculate suitable quantile for 0.9999 change when drawing numPre times
-            const double quantile = pow(0.9999, 1.0 / (double)numPost);
-
-            // There are numConnections connections amongst the numPre*numPost possible connections.
-            // Each of the numConnections connections has an independent p=float(numPost)/(numPre*numPost)
-            // probability of being selected, and the number of synapses in the sub-row is binomially distributed
-            return binomialInverseCDF(quantile, pars[0], (double)numPre / ((double)numPre * (double)numPost));
-        });
-};
-IMPLEMENT_SNIPPET(FixedNumberTotalWithReplacement);
-
-class StaticPulseDendriticDelayHalf : public WeightUpdateModels::Base
-{
-public:
-    DECLARE_MODEL(StaticPulseDendriticDelayHalf, 0, 2);
-
-    SET_VARS({{"g", "scalar"},{"d", "uint8_t"}});
-
-    SET_SIM_CODE("$(addToInSynDelay, $(g), $(d));\n");
-};
-IMPLEMENT_MODEL(StaticPulseDendriticDelayHalf);
-
 void modelDefinition(NNmodel &model)
 {
     model.setDT(Parameters::dtMs);
@@ -185,10 +24,11 @@ void modelDefinition(NNmodel &model)
         5.0);  // 1 - sd
 
     // LIF initial conditions
-    LIFPoisson::VarValues lifInit(
+    NeuronModels::LIF::VarValues lifInit(
         initVar<InitVarSnippet::Normal>(vDist), // 0 - V
-        0.0,                                    // 1 - RefracTime
-        0.0);                                   // 2 - Ipoisson
+        0.0);                                   // 1 - RefracTime
+
+    CurrentSourceModels::PoissonExp::VarValues poissonInit(0.0);    // 0 - Current
 
     // Exponential current parameters
     PostsynapticModels::ExpCurr::ParamValues excitatoryExpCurrParams(
@@ -215,33 +55,47 @@ void modelDefinition(NNmodel &model)
         for(unsigned int pop = 0; pop < Parameters::PopulationMax; pop++) {
             // Determine name of population
             const std::string popName = Parameters::getPopulationName(layer, pop);
+
+            // Calculate external input rate, weight and current
+            const double extInputRate = (Parameters::numExternalInputs[layer][pop] *
+                                         Parameters::connectivityScalingFactor *
+                                         Parameters::backgroundRate);
             const double extWeight = Parameters::externalW / sqrt(Parameters::connectivityScalingFactor);
 
-
+            const double extInputCurrent = 0.001 * 0.5 * (1.0 - sqrt(Parameters::connectivityScalingFactor)) * Parameters::getFullMeanInputCurrent(layer, pop);
+            assert(extInputCurrent >= 0.0);
 
             // LIF model parameters
-            LIFPoisson::ParamValues lifParams(
+            NeuronModels::LIF::ParamValues lifParams(
                 0.25,               // 0 - C
                 10.0,               // 1 - TauM
                 -65.0,              // 2 - Vrest
                 -65.0,              // 3 - Vreset
                 -50.0,              // 4 - Vthresh
-                2.0,                // 5 - TauRefrac
-                extWeight,          // 6 - PoissonWeight
-                0.5);               // 7 - IpoissonTau
+                extInputCurrent,    // 5 - Ioffset
+                2.0);               // 6 - TauRefrac
+
+            CurrentSourceModels::PoissonExp::ParamValues poissonParams(
+                extWeight,      // 0 - Weight
+                0.5,            // 1 - TauSyn
+                extInputRate);  // 2 - Rate
 
             // Create population
             const unsigned int popSize = Parameters::getScaledNumNeurons(layer, pop);
-            auto *neuronPop = model.addNeuronPopulation<LIFPoisson>(popName, popSize,
-                                                                    lifParams, lifInit);
+            auto *neuronPop = model.addNeuronPopulation<NeuronModels::LIF>(popName, popSize,
+                                                                           lifParams, lifInit);
 
+            // Add poisson current source population
+            model.addCurrentSource<CurrentSourceModels::PoissonExp>(popName + "_poisson", popName,
+                                                                    poissonParams, poissonInit);
             // Make recordable on host
 #ifdef USE_ZERO_COPY
             neuronPop->setSpikeLocation(VarLocation::ZERO_COPY);
 #else
             neuronPop->setSpikeLocation(VarLocation::HOST_DEVICE);
 #endif
-            std::cout << "\tPopulation " << popName << ": num neurons:" << popSize << ", external weight:" << extWeight << std::endl;
+            std::cout << "\tPopulation " << popName << ": num neurons:" << popSize << ", external weight:" << extWeight << ", external input rate:" << extInputRate << std::endl;
+
             // Add number of neurons to total
             totalNeurons += popSize;
         }
@@ -279,7 +133,7 @@ void modelDefinition(NNmodel &model)
                         std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << "(" << prob << "), meanWeight=" << meanWeight << ", weightSD=" << weightSD << ", meanDelay=" << Parameters::meanDelay[srcPop] << ", delaySD=" << Parameters::delaySD[srcPop] << std::endl;
 
                         // Build parameters for fixed number total connector
-                        FixedNumberTotalWithReplacement::ParamValues connectParams(
+                        InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement::ParamValues connectParams(
                             numConnections);                            // 0 - number of connections
 
                         totalSynapses += numConnections;
@@ -295,14 +149,14 @@ void modelDefinition(NNmodel &model)
                         // Excitatory
                         if(srcPop == Parameters::PopulationE) {
                             // Build distribution for weight parameters
-                            NormalClipped::ParamValues wDist(
+                            InitVarSnippet::NormalClipped::ParamValues wDist(
                                 meanWeight,                                 // 0 - mean
                                 weightSD,                                   // 1 - sd
                                 0.0,                                        // 2 - min
                                 std::numeric_limits<float>::max());         // 3 - max
 
                             // Build distribution for delay parameters
-                            NormalClippedDelay::ParamValues dDist(
+                            InitVarSnippet::NormalClippedDelay::ParamValues dDist(
                                 Parameters::meanDelay[srcPop],              // 0 - mean
                                 Parameters::delaySD[srcPop],                // 1 - sd
                                 0.0,                                        // 2 - min
@@ -310,16 +164,16 @@ void modelDefinition(NNmodel &model)
 
 
                             // Create weight parameters
-                            StaticPulseDendriticDelayHalf::VarValues staticSynapseInit(
-                                initVar<NormalClipped>(wDist),          // 0 - Wij (nA)
-                                initVar<NormalClippedDelay>(dDist));    // 1 - delay (ms)
+                            WeightUpdateModels::StaticPulseDendriticDelay::VarValues staticSynapseInit(
+                                initVar<InitVarSnippet::NormalClipped>(wDist),          // 0 - Wij (nA)
+                                initVar<InitVarSnippet::NormalClippedDelay>(dDist));    // 1 - delay (ms)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, PostsynapticModels::ExpCurr>(
                                 synapseName, matrixType, NO_DELAY, srcName, trgName,
                                 {}, staticSynapseInit,
                                 excitatoryExpCurrParams, {},
-                                initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
+                                initConnectivity<InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement>(connectParams));
 
                             // Set max dendritic delay and span type
                             synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
@@ -331,30 +185,30 @@ void modelDefinition(NNmodel &model)
                         // Inhibitory
                         else {
                             // Build distribution for weight parameters
-                            NormalClipped::ParamValues wDist(
+                            InitVarSnippet::NormalClipped::ParamValues wDist(
                                 meanWeight,                                 // 0 - mean
                                 weightSD,                                   // 1 - sd
                                 -std::numeric_limits<float>::max(),         // 2 - min
                                 0.0);                                       // 3 - max
 
                             // Build distribution for delay parameters
-                            NormalClippedDelay::ParamValues dDist(
+                            InitVarSnippet::NormalClippedDelay::ParamValues dDist(
                                 Parameters::meanDelay[srcPop],              // 0 - mean
                                 Parameters::delaySD[srcPop],                // 1 - sd
                                 0.0,                                        // 2 - min
                                 maxDelayMs[srcPop]);                        // 3 - max
 
                             // Create weight parameters
-                            StaticPulseDendriticDelayHalf::VarValues staticSynapseInit(
-                                initVar<NormalClipped>(wDist),          // 0 - Wij (nA)
-                                initVar<NormalClippedDelay>(dDist));    // 1 - delay (ms)
+                            WeightUpdateModels::StaticPulseDendriticDelay::VarValues staticSynapseInit(
+                                initVar<InitVarSnippet::NormalClipped>(wDist),          // 0 - Wij (nA)
+                                initVar<InitVarSnippet::NormalClippedDelay>(dDist));    // 1 - delay (ms)
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<StaticPulseDendriticDelayHalf, PostsynapticModels::ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, PostsynapticModels::ExpCurr>(
                                 synapseName, matrixType, NO_DELAY, srcName, trgName,
                                 {}, staticSynapseInit,
                                 inhibitoryExpCurrParams, {},
-                                initConnectivity<FixedNumberTotalWithReplacement>(connectParams));
+                                initConnectivity<InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement>(connectParams));
 
                             // Set max dendritic delay and span type
                             synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
