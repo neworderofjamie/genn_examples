@@ -9,7 +9,9 @@ void modelDefinition(NNmodel &model)
     model.setDT(1.0);
     model.setName("benchmark_stdp");
     model.setTiming(true);
-
+    model.setDefaultVarLocation(VarLocation::DEVICE);
+    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
+    
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
