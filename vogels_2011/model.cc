@@ -1,6 +1,7 @@
 #include <cmath>
 #include <vector>
 
+#include "binomial.h"
 #include "modelSpec.h"
 
 // GeNN robotics includes
@@ -11,19 +12,10 @@ void modelDefinition(NNmodel &model)
     model.setDT(1.0);
     model.setName("vogels_2011");
     model.setTiming(true);
-    model.setDefaultVarLocation(VarLocation::DEVICE);
-    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
-    
+
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
-    InitVarSnippet::Uniform::ParamValues vDist(
-        -60.0,  // 0 - min
-        -50.0); // 1 - max
-
-    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
-        0.02); // 0 - prob
-    
     // LIF model parameters
     NeuronModels::LIF::ParamValues lifParams(
         0.2,    // 0 - C
@@ -36,8 +28,8 @@ void modelDefinition(NNmodel &model)
 
     // LIF initial conditions
     NeuronModels::LIF::VarValues lifInit(
-        initVar<InitVarSnippet::Uniform>(vDist),    // 0 - V
-        0.0);                                       // 1 - RefracTime
+        uninitialisedVar(), // 0 - V
+        0.0);               // 1 - RefracTime
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
@@ -68,31 +60,36 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", 2000, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", 500, lifParams, lifInit);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        excitatoryExpCurrParams, {});
+    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "EI", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+        excitatoryExpCurrParams, {});
+    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "II", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+        inhibitoryExpCurrParams, {});
     auto *ie = model.addSynapsePopulation<Vogels2011, PostsynapticModels::ExpCurr>(
         "IE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
         "I", "E",
         vogels2011AdditiveSTDPParams, vogels2011AdditiveSTDPInit,
-        inhibitoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+        inhibitoryExpCurrParams, {});
 
+    ee->setMaxConnections(binomialInverseCDF(pow(0.9999, 1.0 / 2000.0), 2000, 0.02));
+    ee->setMaxSourceConnections(binomialInverseCDF(pow(0.9999, 1.0 / 2000.0), 2000, 0.02));
+    ei->setMaxConnections(binomialInverseCDF(pow(0.9999, 1.0 / 2000.0), 500, 0.02));
+    ei->setMaxSourceConnections(binomialInverseCDF(pow(0.9999, 1.0 / 500.0), 2000, 0.02));
+    ii->setMaxConnections(binomialInverseCDF(pow(0.9999, 1.0 / 500.0), 500, 0.02));
+    ii->setMaxSourceConnections(binomialInverseCDF(pow(0.9999, 1.0 / 500.0), 500, 0.02));
+    ie->setMaxConnections(binomialInverseCDF(pow(0.9999, 1.0 / 500.0), 2000, 0.02));
+    ie->setMaxSourceConnections(binomialInverseCDF(pow(0.9999, 1.0 / 2000.0), 500, 0.02));
+    
     // Configure plastic weight variables they can be downloaded to host
     ie->setWUVarLocation("g", VarLocation::HOST_DEVICE);
     ie->setSparseConnectivityLocation(VarLocation::HOST_DEVICE);
