@@ -1,6 +1,7 @@
 #include <cmath>
 #include <vector>
 
+#include "binomial.h"
 #include "modelSpec.h"
 
 #include "parameters.h"
@@ -9,20 +10,11 @@ void modelDefinition(NNmodel &model)
 {
     model.setDT(1.0);
     model.setName("va_benchmark");
-    model.setDefaultVarLocation(VarLocation::DEVICE);
-    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
-    model.setTiming(true);
+    model.setTiming(false);
 
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
-    InitVarSnippet::Uniform::ParamValues vDist(
-        Parameters::resetVoltage,       // 0 - min
-        Parameters::thresholdVoltage);  // 1 - max
-
-    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
-        Parameters::probabilityConnection); // 0 - prob
-
     // LIF model parameters
     NeuronModels::LIF::ParamValues lifParams(
         1.0,    // 0 - C
@@ -35,7 +27,7 @@ void modelDefinition(NNmodel &model)
 
     // LIF initial conditions
     NeuronModels::LIF::VarValues lifInit(
-        initVar<InitVarSnippet::Uniform>(vDist),     // 0 - V
+        uninitialisedVar(),     // 0 - V
         0.0);   // 1 - RefracTime
 
     // Static synapse parameters
@@ -61,35 +53,34 @@ void modelDefinition(NNmodel &model)
     i->setSpikeLocation(VarLocation::HOST_DEVICE);
 
     // Determine matrix type
-    const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
-        ? SynapseMatrixType::PROCEDURAL_GLOBALG
-        : (Parameters::bitmaskConnectivity ? SynapseMatrixType::BITMASK_GLOBALG : SynapseMatrixType::SPARSE_GLOBALG);
+    const SynapseMatrixType matrixType = Parameters::bitmaskConnectivity ? SynapseMatrixType::BITMASK_GLOBALG : SynapseMatrixType::SPARSE_GLOBALG;
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "EE", matrixType, NO_DELAY,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
+        excitatoryExpCurrParams, {});
     auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "EI", matrixType, NO_DELAY,
         "E", "I",
         {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+        excitatoryExpCurrParams, {});
     auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "II", matrixType, NO_DELAY,
         "I", "I",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
+        inhibitoryExpCurrParams, {});
     auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "IE", matrixType, NO_DELAY,
         "I", "E",
         {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {},
-        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+        inhibitoryExpCurrParams, {});
 
+    ee->setMaxConnections(binomialInverseCDF(pow(0.9999, 1.0 / (double)Parameters::numExcitatory), Parameters::numExcitatory, Parameters::probabilityConnection));
+    ei->setMaxConnections(binomialInverseCDF(pow(0.9999, 1.0 / (double)Parameters::numExcitatory), Parameters::numInhibitory, Parameters::probabilityConnection));
+    ii->setMaxConnections(binomialInverseCDF(pow(0.9999, 1.0 / (double)Parameters::numInhibitory), Parameters::numInhibitory, Parameters::probabilityConnection));
+    ie->setMaxConnections(binomialInverseCDF(pow(0.9999, 1.0 / (double)Parameters::numInhibitory), Parameters::numExcitatory, Parameters::probabilityConnection));
+            
     if(Parameters::presynapticParallelism) {
         // Set span type
         ee->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
