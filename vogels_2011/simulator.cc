@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <numeric>
 #include <random>
+#include <cassert>
 
 // GeNN userproject includes
 #include "timer.h"
