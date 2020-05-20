@@ -56,7 +56,7 @@ int main()
 
     std::cout << "Sim timesteps:" << simTimesteps << std::endl;
 
-    SpikeRecorder recorder("spikes.csv", glbSpkCntPre, glbSpkPre, ",", true);
+    SpikeRecorder<> recorder(&getPreCurrentSpikes, &getPreCurrentSpikeCount, "spikes.csv", ",", true);
 
     // Loop through timesteps
     while(iT < simTimesteps) {
