@@ -58,7 +58,7 @@ while model.t < 500.0:
 # Plot for verification
 fig,axis = plt.subplots()
 for i, n in enumerate(poisson_spikes):
-    axis.scatter(n, [i] * len(n), color="blue", label="Offline")
+    axis.scatter(n, [i] * len(n), color="blue", label=("Offline" if i == 0 else None))
 axis.scatter(spike_times, spike_ids, color="red", label="GeNN")
 axis.legend()
 plt.show()
