@@ -53,49 +53,56 @@ void buildFixedProbabilityConnector(unsigned int numPre, unsigned int numPost, f
 
 int main()
 {
-    std::mt19937 gen;
-    allocateMem();
-    initialize();
-    
-    // Create connectivity
-    buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::probabilityConnection,
-                                   rowLengthEE, indEE, maxRowLengthEE, gen);
-    buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                   rowLengthEI, indEI, maxRowLengthEI, gen);
-    buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
-                                   rowLengthII, indII, maxRowLengthII, gen);
-    buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
-                                   rowLengthIE, indIE, maxRowLengthIE, gen);
-
-    // Initialize membrane voltage
-    std::uniform_real_distribution<float> vDist(Parameters::resetVoltage, Parameters::thresholdVoltage);
-    std::generate_n(VE, Parameters::numExcitatory, [&vDist, &gen](){ return vDist(gen); });
-    std::generate_n(VI, Parameters::numInhibitory, [&vDist, &gen](){ return vDist(gen); });
-    
-    initializeSparse();
-
-    // Open CSV output files
-    SpikeRecorder<SpikeWriterTextCached> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
-
+    try
     {
-        Timer a("Simulation wall clock:");
-        while(t < 10000.0) {
-            // Simulate
-            stepTime();
+        std::mt19937 gen;
+        allocateMem();
+        initialize();
 
-            pullECurrentSpikesFromDevice();
+        // Create connectivity
+        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numExcitatory, Parameters::probabilityConnection,
+                                       rowLengthEE, indEE, maxRowLengthEE, gen);
+        buildFixedProbabilityConnector(Parameters::numExcitatory, Parameters::numInhibitory, Parameters::probabilityConnection,
+                                       rowLengthEI, indEI, maxRowLengthEI, gen);
+        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numInhibitory, Parameters::probabilityConnection,
+                                       rowLengthII, indII, maxRowLengthII, gen);
+        buildFixedProbabilityConnector(Parameters::numInhibitory, Parameters::numExcitatory, Parameters::probabilityConnection,
+                                       rowLengthIE, indIE, maxRowLengthIE, gen);
+
+        // Initialize membrane voltage
+        std::uniform_real_distribution<float> vDist(Parameters::resetVoltage, Parameters::thresholdVoltage);
+        std::generate_n(VE, Parameters::numExcitatory, [&vDist, &gen]() { return vDist(gen); });
+        std::generate_n(VI, Parameters::numInhibitory, [&vDist, &gen]() { return vDist(gen); });
+
+        initializeSparse();
+
+        // Open CSV output files
+        SpikeRecorder<SpikeWriterTextCached> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
+
+        {
+            Timer a("Simulation wall clock:");
+            while(t < 10000.0) {
+                // Simulate
+                stepTime();
+
+                pullECurrentSpikesFromDevice();
 
 
-            spikes.record(t);
+                spikes.record(t);
+            }
         }
+
+        spikes.writeCache();
+
+        std::cout << "Init:" << initTime << std::endl;
+        std::cout << "Init sparse:" << initSparseTime << std::endl;
+        std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
+        std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
     }
-
-    spikes.writeCache();
-
-    std::cout << "Init:" << initTime << std::endl;
-    std::cout << "Init sparse:" << initSparseTime << std::endl;
-    std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
-    std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
-
-    return 0;
+    catch(const std::exception &ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }

@@ -3,6 +3,7 @@
 #include <numeric>
 #include <random>
 #include <cassert>
+#include <iostream>
 
 // GeNN userproject includes
 #include "timer.h"
@@ -51,62 +52,71 @@ void buildFixedProbabilityConnector(unsigned int numPre, unsigned int numPost, f
 
 int main()
 {
-    std::mt19937 gen;
-
-    allocateMem();
-    initialize();
-    
-     // Create connectivity
-    buildFixedProbabilityConnector(2000, 2000, 0.02,
-                                   rowLengthEE, indEE, maxRowLengthEE, gen);
-    buildFixedProbabilityConnector(2000, 500, 0.02,
-                                   rowLengthEI, indEI, maxRowLengthEI, gen);
-    buildFixedProbabilityConnector(500, 500, 0.02,
-                                   rowLengthII, indII, maxRowLengthII, gen);
-    buildFixedProbabilityConnector(500, 2000, 0.02,
-                                   rowLengthIE, indIE, maxRowLengthIE, gen);
-    
-    // Initialize membrane voltage
-    std::uniform_real_distribution<float> vDist(-60.0, -50.0);
-    std::generate_n(VE, 2000, [&vDist, &gen](){ return vDist(gen); });
-    std::generate_n(VI, 500, [&vDist, &gen](){ return vDist(gen); });
-    
-    initializeSparse();
-
-    // Open CSV output files
-    SpikeRecorder<SpikeWriterTextCached> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
-
-    FILE *weights = fopen("weights.csv", "w");
-    fprintf(weights, "Time(ms), Weight (nA)\n");
-
+    try
     {
-        Timer b("Simulation:");
-        // Loop through timesteps
-        while(t < 10000.0f) {
-            // Simulate
-            stepTime();
+        std::mt19937 gen;
 
-            pullECurrentSpikesFromDevice();
-            pullgIEFromDevice();
+        allocateMem();
+        initialize();
 
-            spikes.record(t);
+        // Create connectivity
+        buildFixedProbabilityConnector(2000, 2000, 0.02,
+                                       rowLengthEE, indEE, maxRowLengthEE, gen);
+        buildFixedProbabilityConnector(2000, 500, 0.02,
+                                       rowLengthEI, indEI, maxRowLengthEI, gen);
+        buildFixedProbabilityConnector(500, 500, 0.02,
+                                       rowLengthII, indII, maxRowLengthII, gen);
+        buildFixedProbabilityConnector(500, 2000, 0.02,
+                                       rowLengthIE, indIE, maxRowLengthIE, gen);
 
-            float totalWeight = 0.0f;
-            unsigned int numSynapses = 0;
-            for(unsigned int i = 0; i < 500; i++) {
-                for(unsigned int s = 0; s < rowLengthIE[i]; s++) {
-                    totalWeight += gIE[(i * maxRowLengthIE) + s];
-                    numSynapses++;
+        // Initialize membrane voltage
+        std::uniform_real_distribution<float> vDist(-60.0, -50.0);
+        std::generate_n(VE, 2000, [&vDist, &gen]() { return vDist(gen); });
+        std::generate_n(VI, 500, [&vDist, &gen]() { return vDist(gen); });
+
+        initializeSparse();
+
+        // Open CSV output files
+        SpikeRecorder<SpikeWriterTextCached> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
+
+        FILE *weights = fopen("weights.csv", "w");
+        fprintf(weights, "Time(ms), Weight (nA)\n");
+
+        {
+            Timer b("Simulation:");
+            // Loop through timesteps
+            while(t < 10000.0f) {
+                // Simulate
+                stepTime();
+
+                pullECurrentSpikesFromDevice();
+                pullgIEFromDevice();
+
+                spikes.record(t);
+
+                float totalWeight = 0.0f;
+                unsigned int numSynapses = 0;
+                for(unsigned int i = 0; i < 500; i++) {
+                    for(unsigned int s = 0; s < rowLengthIE[i]; s++) {
+                        totalWeight += gIE[(i * maxRowLengthIE) + s];
+                        numSynapses++;
+                    }
                 }
-            }
 
-            // Calculate mean IE weights
-            fprintf(weights, "%f, %f\n", 1.0 * t, totalWeight / (double)numSynapses);
+                // Calculate mean IE weights
+                fprintf(weights, "%f, %f\n", 1.0 * t, totalWeight / (double)numSynapses);
+            }
         }
+
+        // Close files
+        fclose(weights);
+
+    }
+    catch(const std::exception &ex)
+    {
+        std::cerr << ex.what() << std::endl;
+        return EXIT_FAILURE;
     }
 
-    // Close files
-    fclose(weights);
-
-    return 0;
+    return EXIT_SUCCESS;
 }

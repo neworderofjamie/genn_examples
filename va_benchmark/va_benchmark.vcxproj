@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{3E34BACA-95D2-4870-99BF-B48E9E6004CA}</ProjectGuid>
+    <ProjectGuid>{8085A6A8-783D-40A2-91FA-6C6EBFC0F454}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="simulator.cc" />
@@ -19,7 +19,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries  Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
     <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
     <WholeProgramOptimization Condition="'$(Configuration)'=='Release'">true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
@@ -63,7 +63,7 @@
     </Exec>
     <ItemGroup>
       <ClCompile>
-       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$([System.IO.Path]::GetFullPath($([System.IO.Path]::GetDirectoryName($(GeNNBuildModelPath)))\..\userproject\include))</AdditionalIncludeDirectories>
+        <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$([System.IO.Path]::GetFullPath($([System.IO.Path]::GetDirectoryName($(GeNNBuildModelPath)))\..\userproject\include))</AdditionalIncludeDirectories>
       </ClCompile>
     </ItemGroup>
   </Target>
