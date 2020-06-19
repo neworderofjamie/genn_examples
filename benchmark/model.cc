@@ -54,5 +54,5 @@ void modelDefinition(NNmodel &model)
         {}, staticSynapseInit,
         expCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    syn->setSpanType(SynapseGroup::SpanType::POSTSYNAPTIC);
+    //syn->setSpanType(SynapseGroup::SpanType::POSTSYNAPTIC);
 }

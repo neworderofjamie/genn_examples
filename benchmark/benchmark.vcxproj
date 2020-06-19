@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{2EC8CDFE-D3D3-4654-8877-5AD8D45848A9}</ProjectGuid>
+    <ProjectGuid>{D7FAE0F9-CC13-4C5C-A81A-244B4483F1A9}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="simulator.cc" />
@@ -57,4 +57,14 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <Target Name="FindUserProjects" BeforeTargets="PrepareForBuild">
+    <Exec Command="where genn-buildmodel.bat" ConsoleToMsBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GeNNBuildModelPath" />
+    </Exec>
+    <ItemGroup>
+      <ClCompile>
+       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$([System.IO.Path]::GetFullPath($([System.IO.Path]::GetDirectoryName($(GeNNBuildModelPath)))\..\userproject\include))</AdditionalIncludeDirectories>
+      </ClCompile>
+    </ItemGroup>
+  </Target>
 </Project>
