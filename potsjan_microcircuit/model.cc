@@ -18,6 +18,8 @@ void modelDefinition(NNmodel &model)
     model.setDefaultNarrowSparseIndEnabled(true);
 
     GENN_PREFERENCES.optimizeCode = true;
+    GENN_PREFERENCES.generateEmptyStatePushPull = false;
+    GENN_PREFERENCES.generateExtraGlobalParamPull = false;
 
     InitVarSnippet::Normal::ParamValues vDist(
         -58.0, // 0 - mean
