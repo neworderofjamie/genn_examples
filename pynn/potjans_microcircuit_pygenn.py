@@ -309,7 +309,7 @@ duration_timesteps = int(round(DURATION_MS / DT_MS))
 ten_percent_timestep = duration_timesteps // 10
 
 # Create dictionary to hold spikes for each population
-pop_spikes = [[pop, np.empty(0), np.empty(0)] 
+pop_spikes = [[pop, []] 
               for pop in itervalues(neuron_populations)]
 
 # Loop through timesteps
@@ -322,14 +322,13 @@ while model.t < DURATION_MS:
     if (model.timestep % ten_percent_timestep) == 0:
         print("%u%%" % (model.timestep / 100))
 
+
     for i, spikes in enumerate(pop_spikes):
         # Download spikes
-        model.pull_current_spikes_from_device(spikes[0].name)
+        spikes[0].pull_current_spikes_from_device()
 
         # Add to data structure
-        spike_times = np.ones_like(spikes[0].current_spikes) * model.t
-        pop_spikes[i][1] = np.hstack((pop_spikes[i][1], spikes[0].current_spikes))
-        pop_spikes[i][2] = np.hstack((pop_spikes[i][2], spike_times))
+        spikes[1].append(np.copy(spikes[0].current_spikes))
 
 sim_end_time =  perf_counter()
 
@@ -342,17 +341,21 @@ if MEASURE_TIMING:
     print("\tNeuron simulation:%f" % (1000.0 * model.neuron_update_time))
     print("\tSynapse simulation:%f" % (1000.0 * model.presynaptic_update_time))
 
+
 # Create plot
 figure, axes = plt.subplots(1, 2)
 
 start_id = 0
 bar_y = 0.0
-for pop, i, t in reversed(pop_spikes):
+for pop, spikes in reversed(pop_spikes):
+    spike_ids = np.concatenate(spikes)
+    spike_times = np.concatenate([np.ones_like(s) * i * DT_MS 
+                                  for i, s in enumerate(spikes)])
     # Plot spikes
-    actor = axes[0].scatter(t, i + start_id, s=2, edgecolors="none")
+    actor = axes[0].scatter(spike_times, spike_ids + start_id, s=2, edgecolors="none")
 
     # Plot bar showing rate in matching colour
-    axes[1].barh(bar_y, len(t) / (float(pop.size) * DURATION_MS / 1000.0), 
+    axes[1].barh(bar_y, len(spike_times) / (float(pop.size) * DURATION_MS / 1000.0), 
                  align="center", color=actor.get_facecolor(), ecolor="black")
 
     # Update offset
@@ -371,3 +374,4 @@ axes[1].set_yticklabels([s[0].name for s in pop_spikes])
 
 # Show plot
 plt.show()
+
