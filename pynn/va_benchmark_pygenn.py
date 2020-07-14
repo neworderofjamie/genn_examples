@@ -85,16 +85,17 @@ print("Simulation time:%fs" % (sim_end_time - sim_start_time))
 # Download recording data
 model.pull_recording_buffers_from_device()
 
-e_spikes = excitatory_pop.spike_recording_data
+# Get recording data
+spike_times, spike_ids = excitatory_pop.spike_recording_data
 
 fig, axes = plt.subplots(2)
 
 bin_size = 10.0
 rate_bins = np.arange(0, 10000.0, bin_size)
-rate = np.histogram(e_spikes[0], bins=rate_bins)[0]
+rate = np.histogram(spike_times, bins=rate_bins)[0]
 rate_bin_centres = rate_bins[:-1] + (bin_size / 2.0)
 
-axes[0].scatter(e_spikes[0], e_spikes[1], s=1)
+axes[0].scatter(spike_times, spike_ids, s=1)
 axes[1].plot(rate_bin_centres, rate * (1000.0 / bin_size) * (1.0 / float(NUM_EXCITATORY)))
 
 plt.show()
