@@ -29,11 +29,11 @@ namespace Parameters
     // Number of threads to use for each row if using presynaptic parallelism
     const unsigned int numThreadsPerSpike = 8;
 
-    // number of cells
-    const unsigned int numNeurons = 50000;
+    // Number of cells
+    const unsigned int numNeurons = 4000;
 
     const unsigned int numTimesteps = 10000;
-    
+
     const double resetVoltage = -60.0;
     const double thresholdVoltage = -50.0;
 
