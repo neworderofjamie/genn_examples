@@ -16,7 +16,7 @@ namespace Parameters
     // Should we use procedural rather than in-memory connectivity?
     const bool proceduralConnectivity = false;
 
-    const bool bitmaskConnectivity = true;
+    const bool bitmaskConnectivity = false;
 
     // Assert settings are valid
     static_assert(presynapticParallelism || !proceduralConnectivity,
@@ -30,8 +30,10 @@ namespace Parameters
     const unsigned int numThreadsPerSpike = 8;
 
     // number of cells
-    const unsigned int numNeurons = 150000;
+    const unsigned int numNeurons = 50000;
 
+    const unsigned int numTimesteps = 10000;
+    
     const double resetVoltage = -60.0;
     const double thresholdVoltage = -50.0;
 

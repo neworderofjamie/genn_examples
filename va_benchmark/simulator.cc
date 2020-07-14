@@ -14,32 +14,38 @@
 
 int main()
 {
-    allocateMem();
-    initialize();
-    initializeSparse();
-
-    // Open CSV output files
-    SpikeRecorder<SpikeWriterTextCached> spikes(&getECurrentSpikes, &getECurrentSpikeCount, "spikes.csv", ",", true);
-
+    try
     {
-        Timer a("Simulation wall clock:");
-        while(t < 10000.0) {
-            // Simulate
-            stepTime();
+        allocateMem();
+        allocateRecordingBuffers(Parameters::numTimesteps);
+        initialize();
+        initializeSparse();
 
-            pullECurrentSpikesFromDevice();
-
-
-            spikes.record(t);
+        {
+            Timer a("Simulation wall clock:");
+            while(iT < Parameters::numTimesteps) {
+                stepTime();
+            }
         }
+        
+        {
+            Timer a("Downloading spikes:");
+            pullRecordingBuffersFromDevice();
+            
+            writeBinarySpikeRecording("spikes_e.bin", recordSpkE, 
+                                      Parameters::numExcitatory, Parameters::numTimesteps);
+            writeBinarySpikeRecording("spikes_i.bin", recordSpkE, 
+                                      Parameters::numInhibitory, Parameters::numTimesteps);
+        }
+     
+        std::cout << "Init:" << initTime << std::endl;
+        std::cout << "Init sparse:" << initSparseTime << std::endl;
+        std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
+        std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
     }
-
-    spikes.writeCache();
-
-    std::cout << "Init:" << initTime << std::endl;
-    std::cout << "Init sparse:" << initSparseTime << std::endl;
-    std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
-    std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
-
-    return 0;
+    catch(const std::exception &ex) {
+        std::cerr << "Error:" << ex.what() << std::endl;
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }

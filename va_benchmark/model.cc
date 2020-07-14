@@ -56,9 +56,9 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    // Configure spike variables so that they can be downloaded to host
-    e->setSpikeLocation(VarLocation::HOST_DEVICE);
-    i->setSpikeLocation(VarLocation::HOST_DEVICE);
+    // Enable spike recording
+    e->setSpikeRecordingEnabled(true);
+    i->setSpikeRecordingEnabled(true);
 
     // Determine matrix type
     const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
