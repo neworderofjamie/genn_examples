@@ -47,7 +47,7 @@ inhibitory_pop = model.add_neuron_population("I", NUM_INHIBITORY, "LIF", lif_par
 excitatory_pop.spike_recording_enabled = True
 
 model.add_synapse_population("EE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
-    excitatory_pop, inhibitory_pop,
+    excitatory_pop, excitatory_pop,
     "StaticPulse", {}, excitatory_synapse_init, {}, {},
     "ExpCurr", excitatory_post_syn_params, {},
     genn_model.init_connectivity("FixedProbabilityNoAutapse", fixed_prob))
