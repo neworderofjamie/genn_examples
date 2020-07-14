@@ -338,11 +338,14 @@ if MEASURE_TIMING:
 # Create plot
 figure, axes = plt.subplots(1, 2)
 
+# **YUCK** re-order neuron populationsf for plotting
+ordered_neuron_populations = list(reversed(list(itervalues(neuron_populations))))
+
 start_id = 0
 bar_y = 0.0
-for pop in reversed(neuron_populations):
+for pop in ordered_neuron_populations:
     # Get recording data
-    spike_times, spike_ids = excitatory_pop.spike_recording_data
+    spike_times, spike_ids = pop.spike_recording_data
     
     # Plot spikes
     actor = axes[0].scatter(spike_times, spike_ids + start_id, s=2, edgecolors="none")
@@ -357,13 +360,12 @@ for pop in reversed(neuron_populations):
     # Update bar pos
     bar_y += 1.0
 
-
 axes[0].set_xlabel("Time [ms]")
 axes[0].set_ylabel("Neuron number")
 
-axes[1].set_xlabel("Mean firing rate [Hz]")
-axes[1].set_yticks(np.arange(0.0, len(pop_spikes) * 1.0, 1.0))
-axes[1].set_yticklabels([s[0].name for s in pop_spikes])
+axes[1].set_xlabel("Mean firingrate [Hz]")
+axes[1].set_yticks(np.arange(0.0, len(neuron_populations), 1.0))
+axes[1].set_yticklabels([n.name for n in ordered_neuron_populations])
 
 # Show plot
 plt.show()
