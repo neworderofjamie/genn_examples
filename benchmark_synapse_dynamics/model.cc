@@ -71,9 +71,14 @@ void modelDefinition(NNmodel &model)
     model.addNeuronPopulation<NeuronModels::LIF>("Neurons", Parameters::numPost,
                                                  lifParams, lifInit);
 
-    auto *syn = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>("Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
-                                                                                      "Stim", "Neurons",
-                                                                                      continuousSynapseParams, continuousSynapseInit,
-                                                                                      {}, {},
-                                                                                      initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+    auto *syn = model.addSynapsePopulation<Continuous, PostsynapticModels::DeltaCurr>(
+        "Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
+        "Stim", "Neurons",
+        continuousSynapseParams, continuousSynapseInit,
+        {}, {}
+#ifdef SYNAPSE_MATRIX_CONNECTIVITY_DENSE
+        );
+#else
+        , initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
+#endif
 }

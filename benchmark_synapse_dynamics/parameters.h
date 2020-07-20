@@ -1,4 +1,4 @@
-#define SYNAPSE_MATRIX_CONNECTIVITY_SPARSE
+#define SYNAPSE_MATRIX_CONNECTIVITY_DENSE
 #define SYNAPSE_MATRIX_WEIGHT_INDIVIDUAL
 
 #ifdef SYNAPSE_MATRIX_CONNECTIVITY_DENSE
@@ -28,7 +28,7 @@
 
 namespace Parameters
 {
-    constexpr unsigned int numPre = 500;
-    constexpr unsigned int numPost = 500;
+    constexpr unsigned int numPre = 10000;
+    constexpr unsigned int numPost = 10000;
     constexpr double connectionProbability = 0.5;
 }

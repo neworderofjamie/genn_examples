@@ -9,9 +9,9 @@ int main()
     initialize();
     initializeSparse();
 
-    AnalogueRecorder<float> recorder("voltages.csv", {VExcitatory, inSynStimToExcitatory}, 1, ",");
+    AnalogueRecorder<float> recorder("voltages.csv", {VExcitatory, PsiExcitatory, inSynStimToExcitatory}, 1, ",");
 
-    unsigned int spikeTimesteps[] = {50, 150};
+    unsigned int spikeTimesteps[] = {50, 60};
     const unsigned int *nextSpikeTimestep = &spikeTimesteps[0];
     const unsigned int *endSpikeTimestep = &spikeTimesteps[2];
 
@@ -39,6 +39,7 @@ int main()
         stepTime();
 
         pullVExcitatoryFromDevice();
+        pullPsiExcitatoryFromDevice();
 
         recorder.record(t);
     }

@@ -20,7 +20,8 @@ int main()
     std::cout << "\tInit:" << initTime * 1000.0 << std::endl;
     std::cout << "\tSparse init:" << initSparseTime * 1000.0 << std::endl;
     std::cout << "\tNeuron simulation:" << neuronUpdateTime * 1000.0 << std::endl;
-    std::cout << "\tSynapse simulation:" << presynapticUpdateTime * 1000.0 << std::endl;
+    std::cout << "\tPresynaptic update:" << presynapticUpdateTime * 1000.0 << std::endl;
+    std::cout << "\tSynapse dynamics:" << synapseDynamicsTime * 1000.0 << std::endl;
 
 
   return 0;
