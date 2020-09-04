@@ -43,6 +43,7 @@ int main()
         }
 
         allocateMem();
+        allocateRecordingBuffers(500);
         initialize();
 
         std::copy_n(endIndices.cbegin(), 100, startSpikeSSA);
@@ -55,14 +56,12 @@ int main()
         std::copy(spikeTimes.cbegin(), spikeTimes.cend(), spikeTimesSSA);
         pushspikeTimesSSAToDevice(spikeTimes.size());
 
-        SpikeRecorder<> spikes(&getSSACurrentSpikes, &getSSACurrentSpikeCount, "spikes.csv", ",", true);
-
         while(t < durationMs) {
             stepTime();
-
-            pullSSACurrentSpikesFromDevice();
-            spikes.record(t);
         }
+        
+        pullRecordingBuffersFromDevice();
+        writeTextSpikeRecording("spikes.csv", recordSpkSSA, 100, 500, 1.0, ",", true);
     }
     catch(const std::exception &ex)
     {
