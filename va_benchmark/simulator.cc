@@ -32,10 +32,10 @@ int main()
             Timer a("Downloading spikes:");
             pullRecordingBuffersFromDevice();
             
-            writeBinarySpikeRecording("spikes_e.bin", recordSpkE, 
-                                      Parameters::numExcitatory, Parameters::numTimesteps);
-            writeBinarySpikeRecording("spikes_i.bin", recordSpkE, 
-                                      Parameters::numInhibitory, Parameters::numTimesteps);
+            writeTextSpikeRecording("spikes_e.csv", recordSpkE, Parameters::numExcitatory, 
+                                    Parameters::numTimesteps, Parameters::timestep, ",", true);
+            writeTextSpikeRecording("spikes_i.csv", recordSpkE, Parameters::numInhibitory, 
+                                    Parameters::numTimesteps, Parameters::timestep, ",", true);
         }
      
         std::cout << "Init:" << initTime << std::endl;
