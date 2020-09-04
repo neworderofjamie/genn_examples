@@ -16,13 +16,13 @@
 
 // Macro to record a population's output
 #define RECORD_SPIKES(LAYER, POPULATION) \
-    writeBinarySpikeRecording(#LAYER#POPULATION".bin", recordSpk##LAYER##POPULATION, Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION), timesteps);
+    writeTextSpikeRecording(#LAYER#POPULATION".csv", recordSpk##LAYER##POPULATION, Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION), timesteps, Parameters::dtMs, ",", true);
 
 int main()
 {
     try
     {
-        const unsigned int timesteps = round(Parameters::durationMs / DT);
+        const unsigned int timesteps = (unsigned int)round(Parameters::durationMs / Parameters::dtMs);
         
         allocateMem();
         allocateRecordingBuffers(timesteps);
