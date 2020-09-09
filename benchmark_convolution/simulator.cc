@@ -12,7 +12,7 @@ int main()
     initializeSparse();
 
 #ifdef SYNAPSE_MATRIX_CONNECTIVITY_DENSE
-    allocatekernelsgSyn(3 * 3);
+    allocatekernelsgSyn(3 * 3 * 3 * 32);
 #endif
 
 
