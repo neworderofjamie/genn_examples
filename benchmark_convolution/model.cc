@@ -2,8 +2,64 @@
 
 #include "parameters.h"
 
+class Conv2DSparse : public InitSparseConnectivitySnippet::Base
+{
+public:
+    DECLARE_SNIPPET(Conv2DSparse, 12);
+    
+    SET_PARAM_NAMES({"conv_kh", "conv_kw",
+                     "conv_sh", "conv_sw",
+                     "conv_padh", "conv_padw",
+                     "conv_ih", "conv_iw", "conv_ic",
+                     "conv_oh", "conv_ow", "conv_oc"});
+                    
+    SET_ROW_BUILD_STATE_VARS({{"inRow", "unsigned int", "($(id_pre) / (unsigned int)$(conv_ic)) / (unsigned int)$(conv_iw)"},
+                              {"inCol", "unsigned int", "($(id_pre) / (unsigned int)$(conv_ic)) % (unsigned int)$(conv_iw)"},
+                              {"inChan", "unsigned int", "$(id_pre) % (unsigned int)$(conv_ic)"},
+                              {"outRow", "unsigned int", "min((unsigned int)$(conv_oh), max(0, 1 + ((inRow + (unsigned int)$(conv_padh) - (unsigned int)$(conv_kh)) / (unsigned int)$(conv_sh))))"},
+                              {"maxOutRow", "unsigned int", "min((unsigned int)$(conv_oh), max(0, 1 + ((inRow + (unsigned int)$(conv_padh)) / (unsigned int)$(conv_sh))))"},
+                              {"minOutCol", "unsigned int", "min((unsigned int)$(conv_ow), max(0, 1 + ((inCol + (unsigned int)$(conv_padw) - (unsigned int)$(conv_kw)) / (unsigned int)$(conv_sw))))"},
+                              {"maxOutCol", "unsigned int", "min((unsigned int)$(conv_ow), max(0, 1 + ((inCol + (unsigned int)$(conv_padw)) / (unsigned int)$(conv_sw))))"}});
 
-class Conv2D : public InitVarSnippet::Base
+    SET_ROW_BUILD_CODE(
+        "if($(outRow) == $(maxOutRow)) {\n"
+        "   $(endRow);\n"
+        "}\n"
+        "const unsigned int strideRow = ($(outRow) * $(conv_sh)) - $(conv_padh);\n"
+        "const unsigned int kernRow = $(inRow) - strideRow;\n"
+        "for(unsigned int outCol = $(minOutCol); outCol < $(maxOutCol); outCol++) {\n"
+        "    const unsigned int strideCol = (outCol * $(conv_sw)) - $(conv_padw);\n"
+        "    const unsigned int kernCol = $(inCol) - strideCol;\n"
+        "    for(unsigned int outChan = 0; outChan < (unsigned int)$(conv_oc); outChan++) {\n"
+        "        const unsigned int idPost = (($(outRow) * $(conv_ow) * $(conv_oc)) +\n"
+        "                                     (outCol * $(conv_oc)) +\n"
+        "                                     outChan);\n"
+        "        $(addSynapse, idPost, $(outRow), outCol, $(inChan), outChan);\n"
+        "    }\n"
+        "}\n"
+        "$(outRow)++;\n");
+
+    SET_CALC_MAX_ROW_LENGTH_FUNC(
+        [](unsigned int, unsigned int, const std::vector<double> &pars)
+        {
+            const unsigned int conv_kh = (unsigned int)pars[0];
+            const unsigned int conv_kw = (unsigned int)pars[1];
+            const unsigned int conv_sh = (unsigned int)pars[2];
+            const unsigned int conv_sw = (unsigned int)pars[3];
+            const unsigned int conv_oc = (unsigned int)pars[11];
+            return (conv_kh / conv_sh) * (conv_kw / conv_sw) * conv_oc;
+        });
+    
+    SET_CALC_KERNEL_SIZE_FUNC(
+        [](const std::vector<double> &pars)->std::vector<unsigned int>
+        {
+            return {(unsigned int)pars[0], (unsigned int)pars[1],
+                    (unsigned int)pars[8], (unsigned int)pars[11]};
+        });
+};
+IMPLEMENT_SNIPPET(Conv2DSparse);
+
+/*class Conv2D : public InitVarSnippet::Base
 {
 public:
     DECLARE_SNIPPET(Conv2D, 12);
@@ -49,9 +105,9 @@ public:
         "    $(value) = 0.0;\n"
         "}");
 };
-IMPLEMENT_SNIPPET(Conv2D);
+IMPLEMENT_SNIPPET(Conv2D);*/
 
-/*class Conv2D : public InitVarSnippet::Base
+class Conv2D : public InitVarSnippet::Base
 {
 public:
     DECLARE_SNIPPET(Conv2D, 12);
@@ -92,7 +148,7 @@ public:
         "    $(value) = 0.0;\n"
         "}");
 };
-IMPLEMENT_SNIPPET(Conv2D);*/
+IMPLEMENT_SNIPPET(Conv2D);
 
 void modelDefinition(NNmodel &model)
 {
@@ -124,9 +180,8 @@ void modelDefinition(NNmodel &model)
     NeuronModels::PoissonNew::VarValues poissonInit(
         0.0);   // 0 - time to spike [ms]
 
-    
-
-    Conv2D::ParamValues convParams(
+#ifdef SYNAPSE_MATRIX_CONNECTIVITY_PROCEDURAL
+    Conv2DSparse::ParamValues convParams(
         3, 3,           // conv_kh, conv_kw
         1, 1,           // conv_sh, conv_sw
         0, 0,           // conv_padh, conv_padw
@@ -135,18 +190,38 @@ void modelDefinition(NNmodel &model)
     
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
+        uninitialisedVar());    // 0 - Wij (nA)
+#else
+    Conv2D::ParamValues convParams(
+        3, 3,           // conv_kh, conv_kw
+        1, 1,           // conv_sh, conv_sw
+        0, 0,           // conv_padh, conv_padw
+        32, 32, 3,      // conv_ih, conv_iw, conv_ic
+        30, 30, 32);    // conv_oh, conv_ow, conv_oc*/
+    
+    // Static synapse parameters
+    WeightUpdateModels::StaticPulse::VarValues staticSynapseInit(
         initVar<Conv2D>(convParams));    // 0 - Wij (nA)
-        
+#endif
+
     // Create IF_curr neuron
     model.addNeuronPopulation<NeuronModels::PoissonNew>("Poisson", 32 * 32 * 3,
                                                         poissonParams, poissonInit);
     model.addNeuronPopulation<NeuronModels::LIF>("Neurons", 30 * 30 * 32,
                                                  lifParams, lifInit);
 
-    
+#ifdef SYNAPSE_MATRIX_CONNECTIVITY_PROCEDURAL
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
+        "Poisson", "Neurons",
+        {}, staticSynapseInit,
+        {}, {},
+        initConnectivity<Conv2DSparse>(convParams));
+#else
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "Syn", SYNAPSE_MATRIX_TYPE, NO_DELAY,
         "Poisson", "Neurons",
         {}, staticSynapseInit,
         {}, {});
+#endif
 }

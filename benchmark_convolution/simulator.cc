@@ -11,7 +11,11 @@ int main()
     initialize();
     initializeSparse();
 
+#ifdef SYNAPSE_MATRIX_CONNECTIVITY_DENSE
     allocatekernelsgSyn(3 * 3);
+#endif
+
+
     while(t < 5000.0f) {
         stepTime();
     }
