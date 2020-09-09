@@ -34,7 +34,7 @@ public:
         "        const unsigned int idPost = (($(outRow) * $(conv_ow) * $(conv_oc)) +\n"
         "                                     (outCol * $(conv_oc)) +\n"
         "                                     outChan);\n"
-        "        $(addSynapse, idPost, $(outRow), outCol, $(inChan), outChan);\n"
+        "        $(addSynapse, idPost, kernRow, kernCol, $(inChan), outChan);\n"
         "    }\n"
         "}\n"
         "$(outRow)++;\n");
@@ -152,6 +152,7 @@ IMPLEMENT_SNIPPET(Conv2D);
 
 void modelDefinition(NNmodel &model)
 {
+    GENN_PREFERENCES.generateLineInfo = true;
     model.setDT(1.0);
     model.setName("benchmark");
     model.setTiming(true);
