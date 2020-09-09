@@ -13,27 +13,27 @@ public:
                      "conv_ih", "conv_iw", "conv_ic",
                      "conv_oh", "conv_ow", "conv_oc"});
 
-    SET_ROW_BUILD_STATE_VARS({{"inRow", "unsigned int", "($(id_pre) / (unsigned int)$(conv_ic)) / (unsigned int)$(conv_iw)"},
-                              {"inCol", "unsigned int", "($(id_pre) / (unsigned int)$(conv_ic)) % (unsigned int)$(conv_iw)"},
-                              {"inChan", "unsigned int", "$(id_pre) % (unsigned int)$(conv_ic)"},
-                              {"outRow", "unsigned int", "min((unsigned int)$(conv_oh), max(0, 1 + ((inRow + (unsigned int)$(conv_padh) - (unsigned int)$(conv_kh)) / (unsigned int)$(conv_sh))))"},
-                              {"maxOutRow", "unsigned int", "min((unsigned int)$(conv_oh), max(0, 1 + ((inRow + (unsigned int)$(conv_padh)) / (unsigned int)$(conv_sh))))"},
-                              {"minOutCol", "unsigned int", "min((unsigned int)$(conv_ow), max(0, 1 + ((inCol + (unsigned int)$(conv_padw) - (unsigned int)$(conv_kw)) / (unsigned int)$(conv_sw))))"},
-                              {"maxOutCol", "unsigned int", "min((unsigned int)$(conv_ow), max(0, 1 + ((inCol + (unsigned int)$(conv_padw)) / (unsigned int)$(conv_sw))))"}});
+    SET_ROW_BUILD_STATE_VARS({{"inRow", "int", "($(id_pre) / (int)$(conv_ic)) / (int)$(conv_iw)"},
+                              {"inCol", "int", "($(id_pre) / (int)$(conv_ic)) % (int)$(conv_iw)"},
+                              {"inChan", "int", "$(id_pre) % (int)$(conv_ic)"},
+                              {"outRow", "int", "min((int)$(conv_oh), max(0, 1 + ((inRow + (int)$(conv_padh) - (int)$(conv_kh)) / (int)$(conv_sh))))"},
+                              {"maxOutRow", "int", "min((int)$(conv_oh), max(0, 1 + ((inRow + (int)$(conv_padh)) / (int)$(conv_sh))))"},
+                              {"minOutCol", "int", "min((int)$(conv_ow), max(0, 1 + ((inCol + (int)$(conv_padw) - (int)$(conv_kw)) / (int)$(conv_sw))))"},
+                              {"maxOutCol", "int", "min((int)$(conv_ow), max(0, 1 + ((inCol + (int)$(conv_padw)) / (int)$(conv_sw))))"}});
 
     SET_ROW_BUILD_CODE(
         "if($(outRow) == $(maxOutRow)) {\n"
         "   $(endRow);\n"
         "}\n"
-        "const unsigned int strideRow = ($(outRow) * $(conv_sh)) - $(conv_padh);\n"
-        "const unsigned int kernRow = $(inRow) - strideRow;\n"
-        "for(unsigned int outCol = $(minOutCol); outCol < $(maxOutCol); outCol++) {\n"
-        "    const unsigned int strideCol = (outCol * $(conv_sw)) - $(conv_padw);\n"
-        "    const unsigned int kernCol = $(inCol) - strideCol;\n"
+        "const int strideRow = ($(outRow) * (int)$(conv_sh)) - (int)$(conv_padh);\n"
+        "const int kernRow = $(inRow) - strideRow;\n"
+        "for(int outCol = $(minOutCol); outCol < $(maxOutCol); outCol++) {\n"
+        "    const int strideCol = (outCol * (int)$(conv_sw)) - (int)$(conv_padw);\n"
+        "    const int kernCol = $(inCol) - strideCol;\n"
         "    for(unsigned int outChan = 0; outChan < (unsigned int)$(conv_oc); outChan++) {\n"
-        "        const unsigned int idPost = (($(outRow) * $(conv_ow) * $(conv_oc)) +\n"
-        "                                     (outCol * $(conv_oc)) +\n"
-        "                                     outChan);\n"
+        "        const int idPost = (($(outRow) * (int)$(conv_ow) * (int)$(conv_oc)) +\n"
+        "                           (outCol * (int)$(conv_oc)) +\n"
+        "                           outChan);\n"
         "        $(addSynapse, idPost, kernRow, kernCol, $(inChan), outChan);\n"
         "    }\n"
         "}\n"
