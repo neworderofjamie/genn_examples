@@ -192,4 +192,36 @@ void adamOptimizerTransposeCUDA(float *d_DeltaGIn, float *d_MIn, float *d_VIn, f
     transposeKernel<<<grid, threads>>>(d_GIn, d_GOut, numInRows, numInCols, adam);
     CHECK_CUDA_ERRORS(cudaPeekAtLastError());
 }
+
+void rMaxPropCUDA(float *d_M, float *d_Epsilon, float *d_G,
+                  unsigned int numRows, unsigned int numCols,
+                  float updateTime, float tauRMS, float r0, float epsilon, float wMin, float wMax)
+{
+    const unsigned int numSynapses = numRows * numCols;
+    const unsigned int numBlocks = (numSynapses + 31) / 32;
+
+    RMaxProp rMaxProp(d_M, d_Epsilon, updateTime, tauRMS, r0, epsilon, wMin, wMax);
+
+    const dim3 threads(32, 1);
+    const dim3 grid(numBlocks, 1);
+    updateKernel<<<grid, threads>>>(d_G, numSynapses, rMaxProp);
+    CHECK_CUDA_ERRORS(cudaPeekAtLastError());
+}
+
+void rMaxPropTransposeCUDA(float *d_MIn, float *d_EpsilonIn, float *d_GIn,
+                           float *d_GOut, unsigned int numInRows, unsigned int numInCols,
+                           float updateTime, float tauRMS, float r0, float epsilon, float wMin, float wMax)
+{
+    // Calculate number of blocks required to process matrix
+    const unsigned int numBlockX = (numInCols + TILE_DIM - 1) / TILE_DIM;
+    const unsigned int numBlockY = (numInRows + TILE_DIM - 1) / TILE_DIM;
+
+    RMaxProp rMaxProp(d_MIn, d_EpsilonIn, updateTime, tauRMS, r0, epsilon, wMin, wMax);
+
+    const dim3 threads(32, BLOCK_HEIGHT);
+    const dim3 grid(numBlockX, numBlockY);
+    transposeKernel<<<grid, threads>>>(d_GIn, d_GOut, numInRows, numInCols, rMaxProp);
+    CHECK_CUDA_ERRORS(cudaPeekAtLastError());
+}
+
 }   // namespace BatchLearning

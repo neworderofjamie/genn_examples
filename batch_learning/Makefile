@@ -8,9 +8,9 @@ NVCCFLAGS			:= -x cu -arch $(CUDA_ARCH) -Xcudafe "--diag_suppress=2937" -std=c++
 
 .PHONY: all clean generated_code
 
-all: batch_learning.a
+all: libbatch_learning.a
 
-batch_learning.a: $(OBJECTS)
+libbatch_learning.a: $(OBJECTS)
 	@$(AR) $(ARFLAGS) $@ $(OBJECTS)
 
 -include $(DEPS)

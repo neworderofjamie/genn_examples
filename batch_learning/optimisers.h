@@ -104,3 +104,53 @@ private:
     const float m_FirstMomentScale;
     const float m_SecondMomentScale;
 };
+
+class RMaxProp
+{
+public:
+    RMaxProp(float *m, float *upsilon,
+             float updateTime, float tauRMS, float r0, float epsilon, float wMin, float wMax)
+    :   m_M(m), m_Upsilon(upsilon), m_UpdateTime(updateTime), m_ExpRMS(exp(-updateTime / tauRMS)),
+        m_R0(r0), m_Epsilon(epsilon), m_WMin(wMin), m_WMax(wMax)
+    {
+    }
+
+    __forceinline__ __device__ bool updateParameter(float &param, unsigned int idx)
+    {
+        // Get gradients
+        const float gradient = m_M[idx] / m_UpdateTime;
+
+        // Calculate learning rate r
+        m_Upsilon[idx] = fmax(m_Upsilon[idx] * m_ExpRMS, gradient * gradient);
+        const float r = m_R0 / (sqrt(m_Upsilon[idx]) + m_Epsilon);
+
+        // Update synaptic parameter
+        param += r * gradient;
+        param = fmin(m_WMax, fmax(m_WMin, param));
+        m_M[idx] = 0.0f;
+        return true;
+    }
+
+    __forceinline__ __device__ void moveParams(unsigned int srcIdx, unsigned int dstIdx)
+    {
+        m_M[dstIdx] = m_M[srcIdx];
+        m_Upsilon[dstIdx] = m_Upsilon[dstIdx];
+    }
+
+    __forceinline__ __device__ void initSynapse(unsigned int idx)
+    {
+        m_M[idx] = 0.0f;
+        m_Upsilon[idx] = 0.0f;
+    }
+
+private:
+    float *m_M;
+    float *m_Upsilon;
+
+    const float m_UpdateTime;
+    const float m_ExpRMS;
+    const float m_R0;
+    const float m_Epsilon;
+    const float m_WMin;
+    const float m_WMax;
+};
