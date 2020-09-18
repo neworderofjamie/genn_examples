@@ -17,17 +17,46 @@ public:
     SET_VARS({{"w", "scalar"}, {"e", "scalar"}, {"lambda", "scalar"},
               {"upsilon", "scalar"}, {"m", "scalar"}});
 
-    SET_SIM_CODE("$(addToInSyn, $(g));\n");
+    SET_SIM_CODE("$(addToInSyn, $(w));\n");
 
-    SET_LEARN_POST_CODE(
+    SET_SYNAPSE_DYNAMICS_CODE(
         "// Filtered eligibility trace\n"
-        "$(e) += ($(z_tilda_pre) * $(sigma_prime_post) - $(e)/$(tauRise))*DT;\n"
+        "$(e) += ($(zTilda_pre) * $(sigmaPrime_post) - $(e) / $(tauRise))*DT;\n"
         "$(lambda) += ((-$(lambda) + $(e)) / $(tauDecay)) * DT;\n"
-        "// Get error from neuron model and compute full expression\n"
-        "// under integral and calculate m\n"
-        "$(m) += $(lambda) * $(err_tilda_post);\n");
+        "// Get error from neuron model and compute full \n"
+        "// expression under integral and calculate m\n"
+        "$(m) += $(lambda) * $(errTilda_post);\n");
 };
 IMPLEMENT_MODEL(SuperSpike);
+
+//----------------------------------------------------------------------------
+// Feedback
+//----------------------------------------------------------------------------
+class Feedback : public WeightUpdateModels::Base
+{
+public:
+    DECLARE_MODEL(Feedback, 0, 1);
+
+    SET_VARS({{"w", "scalar"}});
+
+    SET_SYNAPSE_DYNAMICS_CODE("$(addToInSyn, $(w) * $(errTilda_post));\n");
+};
+IMPLEMENT_MODEL(Feedback);
+
+//---------------------------------------------------------------------------
+// FeedbackPSM
+//---------------------------------------------------------------------------
+//! Simple postsynaptic model which transfer input directly to neuron without any dynamics
+class FeedbackPSM : public PostsynapticModels::Base
+{
+public:
+    DECLARE_MODEL(FeedbackPSM, 0, 0);
+
+    SET_APPLY_INPUT_CODE(
+        "$(ISynFeedback) += $(inSyn);\n"
+        "$(inSyn) = 0;\n");
+};
+IMPLEMENT_MODEL(FeedbackPSM);
 
 //----------------------------------------------------------------------------
 // Input
@@ -68,7 +97,7 @@ IMPLEMENT_MODEL(Input);
 class Hidden : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Hidden, 7, 5);
+    DECLARE_MODEL(Hidden, 8, 6);
 
     SET_PARAM_NAMES({
         "C",            // 0 - Membrane capacitance
@@ -77,14 +106,15 @@ public:
         "Vthresh",      // 3 - Spiking threshold (mV)
         "tauRefrac",    // 4 - Refractory time constant (ms)
         "tauRise",      // 5 - Rise time constant (ms)
-        "tauDecay"});   // 6 - Decay time constant
+        "tauDecay",     // 6 - Decay time constant
+        "beta"});       // 7 - Beta
 
     SET_DERIVED_PARAMS({
         {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
         {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
 
     SET_VARS({{"V", "scalar"}, {"refracTime", "scalar"}, {"errTilda", "scalar"},
-              {"z", "scalar"}, {"zTilda", "scalar"}});
+              {"z", "scalar"}, {"zTilda", "scalar"}, {"sigmaPrime", "scalar"}});
 
     SET_EXTRA_GLOBAL_PARAMS({{"spikeTimes", "scalar*"}});
 
@@ -107,6 +137,9 @@ public:
         "if ($(zTilda) < 0.0000001) {\n"
         "    $(zTilda) = 0.0;\n"
         "}\n"
+        "// filtered partial derivative\n"
+        "const scalar onePlusHi = 1.0 + fabs($(beta) * ($(V) - $(Vthresh)));\n"
+        "$(sigmaPrime) = 1.0 / (onePlusHi * onePlusHi);\n"
         "// error\n"
         "$(errTilda) = $(ISynFeedback);\n");
 
@@ -126,7 +159,7 @@ IMPLEMENT_MODEL(Hidden);
 class Output : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Output, 7, 7);
+    DECLARE_MODEL(Output, 8, 8);
 
     SET_PARAM_NAMES({
         "C",            // 0 - Membrane capacitance
@@ -135,7 +168,8 @@ public:
         "Vthresh",      // 3 - Spiking threshold (mV)
         "tauRefrac",    // 4 - Refractory time constant (ms)
         "tauRise",      // 5 - Rise time constant (ms)
-        "tauDecay"});   // 6 - Decay time constant
+        "tauDecay",     // 6 - Decay time constant
+        "beta"});       // 7 - Beta
 
     SET_DERIVED_PARAMS({
         {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
@@ -146,7 +180,7 @@ public:
         {"tPeak", [](const std::vector<double> &pars, double){ return ((pars[6] * pars[5]) / (pars[6] - pars[5])) * std::log(pars[6] / pars[5]); }}});
 
     SET_VARS({{"V", "scalar"}, {"refracTime", "scalar"}, {"errRise", "scalar"}, {"errTilda", "scalar"},
-              {"errDecay", "scalar"}, {"startSpike", "unsigned int"}, {"endSpike", "unsigned int"}});
+              {"errDecay", "scalar"}, {"sigmaPrime", "scalar"}, {"startSpike", "unsigned int"}, {"endSpike", "unsigned int"}});
     SET_EXTRA_GLOBAL_PARAMS({{"spikeTimes", "scalar*"}});
 
     SET_SIM_CODE(
@@ -161,6 +195,9 @@ public:
         "else {\n"
         "    $(refracTime) -= DT;\n"
         "}\n"
+        "// filtered partial derivative\n"
+        "const scalar onePlusHi = 1.0 + fabs($(beta) * ($(V) - $(Vthresh)));\n"
+        "$(sigmaPrime) = 1.0 / (onePlusHi * onePlusHi);\n"
         "// error\n"
         "scalar sPred = 0.0;\n"
         "if ($(startSpike) != $(endSpike) && $(t) >= $(spikeTimes)[$(startSpike)]) {\n"
@@ -190,7 +227,7 @@ void modelDefinition(NNmodel &model)
     model.setTiming(true);
 
     //------------------------------------------------------------------------
-    // Input layer
+    // Input layer parameters
     //------------------------------------------------------------------------
     Input::ParamValues inputParams(
         Parameters::tauRise,    // 0 - Rise time constant (ms)
@@ -203,7 +240,7 @@ void modelDefinition(NNmodel &model)
         0.0);                   // 3 - zTilda
 
     //------------------------------------------------------------------------
-    // Hidden layer
+    // Hidden layer parameters
     //------------------------------------------------------------------------
     Hidden::ParamValues hiddenParams(
         10.0,                   // 0 - Membrane capacitance
@@ -212,17 +249,19 @@ void modelDefinition(NNmodel &model)
         -50.0,                  // 3 - Spiking threshold (mV)
         5.0,                    // 4 - Refractory time constant (ms)
         Parameters::tauRise,    // 5 - Rise time constant (ms)
-        Parameters::tauDecay);  // 6 - Decay time constant
+        Parameters::tauDecay,   // 6 - Decay time constant (ms)
+        1.0);                   // 7 - Beta
 
     Hidden::VarValues hiddenVars(
         -60.0,  // V
         0.0,    // refracTime
         0.0,    // errTilda
         0.0,    // z
-        0.0);   // zTilda
+        0.0,    // zTilda
+        0.0);   // sigmaPrime
 
     //------------------------------------------------------------------------
-    // Output layer
+    // Output layer parameters
     //------------------------------------------------------------------------
     Output::ParamValues outputParams(
         10.0,                   // 0 - Membrane capacitance
@@ -231,17 +270,70 @@ void modelDefinition(NNmodel &model)
         -50.0,                  // 3 - Spiking threshold (mV)
         5.0,                    // 4 - Refractory time constant (ms)
         Parameters::tauRise,    // 5 - Rise time constant (ms)
-        Parameters::tauDecay);  // 6 - Decay time constant
+        Parameters::tauDecay,   // 6 - Decay time constant
+        1.0);                   // 7 - Beta
     Output::VarValues outputVars(
         -60.0,                  // V
         0.0,                    // refracTime
         0.0,                    // errRise
         0.0,                    // errTilda
         0.0,                    // errDecay
+        0.0,                    // sigmaPrime
         uninitialisedVar(),     // startSpike
         uninitialisedVar());    // endSpike
 
+    //------------------------------------------------------------------------
+    // Synapse parameters
+    //------------------------------------------------------------------------
+    PostsynapticModels::ExpCurr::ParamValues expCurrParams(
+        5.0);  // 0 - TauSyn (ms)
+
+    SuperSpike::ParamValues superSpikeParams(
+        Parameters::tauRise,    // 0 - Rise time constant (ms)
+        Parameters::tauDecay);  // 1 - Decay time constant (ms)
+
+    InitVarSnippet::Uniform::ParamValues wDist(
+        -0.001, // 0 - min
+        0.001); // 1 - max
+
+    SuperSpike::VarValues superSpikeVars(
+        initVar<InitVarSnippet::Uniform>(wDist),    // w
+        0.0,                                        // e
+        0.0,                                        // lambda
+        0.0,                                        // upsilon
+        0.0);                                       // m
+
+    // **HACK** this is actually a nasty corner case for the initialisation rules
+    // We really want this uninitialised as we are going to copy over transpose
+    // But then initialiseSparse would copy over host values
+    Feedback::VarValues feedbackVars(
+        0.0);
+
+    //------------------------------------------------------------------------
+    // Neuron groups
+    //------------------------------------------------------------------------
     model.addNeuronPopulation<Input>("Input", Parameters::numInput, inputParams, inputVars);
     model.addNeuronPopulation<Hidden>("Hidden", Parameters::numHidden, hiddenParams, hiddenVars);
     model.addNeuronPopulation<Output>("Output", Parameters::numOutput, outputParams, outputVars);
+
+    //------------------------------------------------------------------------
+    // Synapse groups
+    //------------------------------------------------------------------------
+    model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
+        "Input_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+        "Input", "Hidden",
+        superSpikeParams, superSpikeVars,
+        expCurrParams, {});
+
+    model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
+        "Hidden_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+        "Hidden", "Output",
+        superSpikeParams, superSpikeVars,
+        expCurrParams, {});
+
+    model.addSynapsePopulation<Feedback, FeedbackPSM>(
+        "Output_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+        "Output", "Hidden",
+        {}, feedbackVars,
+        {}, {});
 }
