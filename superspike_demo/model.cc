@@ -220,7 +220,7 @@ IMPLEMENT_MODEL(Output);
 
 void modelDefinition(NNmodel &model)
 {
-    model.setDT(0.1);
+    model.setDT(Parameters::timestepMs);
     model.setName("superspike_demo");
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);

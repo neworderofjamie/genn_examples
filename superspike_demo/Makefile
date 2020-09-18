@@ -8,7 +8,7 @@ CXXFLAGS 			+=-std=c++11 -Wall -Wpedantic -Wextra
 all: superspike_demo batch_learning
 
 superspike_demo: simulator.cc generated_code batch_learning
-	$(CXX) $(CXXFLAGS)  -I$(GENN_USERPROJECT_INCLUDE) simulator.cc -o superspike_demo -L$(GENERATED_CODE_DIR) -L$(BATCH_LEARNING_DIR) -lbatch_learning -lrunner -Wl,-rpath $(GENERATED_CODE_DIR)
+	$(CXX) $(CXXFLAGS)  -I$(GENN_USERPROJECT_INCLUDE) -I$(BATCH_LEARNING_DIR) simulator.cc -o superspike_demo -L$(GENERATED_CODE_DIR) -L$(BATCH_LEARNING_DIR) -lbatch_learning -lrunner -Wl,-rpath $(GENERATED_CODE_DIR)
 
 batch_learning:
 	$(MAKE) -C $(BATCH_LEARNING_DIR)
