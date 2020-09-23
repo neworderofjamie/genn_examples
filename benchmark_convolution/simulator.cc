@@ -8,12 +8,13 @@
 int main()
 {
     allocateMem();
+
+    allocatekernelgSyn(3 * 3 * 3 * 32);
+
     initialize();
     initializeSparse();
 
-#ifdef SYNAPSE_MATRIX_CONNECTIVITY_DENSE
-    allocatekernelsgSyn(3 * 3 * 3 * 32);
-#endif
+
 
 
     while(t < 5000.0f) {
