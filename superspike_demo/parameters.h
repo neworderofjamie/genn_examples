@@ -18,7 +18,8 @@ namespace Parameters
     constexpr double wMax = 10.0;
 
     // Experiment parameters
-    constexpr unsigned int numTrials = 1500;
+    constexpr double inputFreqHz = 5.0;
+    constexpr unsigned int numTrials = 5;
     constexpr double updateTimeMs = 10000.0;
     constexpr double trialMs = 1890.0;
 

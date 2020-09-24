@@ -222,8 +222,6 @@ void modelDefinition(NNmodel &model)
 {
     model.setDT(Parameters::timestepMs);
     model.setName("superspike_demo");
-    model.setDefaultVarLocation(VarLocation::DEVICE);
-    model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
     model.setTiming(true);
 
     //------------------------------------------------------------------------
@@ -312,14 +310,17 @@ void modelDefinition(NNmodel &model)
     //------------------------------------------------------------------------
     // Neuron groups
     //------------------------------------------------------------------------
-    model.addNeuronPopulation<Input>("Input", Parameters::numInput, inputParams, inputVars);
+    auto *input = model.addNeuronPopulation<Input>("Input", Parameters::numInput, inputParams, inputVars);
     model.addNeuronPopulation<Hidden>("Hidden", Parameters::numHidden, hiddenParams, hiddenVars);
-    model.addNeuronPopulation<Output>("Output", Parameters::numOutput, outputParams, outputVars);
+    auto *output = model.addNeuronPopulation<Output>("Output", Parameters::numOutput, outputParams, outputVars);
+
+    input->setSpikeRecordingEnabled(true);
+    output->setSpikeRecordingEnabled(true);
 
     //------------------------------------------------------------------------
     // Synapse groups
     //------------------------------------------------------------------------
-    model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
+    /*model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
         "Input_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "Hidden",
         superSpikeParams, superSpikeVars,
@@ -335,5 +336,5 @@ void modelDefinition(NNmodel &model)
         "Output_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Output", "Hidden",
         {}, feedbackVars,
-        {}, {});
+        {}, {});*/
 }
