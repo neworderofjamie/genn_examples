@@ -14,6 +14,7 @@ namespace Parameters
     constexpr double tauDecay = 10.0;
     constexpr double tauRMS = 30000.0;
     constexpr double r0 = 0.005;
+    constexpr double epsilon = 0.000000000000000000001;
     constexpr double wMin = -10.0;
     constexpr double wMax = 10.0;
 

@@ -311,10 +311,11 @@ void modelDefinition(NNmodel &model)
     // Neuron groups
     //------------------------------------------------------------------------
     auto *input = model.addNeuronPopulation<Input>("Input", Parameters::numInput, inputParams, inputVars);
-    model.addNeuronPopulation<Hidden>("Hidden", Parameters::numHidden, hiddenParams, hiddenVars);
+    auto *hidden = model.addNeuronPopulation<Hidden>("Hidden", Parameters::numHidden, hiddenParams, hiddenVars);
     auto *output = model.addNeuronPopulation<Output>("Output", Parameters::numOutput, outputParams, outputVars);
 
     input->setSpikeRecordingEnabled(true);
+    hidden->setSpikeRecordingEnabled(true);
     output->setSpikeRecordingEnabled(true);
 
     //------------------------------------------------------------------------
