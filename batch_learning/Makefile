@@ -26,4 +26,4 @@ libbatch_learning.a: $(OBJECTS)
 clean:
 	rm -f *.o
 	rm -f *.d
-	rm batch_learning.a
+	rm -f libbatch_learning.a
