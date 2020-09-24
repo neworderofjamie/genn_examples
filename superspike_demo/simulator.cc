@@ -127,8 +127,8 @@ int main()
         generateFrozenPoissonInput(gen);
 
         // Use CUDA to calculate initial transpose of feedforward hidden->output weights
-        //BatchLearning::transposeCUDA(d_wHidden_Output, d_wOutput_Hidden,
-        //                            Parameters::numHidden, Parameters::numOutput);
+        BatchLearning::transposeCUDA(d_wHidden_Output, d_wOutput_Hidden,
+                                    Parameters::numHidden, Parameters::numOutput);
 
         initializeSparse();
 
@@ -140,14 +140,14 @@ int main()
             // Loop through trials
             unsigned int timestep = 0;
             for(unsigned int trial = 0; trial < Parameters::numTrials; trial++) {
-                if((trial % 100) == 0) {
+                //if((trial % 100) == 0) {
                     // if this isn't the first trial, reduce learning rate
                     /*if(trial != 0) {
                         learningRate *= 0.7f;
                     }*/
 
                     std::cout << "Trial " << trial << " (epsilon " << epsilon << ")" << std::endl;
-                }
+                //}
 
                 // Reset model timestep
                 // **NOTE** this a bit gross but means we can simplify a lot of logic
@@ -159,14 +159,14 @@ int main()
                     stepTime();
 
                     // If it's time to update weights
-                    /*if((timestep % Parameters::updateTimesteps) == 0) {
+                    if((timestep % Parameters::updateTimesteps) == 0) {
                         BatchLearning::rMaxPropCUDA(d_mInput_Hidden, d_upsilonInput_Hidden, d_wInput_Hidden,
                                                  Parameters::numInput, Parameters::numHidden,
                                                  Parameters::updateTimeMs, Parameters::tauRMS, Parameters::r0, epsilon, Parameters::wMin, Parameters::wMax);
                         BatchLearning::rMaxPropTransposeCUDA(d_mHidden_Output, d_upsilonHidden_Output, d_wHidden_Output,
                                                              d_wOutput_Hidden, Parameters::numHidden, Parameters::numOutput,
                                                              Parameters::updateTimeMs, Parameters::tauRMS, Parameters::r0, epsilon, Parameters::wMin, Parameters::wMax);
-                    }*/
+                    }
 
                     timestep++;
 
@@ -176,7 +176,7 @@ int main()
                 pushstartSpikeInputToDevice();
                 pushstartSpikeOutputToDevice();
 
-                //if((trial % 100) == 0) {
+                if((trial % 100) == 0) {
                     pullRecordingBuffersFromDevice();
                     writeTextSpikeRecording("input_spikes_" + std::to_string(trial) + ".csv", recordSpkInput,
                                             Parameters::numInput, Parameters::trialTimesteps, Parameters::timestepMs,
@@ -184,7 +184,7 @@ int main()
                     writeTextSpikeRecording("output_spikes_" + std::to_string(trial) + ".csv", recordSpkOutput,
                                             Parameters::numOutput, Parameters::trialTimesteps, Parameters::timestepMs,
                                             ",", true);
-                //}
+                }
 
             }
 

@@ -320,7 +320,7 @@ void modelDefinition(NNmodel &model)
     //------------------------------------------------------------------------
     // Synapse groups
     //------------------------------------------------------------------------
-    /*model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
+    model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
         "Input_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "Hidden",
         superSpikeParams, superSpikeVars,
@@ -336,5 +336,5 @@ void modelDefinition(NNmodel &model)
         "Output_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Output", "Hidden",
         {}, feedbackVars,
-        {}, {});*/
+        {}, {});
 }
