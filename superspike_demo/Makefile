@@ -15,11 +15,23 @@ all: superspike_demo
 superspike_demo: simulator.o generated_code batch_learning
 	$(NVCC) -o superspike_demo simulator.o $(LINKFLAGS)
 
-simulator.o: simulator.cc
-	@$(NVCC) $(NVCCFLAGS) -dc simulator.cc
-
 batch_learning:
 	$(MAKE) -C $(BATCH_LEARNING_DIR)
 
 generated_code:
 	$(MAKE) -C $(GENERATED_CODE_DIR)
+
+-include simulator.d
+
+simulator.d: simulator.cc
+	@$(NVCC) -M $(NVCCFLAGS) $< 1> $@
+
+simulator.o: simulator.cc simulator.d
+	@$(NVCC) -dc $(NVCCFLAGS) $<
+
+%.d: ;
+
+clean:
+	rm -f *.o
+	rm -f *.d
+	rm -f superspike_demo
