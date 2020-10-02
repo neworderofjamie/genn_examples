@@ -84,7 +84,7 @@ void generateFrozenPoissonInput(std::mt19937 &gen)
     std::exponential_distribution<float> dist(1.0);
 
     // Calcualte inter-spike-interval
-    const float isi = 1000.0f / (Parameters::inputFreqHz * Parameters::timestepMs);
+    const float isiMs = 1000.0f / Parameters::inputFreqHz;
 
     // Loop through input neurons
     std::vector<float> spikeTimes;
@@ -93,13 +93,12 @@ void generateFrozenPoissonInput(std::mt19937 &gen)
         startSpikeInput[i] = spikeTimes.size();
 
         // Generate spike train using exponential distribution
-        for(float t = isi * dist(gen); t < Parameters::trialMs; t += isi * dist(gen)) {
+        for(float t = isiMs * dist(gen); t < Parameters::trialMs; t += isiMs * dist(gen)) {
             spikeTimes.push_back(t);
         }
 
         // Record neurons ending spike index
         endSpikeInput[i] = spikeTimes.size();
-
     }
 
     // Allocate memory for spike times
