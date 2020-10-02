@@ -245,23 +245,36 @@ void modelDefinition(NNmodel &model)
         Parameters::tauDecay,   // 1 - Decay time constant (ms)
         1.0);                   // 2 - Beta
 
-    InitVarSnippet::Uniform::ParamValues wDist(
-        -0.001, // 0 - min
-        0.001); // 1 - max
-
-    SuperSpike::VarValues superSpikeVars(
-        initVar<InitVarSnippet::Uniform>(wDist),    // w
-        0.0,                                        // e
-        0.0,                                        // lambda
-        0.0,                                        // upsilon
-        0.0);                                       // m
-
     SuperSpike::PreVarValues superSpikePreVars(
         0.0,    // z
         0.0);   // zTilda
 
     SuperSpike::PostVarValues superSpikePostVars(
         0.0);   // sigmaPrime
+
+    InitVarSnippet::NormalClipped::ParamValues inputHiddenWeightDist(
+        0.0,                                                        // 0 - mean
+        Parameters::w0 / std::sqrt((double)Parameters::numInput),   // 1 - standard deviation
+        Parameters::wMin,                                           // 2 - min
+        Parameters::wMax);                                          // 3 - max
+    SuperSpike::VarValues inputHiddenVars(
+        initVar<InitVarSnippet::NormalClipped>(inputHiddenWeightDist),  // w
+        0.0,                                                            // e
+        0.0,                                                            // lambda
+        0.0,                                                            // upsilon
+        0.0);                                                           // m
+
+    InitVarSnippet::NormalClipped::ParamValues hiddenOutputWeightDist(
+        0.0,                                                        // 0 - mean
+        Parameters::w0 / std::sqrt((double)Parameters::numHidden),  // 1 - standard deviation
+        Parameters::wMin,                                           // 2 - min
+        Parameters::wMax);                                          // 3 - max
+    SuperSpike::VarValues hiddenOutputVars(
+        initVar<InitVarSnippet::NormalClipped>(hiddenOutputWeightDist), // w
+        0.0,                                                            // e
+        0.0,                                                            // lambda
+        0.0,                                                            // upsilon
+        0.0);                                                           // m
 
     // **HACK** this is actually a nasty corner case for the initialisation rules
     // We really want this uninitialised as we are going to copy over transpose
@@ -286,13 +299,13 @@ void modelDefinition(NNmodel &model)
     model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
         "Input_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "Hidden",
-        superSpikeParams, superSpikeVars, superSpikePreVars, superSpikePostVars,
+        superSpikeParams, inputHiddenVars, superSpikePreVars, superSpikePostVars,
         expCurrParams, {});
 
     model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
         "Hidden_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Hidden", "Output",
-        superSpikeParams, superSpikeVars, superSpikePreVars, superSpikePostVars,
+        superSpikeParams, hiddenOutputVars, superSpikePreVars, superSpikePostVars,
         expCurrParams, {});
 
     model.addSynapsePopulation<Feedback, FeedbackPSM>(
