@@ -35,3 +35,5 @@ clean:
 	rm -f *.o
 	rm -f *.d
 	rm -f superspike_demo
+	$(MAKE) -C $(BATCH_LEARNING_DIR) clean
+	$(MAKE) -C $(GENERATED_CODE_DIR) clean
