@@ -35,10 +35,10 @@ void adamOptimizerTransposeCUDA(float *d_DeltaGIn, float *d_MIn, float *d_VIn, f
 //! Apply RMaxProp to dense weights
 void rMaxPropCUDA(float *d_M, float *d_Upsilon, float *d_G,
                   unsigned int numRows, unsigned int numCols,
-                  float updateTime, float tauRMS, float r0, float epsilon, float wMin, float wMax);
+                  float updateTime, float dt, float tauRMS, float r0, float epsilon, float wMin, float wMax);
 
 //! Apply RMaxProp to dense weights and then transfer to transpose
 void rMaxPropTransposeCUDA(float *d_MIn, float *d_UpsilonIn, float *d_GIn,
                            float *d_GOut, unsigned int numInRows, unsigned int numInCols,
-                           float updateTime, float tauRMS, float r0, float epsilon, float wMin, float wMax);
+                           float updateTime, float dt, float tauRMS, float r0, float epsilon, float wMin, float wMax);
 }
