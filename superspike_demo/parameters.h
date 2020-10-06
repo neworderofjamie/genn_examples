@@ -14,7 +14,7 @@ namespace Parameters
     constexpr double tauDecay = 10.0;
     constexpr double tauRMS = 30000.0;
     constexpr double r0 = 0.001 * 1000.0;
-    constexpr double epsilon = 1E-12;
+    constexpr double epsilon = 1E-32;
 
     // Weights
     // **NOTE** Auryn units are volts, seconds etc so essentially 1000x GeNN parameters

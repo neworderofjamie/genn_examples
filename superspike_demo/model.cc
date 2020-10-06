@@ -41,8 +41,13 @@ public:
 
     SET_POST_DYNAMICS_CODE(
         "// filtered partial derivative\n"
-        "const scalar onePlusHi = 1.0 + fabs($(beta) * ($(V_post) - $(Vthresh_post)));\n"
-        "$(sigmaPrime) = 1.0 / (onePlusHi * onePlusHi);\n");
+        "if($(V_post) < -80.0) {\n"
+        "   $(sigmaPrime) = 0.0;\n"
+        "}\n"
+        "else {\n"
+        "   const scalar onePlusHi = 1.0 + fabs($(beta) * 0.001 * ($(V_post) - $(Vthresh_post)));\n"
+        "   $(sigmaPrime) = $(beta) / (onePlusHi * onePlusHi);\n"
+        "}\n");
 
 };
 IMPLEMENT_MODEL(SuperSpike);
@@ -145,7 +150,7 @@ public:
     SET_DERIVED_PARAMS({
         {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
         {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }},
-        {"normFactor", [](const std::vector<double> &pars, double){ return (1.0 / (-std::exp(-calcTPeak(pars[5], pars[6]) / pars[5])) + std::exp(-calcTPeak(pars[5], pars[6]) / pars[6])); }},
+        {"normFactor", [](const std::vector<double> &pars, double){ return 1.0 / (-std::exp(-calcTPeak(pars[5], pars[6]) / pars[5]) + std::exp(-calcTPeak(pars[5], pars[6]) / pars[6])); }},
         {"tRiseMult", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[5]); }},
         {"tDecayMult", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[6]); }},
         {"tPeak", [](const std::vector<double> &pars, double){ return calcTPeak(pars[5], pars[6]); }}});
@@ -249,7 +254,7 @@ void modelDefinition(NNmodel &model)
     SuperSpike::ParamValues superSpikeParams(
         Parameters::tauRise,    // 0 - Rise time constant (ms)
         Parameters::tauDecay,   // 1 - Decay time constant (ms)
-        1.0 / 1000.0);          // 2 - Beta
+        1000.0);                // 2 - Beta
 
     SuperSpike::PreVarValues superSpikePreVars(
         0.0,    // z
