@@ -160,11 +160,11 @@ int main()
                     // If it's time to update weights
                     if(timestep != 0 && (timestep % Parameters::updateTimesteps) == 0) {
                         BatchLearning::rMaxPropCUDA(d_mInput_Hidden, d_upsilonInput_Hidden, d_wInput_Hidden,
-                                                 Parameters::numInput, Parameters::numHidden,
-                                                 Parameters::updateTimeMs, Parameters::tauRMS, r0, Parameters::epsilon, Parameters::wMin, Parameters::wMax);
+                                                    Parameters::numInput, Parameters::numHidden,
+                                                    Parameters::updateTimeMs, Parameters::timestepMs, Parameters::tauRMS, r0, Parameters::epsilon, Parameters::wMin, Parameters::wMax);
                         BatchLearning::rMaxPropTransposeCUDA(d_mHidden_Output, d_upsilonHidden_Output, d_wHidden_Output,
                                                              d_wOutput_Hidden, Parameters::numHidden, Parameters::numOutput,
-                                                             Parameters::updateTimeMs, Parameters::tauRMS, r0, Parameters::epsilon, Parameters::wMin, Parameters::wMax);
+                                                             Parameters::updateTimeMs, Parameters::timestepMs, Parameters::tauRMS, r0, Parameters::epsilon, Parameters::wMin, Parameters::wMax);
                     }
 
                     timestep++;
@@ -172,6 +172,7 @@ int main()
                 }
 
                 // Reset spike sources by re-uploading starting spike indices
+                // **TODO** build repeating spike source array
                 pushstartSpikeInputToDevice();
                 pushstartSpikeOutputToDevice();
 

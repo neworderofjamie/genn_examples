@@ -57,7 +57,7 @@ public:
 
     SET_VARS({{"w", "scalar"}});
 
-    SET_SYNAPSE_DYNAMICS_CODE("$(addToInSyn, $(w) * $(errTilda_post));\n");
+    SET_SYNAPSE_DYNAMICS_CODE("$(addToInSyn, $(w) * $(errTilda_pre));\n");
 };
 IMPLEMENT_MODEL(Feedback);
 
@@ -145,10 +145,10 @@ public:
     SET_DERIVED_PARAMS({
         {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
         {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }},
-        {"normFactor", [](const std::vector<double> &pars, double){ return (1.0 / (-std::exp(-pars[7] / pars[5])) + std::exp(-pars[7] / pars[6])); }},
+        {"normFactor", [](const std::vector<double> &pars, double){ return (1.0 / (-std::exp(-calcTPeak(pars[5], pars[6]) / pars[5])) + std::exp(-calcTPeak(pars[5], pars[6]) / pars[6])); }},
         {"tRiseMult", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[5]); }},
         {"tDecayMult", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[6]); }},
-        {"tPeak", [](const std::vector<double> &pars, double){ return ((pars[6] * pars[5]) / (pars[6] - pars[5])) * std::log(pars[6] / pars[5]); }}});
+        {"tPeak", [](const std::vector<double> &pars, double){ return calcTPeak(pars[5], pars[6]); }}});
 
     SET_VARS({{"V", "scalar"}, {"refracTime", "scalar"}, {"errRise", "scalar"}, {"errTilda", "scalar"},
               {"errDecay", "scalar"}, {"startSpike", "unsigned int"}, {"endSpike", "unsigned int"}});
@@ -172,7 +172,7 @@ public:
         "    $(startSpike)++;\n"
         "    sPred = 1.0;\n"
         "}\n"
-        "const scalar sReal = $(refracTime) <= 0.0 && $(V) >= $(Vthresh) ? 1.0 : 0.0;\n"
+        "const scalar sReal = ($(refracTime) <= 0.0 && $(V) >= $(Vthresh)) ? 1.0 : 0.0;\n"
         "const scalar mismatch = sPred - sReal;\n"
         "$(errRise) = ($(errRise) * $(tRiseMult)) + mismatch;\n"
         "$(errDecay) = ($(errDecay) * $(tDecayMult)) + mismatch;\n"
@@ -183,6 +183,12 @@ public:
     SET_THRESHOLD_CONDITION_CODE("$(refracTime) <= 0.0 && $(V) >= $(Vthresh)");
 
     SET_NEEDS_AUTO_REFRACTORY(false);
+
+private:
+    static double calcTPeak(double tauRise, double tauDecay)
+    {
+        return ((tauDecay * tauRise) / (tauDecay - tauRise)) * std::log(tauDecay / tauRise);
+    }
 };
 IMPLEMENT_MODEL(Output);
 
@@ -243,7 +249,7 @@ void modelDefinition(NNmodel &model)
     SuperSpike::ParamValues superSpikeParams(
         Parameters::tauRise,    // 0 - Rise time constant (ms)
         Parameters::tauDecay,   // 1 - Decay time constant (ms)
-        1.0);                   // 2 - Beta
+        1.0 / 1000.0);          // 2 - Beta
 
     SuperSpike::PreVarValues superSpikePreVars(
         0.0,    // z
