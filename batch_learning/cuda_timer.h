@@ -1,7 +1,7 @@
 #pragma once
 
 // Auto-generated model code
-#include "pattern_recognition_1_1_CODE/definitionsInternal.h"
+#include "cuda_helpers.h"
 
 //----------------------------------------------------------------------------
 // CUDATimer

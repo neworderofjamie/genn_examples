@@ -66,6 +66,15 @@
     <CudaCompile Include="batch_learning.cc">
       <AdditionalOptions Condition=" !$([System.String]::new('%(BaseCommandLineTemplate)').Contains('-x cu')) ">-x cu %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
+    <CudaCompile Include="deep_r.cc">
+      <AdditionalOptions Condition=" !$([System.String]::new('%(BaseCommandLineTemplate)').Contains('-x cu')) ">-x cu %(AdditionalOptions)</AdditionalOptions>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="batch_learning.h" />
+    <ClInclude Include="cuda_helpers.h" />
+    <ClInclude Include="cuda_timer.h" />
+    <ClInclude Include="deep_r.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
