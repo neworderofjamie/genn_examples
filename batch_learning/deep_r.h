@@ -10,14 +10,16 @@
 typedef struct curandStateXORWOW curandState;
 
 //----------------------------------------------------------------------------
-// Deep-R
+// BatchLearning::Deep-R
 //----------------------------------------------------------------------------
+namespace BatchLearning
+{
 class DeepR
 {
 public:
     DeepR(unsigned int numRows, unsigned int numCols, unsigned int maxRowLength,
-          unsigned int *rowLength, unsigned int *d_rowLength, unsigned int *d_ind, 
-          float *d_DeltaG, float *d_M, float *d_V, float *d_G, float *d_EFiltered, 
+          unsigned int *rowLength, unsigned int *d_rowLength, unsigned int *d_ind,
+          float *d_DeltaG, float *d_M, float *d_V, float *d_G, float *d_EFiltered,
           float beta1 = 0.9, float beta2 = 0.999, float epsilon = 1E-8, unsigned int seed = 0);
     ~DeepR();
 
@@ -32,9 +34,9 @@ public:
         m_SecondPassKernelTimer.update();
     }
 
-    float getFirstPassKernelTime() const{ return m_FirstPassKernelTimer.getTotalTime(); }
-    float getSecondPassKernelTime() const{ return m_SecondPassKernelTimer.getTotalTime(); }
-    double getHostUpdateTime() const{ return m_HostUpdateTime; }
+    float getFirstPassKernelTime() const { return m_FirstPassKernelTimer.getTotalTime(); }
+    float getSecondPassKernelTime() const { return m_SecondPassKernelTimer.getTotalTime(); }
+    double getHostUpdateTime() const { return m_HostUpdateTime; }
 
 private:
     //------------------------------------------------------------------------
@@ -88,3 +90,4 @@ private:
     CUDATimer m_SecondPassKernelTimer;
     double m_HostUpdateTime;
 };
+}   // namespace BatchLearning

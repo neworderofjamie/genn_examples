@@ -185,50 +185,52 @@ __global__ void deepRSecondPassKernel(float *d_G, float *d_EFiltered, unsigned i
 }   // Anonymous namespace
 
 //----------------------------------------------------------------------------
-// DeepR
+// BatchLearning::DeepR
 //----------------------------------------------------------------------------
+namespace BatchLearning
+{
 DeepR::DeepR(unsigned int numRows, unsigned int numCols, unsigned int maxRowLength,
-             unsigned int *rowLength, unsigned int *d_rowLength, unsigned int *d_ind, 
-             float *d_DeltaG, float *d_M, float *d_V, float *d_G, float *d_EFiltered, 
+             unsigned int *rowLength, unsigned int *d_rowLength, unsigned int *d_ind,
+             float *d_DeltaG, float *d_M, float *d_V, float *d_G, float *d_EFiltered,
              float beta1, float beta2, float epsilon, unsigned int seed)
-:   m_NumRows(numRows), m_NumCols(numCols), m_MaxRowLength(maxRowLength),
-    m_BitmaskRowWords((m_NumCols  + 31) / 32), m_RowLength(rowLength), md_RowLength(d_rowLength), md_Ind(d_ind),
+    : m_NumRows(numRows), m_NumCols(numCols), m_MaxRowLength(maxRowLength),
+    m_BitmaskRowWords((m_NumCols + 31) / 32), m_RowLength(rowLength), md_RowLength(d_rowLength), md_Ind(d_ind),
     md_DeltaG(d_DeltaG), md_M(d_M), md_V(d_V), md_G(d_G), md_EFiltered(d_EFiltered),
     m_Beta1(beta1), m_Beta2(beta2), m_Epsilon(epsilon), m_HostUpdateTime(0.0)
 {
     // Allocate additional arrays to hold number of activation
     CHECK_CUDA_ERRORS(cudaMalloc(&md_NumActivations, m_NumRows * sizeof(unsigned int)));
     CHECK_CUDA_ERRORS(cudaHostAlloc(&m_NumActivations, m_NumRows * sizeof(unsigned int), cudaHostAllocPortable));
-    
+
     // Allocate dormant connection counter
     CHECK_CUDA_ERRORS(cudaMalloc(&md_NumDormantConnections, sizeof(unsigned int)));
-    
+
     // Allocate RNG state
     CHECK_CUDA_ERRORS(cudaMalloc(&md_RNG, m_NumRows * sizeof(curandState)));
-    
+
     // Allocate bitmask
     CHECK_CUDA_ERRORS(cudaMalloc(&md_Bitmask, m_BitmaskRowWords * m_NumRows * sizeof(uint32_t)));
-    
+
     // Zero bitmask
     CHECK_CUDA_ERRORS(cudaMemset(md_Bitmask, m_BitmaskRowWords * m_NumRows * sizeof(uint32_t), 0));
-    
+
     // If no seed is passed 
     unsigned long long deviceSeed;
     if(seed == 0) {
         std::random_device seedSource;
-        
+
         // Initialize device seed using seed source
-        uint32_t *deviceSeedWord = reinterpret_cast<uint32_t*>(&deviceSeed);
+        uint32_t *deviceSeedWord = reinterpret_cast<uint32_t *>(&deviceSeed);
         for(int i = 0; i < (sizeof(unsigned long long) / sizeof(uint32_t)); i++) {
             deviceSeedWord[i] = seedSource();
         }
-        
+
         // Generate random state for host RNG from seed source
         uint32_t seedData[std::mt19937::state_size];
         for(int i = 0; i < std::mt19937::state_size; i++) {
             seedData[i] = seedSource();
         }
-        
+
         // Convert into seed sequence
         std::seed_seq seeds(std::begin(seedData), std::end(seedData));
         m_RNG.seed(seeds);
@@ -239,19 +241,19 @@ DeepR::DeepR(unsigned int numRows, unsigned int numCols, unsigned int maxRowLeng
         // **NOTE** this is a terrible idea see http://www.pcg-random.org/posts/cpp-seeding-surprises.html
         std::seed_seq seeds{seed};
         m_RNG.seed(seeds);
-        
+
         // Use seed directly for device RNG
         deviceSeed = seed;
     }
 
     // Calculate number of blocks required to process matrix
     const unsigned int numBlocks = (numRows + 31) / 32;
-    
+
     // Launch kernel to initialize Deep-R structures
     const dim3 threads(32, 1);
     const dim3 grid(numBlocks, 1);
-    initDeepRKernel<<<grid, threads>>>(md_Bitmask, md_RowLength, md_Ind, md_RNG,
-                                       m_NumRows, m_MaxRowLength, m_BitmaskRowWords, deviceSeed);
+    initDeepRKernel << <grid, threads >> > (md_Bitmask, md_RowLength, md_Ind, md_RNG,
+                                            m_NumRows, m_MaxRowLength, m_BitmaskRowWords, deviceSeed);
     CHECK_CUDA_ERRORS(cudaPeekAtLastError());
 }
 //----------------------------------------------------------------------------
@@ -283,20 +285,20 @@ void DeepR::update(unsigned int t, float alpha)
     const dim3 threads(32, 1);
     const dim3 grid(numBlocks, 1);
     m_FirstPassKernelTimer.start();
-    deepRFirstPassKernel<<<grid, threads>>>(md_G, md_EFiltered, md_NumDormantConnections, 
-                                            md_RowLength, md_Ind, md_Bitmask,
-                                            m_NumRows, m_MaxRowLength, m_BitmaskRowWords, adam);
+    deepRFirstPassKernel << <grid, threads >> > (md_G, md_EFiltered, md_NumDormantConnections,
+                                                 md_RowLength, md_Ind, md_Bitmask,
+                                                 m_NumRows, m_MaxRowLength, m_BitmaskRowWords, adam);
     m_FirstPassKernelTimer.stop();
-    
+
     // Copy device dormant count back to host
     CHECK_CUDA_ERRORS(cudaMemcpy(&numDormant, md_NumDormantConnections, sizeof(unsigned int), cudaMemcpyDeviceToHost));
 
     // Copy row lengths back to host
     CHECK_CUDA_ERRORS(cudaMemcpy(m_RowLength, md_RowLength, m_NumRows * sizeof(unsigned int), cudaMemcpyDeviceToHost));
-    
+
     // Count number of synapses
     const size_t numSynapses = std::accumulate(&m_RowLength[0], &m_RowLength[m_NumRows], 0u);
-    
+
     // From this, calculate how many padding synapses there are in data structure
     size_t numTotalPaddingSynapses = (m_MaxRowLength * m_NumRows) - numSynapses;
 
@@ -326,9 +328,10 @@ void DeepR::update(unsigned int t, float alpha)
 
     // Launch kernel to perform second Deep-R pass
     m_SecondPassKernelTimer.start();
-    deepRSecondPassKernel<<<grid, threads>>>(md_G, md_EFiltered, md_RowLength, md_Ind, 
-                                             m_NumRows, m_NumCols, m_MaxRowLength, m_BitmaskRowWords,
-                                             md_Bitmask, md_NumActivations, md_RNG, adam);
+    deepRSecondPassKernel << <grid, threads >> > (md_G, md_EFiltered, md_RowLength, md_Ind,
+                                                  m_NumRows, m_NumCols, m_MaxRowLength, m_BitmaskRowWords,
+                                                  md_Bitmask, md_NumActivations, md_RNG, adam);
     m_SecondPassKernelTimer.stop();
     CHECK_CUDA_ERRORS(cudaPeekAtLastError());
 }
+}   // namespace BatchLearning
