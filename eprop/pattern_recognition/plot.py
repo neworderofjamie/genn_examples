@@ -2,10 +2,25 @@ import csv
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_timeslice(input_spikes, recurrent_spikes, output_data, trial, axes):
+spike_dtype = {"names": ("time", "neuron_id"), "formats": (np.float, np.int)}
+
+def plot_timeslice(subset_recurrent_neuron_ids, output_data, trial, axes):
     start_time = trial * 1000.0
     end_time = start_time + 1000.0
     
+    # Load trial spikes
+    input_spikes = np.loadtxt("input_spikes_%u.csv" % trial, 
+                              delimiter=",", skiprows=1, dtype=spike_dtype)
+    recurrent_spikes = np.loadtxt("recurrent_spikes_%u.csv" % trial, 
+                                  delimiter=",", skiprows=1, dtype=spike_dtype)
+    
+    subset_recurrent_spikes = np.isin(recurrent_spikes["neuron_id"], 
+                                      subset_recurrent_neuron_ids)
+
+
+    recurrent_spikes = recurrent_spikes[:][subset_recurrent_spikes]
+    recurrent_spikes["neuron_id"] = np.digitize(recurrent_spikes["neuron_id"], subset_recurrent_neuron_ids, right=True)
+
     output_data_mask = (output_data["time"] >= start_time) & (output_data["time"] < end_time)
     output_data = output_data[output_data_mask]
    
@@ -31,42 +46,29 @@ def plot_timeslice(input_spikes, recurrent_spikes, output_data, trial, axes):
     axes[2].set_ylim((-3.0, 3.0))
 
     axes[3].set_title("X")
-    axes[3].scatter(input_spikes["time"], input_spikes["neuron_id"], s=2, edgecolors="none")
+    axes[3].scatter(input_spikes["time"] + start_time, input_spikes["neuron_id"], s=2, edgecolors="none")
 
     axes[4].set_title("Recurrent")
-    axes[4].scatter(recurrent_spikes["time"], recurrent_spikes["neuron_id"], s=2, edgecolors="none")
+    axes[4].scatter(recurrent_spikes["time"] + start_time, recurrent_spikes["neuron_id"], s=2, edgecolors="none")
     plt.setp(axes[4].xaxis.get_majorticklabels(), rotation="vertical")
 
-# Read data
-input_spikes = np.loadtxt("input_spikes.csv", delimiter=",", skiprows=1,
-                          dtype={"names": ("time", "neuron_id"),
-                                 "formats": (np.float, np.int)})
-recurrent_spikes = np.loadtxt("recurrent_spikes.csv", delimiter=",", skiprows=1,
-                              dtype={"names": ("time", "neuron_id"),
-                                     "formats": (np.float, np.int)})
+# Read output data
 output_data = np.loadtxt("output.csv", delimiter=",",
                          dtype={"names": ("time", "y1", "y2", "y3", "y_star1", "y_star2", "y_star3"),
                                 "formats": (np.float, np.float, np.float, np.float, np.float, np.float, np.float)})
 
 # Create mask to select the recurrent spikes from 20 random neurons
 subset_recurrent_neuron_ids = np.sort(np.random.choice(600, 20, replace=False))
-subset_recurrent_spikes = np.isin(recurrent_spikes["neuron_id"], 
-                                  subset_recurrent_neuron_ids)
-
-
-recurrent_spikes = recurrent_spikes[:][subset_recurrent_spikes]
-recurrent_spikes["neuron_id"] = np.digitize(recurrent_spikes["neuron_id"], subset_recurrent_neuron_ids, right=True)
 
 # Create plot
 figure, axes = plt.subplots(5, 6, sharex="col")
 
-plot_timeslice(input_spikes, recurrent_spikes, output_data, 0, axes[:,0])
-plot_timeslice(input_spikes, recurrent_spikes, output_data, 200, axes[:,1])
-plot_timeslice(input_spikes, recurrent_spikes, output_data, 400, axes[:,2])
-plot_timeslice(input_spikes, recurrent_spikes, output_data, 600, axes[:,3])
-plot_timeslice(input_spikes, recurrent_spikes, output_data, 800, axes[:,4])
-plot_timeslice(input_spikes, recurrent_spikes, output_data, 1000, axes[:,5])
+plot_timeslice(subset_recurrent_neuron_ids, output_data, 0, axes[:,0])
+plot_timeslice(subset_recurrent_neuron_ids, output_data, 200, axes[:,1])
+plot_timeslice(subset_recurrent_neuron_ids, output_data, 400, axes[:,2])
+plot_timeslice(subset_recurrent_neuron_ids, output_data, 600, axes[:,3])
+plot_timeslice(subset_recurrent_neuron_ids, output_data, 800, axes[:,4])
+plot_timeslice(subset_recurrent_neuron_ids, output_data, 1000, axes[:,5])
 
 # Show plot
-#figure.tight_layout(pad=0)
 plt.show()
