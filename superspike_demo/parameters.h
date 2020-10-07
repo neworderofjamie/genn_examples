@@ -13,6 +13,7 @@ namespace Parameters
     constexpr double tauRise = 5.0;
     constexpr double tauDecay = 10.0;
     constexpr double tauRMS = 30000.0;
+    constexpr double tauAvgErr = 10000.0;
     constexpr double r0 = 0.001 * 1000.0;
     constexpr double epsilon = 1E-32;
 

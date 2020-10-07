@@ -106,6 +106,20 @@ void generateFrozenPoissonInput(std::mt19937 &gen)
     std::copy(spikeTimes.cbegin(), spikeTimes.cend(), &spikeTimesInput[0]);
     pushspikeTimesInputToDevice(spikeTimes.size());
 }
+
+float calculateError(unsigned int timestep)
+{
+    constexpr double a = Parameters::tauDecay / 1000.0;
+    constexpr double b = Parameters::tauRise / 1000.0;
+    constexpr double c = Parameters::tauAvgErr / 1000.0;
+    const double scaleTrErrFlt = 1.0 / (std::pow((a*b)/(a-b),2)*(a/2+b/2-2*(a*b)/(a+b))) / c;
+
+    const double timeS = timestep * Parameters::timestepMs / 1000.0;
+
+    // Calculate mean error
+    const float meanError = std::accumulate(&avgSqrErrOutput[0], &avgSqrErrOutput[Parameters::numOutput], 0.0f) / (float)Parameters::numOutput;
+    return scaleTrErrFlt * meanError / (1.0 - std::exp(-timeS / c) + 1.0E-9);
+}
 }   // Anonymous namespace
 
 int main()
@@ -145,7 +159,9 @@ int main()
 
                 // Display trial number peridically
                 if((trial % 10) == 0) {
-                    std::cout << "Trial " << trial << " (r0 = " << r0 << ")" << std::endl;
+                    // Get average square error
+                    pullavgSqrErrOutputFromDevice();
+                    std::cout << "Trial " << trial << " (r0 = " << r0 << ", error = " << calculateError(timestep) << ")" << std::endl;
                 }
 
                 // Reset model timestep

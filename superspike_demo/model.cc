@@ -136,7 +136,7 @@ IMPLEMENT_MODEL(Hidden);
 class Output : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Output, 7, 7);
+    DECLARE_MODEL(Output, 8, 8);
 
     SET_PARAM_NAMES({
         "C",            // 0 - Membrane capacitance
@@ -145,7 +145,8 @@ public:
         "Vthresh",      // 3 - Spiking threshold (mV)
         "tauRefrac",    // 4 - Refractory time constant (ms)
         "tauRise",      // 5 - Rise time constant (ms)
-        "tauDecay"});   // 6 - Decay time constant
+        "tauDecay",     // 6 - Decay time constant (ms)
+        "tauAvgErr"});  // 7 - Average error time constant (ms)
 
     SET_DERIVED_PARAMS({
         {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
@@ -153,9 +154,10 @@ public:
         {"normFactor", [](const std::vector<double> &pars, double){ return 1.0 / (-std::exp(-calcTPeak(pars[5], pars[6]) / pars[5]) + std::exp(-calcTPeak(pars[5], pars[6]) / pars[6])); }},
         {"tRiseMult", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[5]); }},
         {"tDecayMult", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[6]); }},
-        {"tPeak", [](const std::vector<double> &pars, double){ return calcTPeak(pars[5], pars[6]); }}});
+        {"tPeak", [](const std::vector<double> &pars, double){ return calcTPeak(pars[5], pars[6]); }},
+        {"mulAvgErr", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[7]); }}});
 
-    SET_VARS({{"V", "scalar"}, {"refracTime", "scalar"}, {"errRise", "scalar"}, {"errTilda", "scalar"},
+    SET_VARS({{"V", "scalar"}, {"refracTime", "scalar"}, {"errRise", "scalar"}, {"errTilda", "scalar"}, {"avgSqrErr", "scalar"},
               {"errDecay", "scalar"}, {"startSpike", "unsigned int"}, {"endSpike", "unsigned int"}});
     SET_EXTRA_GLOBAL_PARAMS({{"spikeTimes", "scalar*"}});
 
@@ -181,7 +183,11 @@ public:
         "const scalar mismatch = sPred - sReal;\n"
         "$(errRise) = ($(errRise) * $(tRiseMult)) + mismatch;\n"
         "$(errDecay) = ($(errDecay) * $(tDecayMult)) + mismatch;\n"
-        "$(errTilda) = ($(errDecay) - $(errRise)) * $(normFactor);\n");
+        "$(errTilda) = ($(errDecay) - $(errRise)) * $(normFactor);\n"
+        "// calculate average error trace\n"
+        "const scalar temp = $(errTilda) * $(errTilda) * DT * 0.001;\n"
+        "$(avgSqrErr) *= $(mulAvgErr);\n"
+        "$(avgSqrErr) += temp;\n");
 
     SET_RESET_CODE("$(refracTime) = $(tauRefrac);\n");
 
@@ -235,13 +241,15 @@ void modelDefinition(NNmodel &model)
         -50.0,                  // 3 - Spiking threshold (mV)
         5.0,                    // 4 - Refractory time constant (ms)
         Parameters::tauRise,    // 5 - Rise time constant (ms)
-        Parameters::tauDecay);  // 6 - Decay time constant
+        Parameters::tauDecay,   // 6 - Decay time constant (ms)
+        Parameters::tauAvgErr); // 7 - Average error time constant (ms)
     Output::VarValues outputVars(
         -60.0,                  // V
         0.0,                    // refracTime
         0.0,                    // errRise
         0.0,                    // errTilda
         0.0,                    // errDecay
+        0.0,                    // avgSqrErr
         uninitialisedVar(),     // startSpike
         uninitialisedVar());    // endSpike
 
