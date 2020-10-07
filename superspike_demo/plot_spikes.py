@@ -26,11 +26,12 @@ for i, s in enumerate(input_spikes):
                                dtype=spike_dtype)
 
     # Plot spikes
-    axes[0, i].scatter(input_spikes["time"], input_spikes["neuron_id"], s=2, edgecolors="none")
-    axes[1, i].scatter(hidden_spikes["time"], hidden_spikes["neuron_id"], s=2, edgecolors="none")
-    axes[2, i].scatter(output_spikes["time"], output_spikes["neuron_id"], s=2, edgecolors="none")
+    start_time_s = float(index) * 1.890
+    axes[0, i].scatter(start_time_s + (input_spikes["time"] / 1000.0), input_spikes["neuron_id"], s=2, edgecolors="none")
+    axes[1, i].scatter(start_time_s + (hidden_spikes["time"] / 1000.0), hidden_spikes["neuron_id"], s=2, edgecolors="none")
+    axes[2, i].scatter(start_time_s + (output_spikes["time"] / 1000.0), output_spikes["neuron_id"], s=2, edgecolors="none")
 
-    axes[2, i].set_xlabel("Time [ms]")
+    axes[2, i].set_xlabel("Time [s]")
 
 axes[0, 0].set_ylabel("Neuron number")
 axes[1, 0].set_ylabel("Neuron number")

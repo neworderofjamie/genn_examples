@@ -57,6 +57,7 @@
       <AdditionalDependencies Condition="'$(Configuration)'=='Release'">cudart_static.lib;runner_Release.lib;batch_learning_Release.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalDependencies Condition="'$(Configuration)'=='Debug'">cudart_static.lib;runner_Debug.libbatch_learning_Debug.lib;;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\batch_learning;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
