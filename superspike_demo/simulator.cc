@@ -1,6 +1,7 @@
 // Standard C++ includes
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <random>
 #include <string>
 #include <sstream>
