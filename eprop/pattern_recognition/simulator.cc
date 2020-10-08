@@ -8,10 +8,12 @@
 #include "spikeRecorder.h"
 #include "timer.h"
 
-// EProp includes
+// Batch-learning includes
 #include "batch_learning.h"
-#include "cuda_timer.h"
 #include "deep_r.h"
+
+// EProp includes
+#include "cuda_timer.h"
 #include "parameters.h"
 
 int main()
