@@ -8,14 +8,14 @@ namespace Parameters
     constexpr unsigned int numInputPopulations = 4;
     constexpr unsigned int numInputPopulationNeurons = 10;
     constexpr unsigned int numInputNeurons = numInputPopulations * numInputPopulationNeurons;
-    constexpr unsigned int numRecurrentNeurons = 600;
-    constexpr unsigned int numOutputNeurons = 3;
+    constexpr unsigned int numRecurrentNeurons = 50;
+    constexpr unsigned int numOutputNeurons = 2;
 
     
     // Learning procedure parameters
-    constexpr double activeRateHz = 40.0;
-    constexpr double inactiveRateHz = 0.00000001;
-    constexpr double backgroundRateHz = 10.0;
+    constexpr float activeRateHz = 40.0;
+    constexpr float inactiveRateHz = 0.00000001;
+    constexpr float backgroundRateHz = 10.0;
 
     constexpr double cuePresentMs = 100.0;
     constexpr double cueDelayMs = 50.0;
