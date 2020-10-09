@@ -93,7 +93,7 @@ void modelDefinition(ModelSpec &model)
     const double weight0 = 1.0;
 
     model.setDT(1.0);
-    model.setName("pattern_recognition_1_1");
+    model.setName("pattern_recognition");
     model.setMergePostsynapticModels(true);
     model.setTiming(Parameters::timingEnabled);
 

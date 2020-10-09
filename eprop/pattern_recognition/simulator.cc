@@ -1,4 +1,4 @@
-#include "pattern_recognition_1_1_CODE/definitions.h"
+#include "pattern_recognition_CODE/definitions.h"
 
 #include <iostream>
 #include <random>
