@@ -42,7 +42,7 @@ int main()
         SpikeRecorder<SpikeWriterTextCached> inputSpikeRecorder(&getInputCurrentSpikes, &getInputCurrentSpikeCount, "input_spikes.csv", ",", true);
         SpikeRecorder<SpikeWriterTextCached> recurrentLIFSpikeRecorder(&getRecurrentLIFCurrentSpikes, &getRecurrentLIFCurrentSpikeCount, "recurrent_lif_spikes.csv", ",", true);
         SpikeRecorder<SpikeWriterTextCached> recurrentALIFSpikeRecorder(&getRecurrentALIFCurrentSpikes, &getRecurrentALIFCurrentSpikeCount, "recurrent_alif_spikes.csv", ",", true);
-        AnalogueRecorder<float> outputRecorder("output.csv", {YOutput, YStarOutput}, Parameters::numOutputNeurons, ",");
+        AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, PiStarOutput}, Parameters::numOutputNeurons, ",");
 
         std::mt19937 rng;
         std::uniform_int_distribution<unsigned int> delayTimestepsDistribution(Parameters::minDelayTimesteps, Parameters::maxDelayTimesteps);
@@ -53,12 +53,12 @@ int main()
 
         // Start with a single cue
         unsigned int numCues = 1;
-        for(unsigned int epoch = 0;; epoch++) {
+        for(unsigned int epoch = 0; epoch < 50; epoch++) {
             std::cout << "Epoch " << epoch << std::endl;
 
             // Loop through trials
             for(unsigned int trial = 0; trial < 64; trial++) {
-                std::cout << "Trial " << trial << std::endl;
+                std::cout << "\tTrial " << trial << std::endl;
                 // Calculate number of timesteps per cue in this trial
                 const unsigned int cueTimesteps = (Parameters::cuePresentTimesteps + Parameters::cueDelayTimesteps) * numCues;
 
@@ -100,12 +100,12 @@ int main()
                     else if(timestep == (cueTimesteps + delayTimesteps)){
                         // Activate correct output neuron depending on which cue was presented more often
                         if(numLeftCues > numRightCues) {
-                            YStarOutput[0] = 1.0f;  YStarOutput[1] = 0.0f;
+                            PiStarOutput[0] = 1.0f;  PiStarOutput[1] = 0.0f;
                         }
                         else {
-                            YStarOutput[0] = 0.0f;  YStarOutput[1] = 1.0f;
+                            PiStarOutput[0] = 0.0f;  PiStarOutput[1] = 1.0f;
                         }
-                        pushYStarOutputToDevice();
+                        pushPiStarOutputToDevice();
                         setInputRates(Parameters::inactiveRateHz, Parameters::inactiveRateHz, Parameters::activeRateHz);
                     }
                     stepTime();
@@ -115,18 +115,18 @@ int main()
                     pullInputCurrentSpikesFromDevice();
                     pullRecurrentLIFCurrentSpikesFromDevice();
                     pullRecurrentALIFCurrentSpikesFromDevice();
-                    pullYStarOutputFromDevice();
-                    pullYOutputFromDevice();
+                    pullPiStarOutputFromDevice();
+                    pullPiOutputFromDevice();
                     inputSpikeRecorder.record(t);
                     recurrentLIFSpikeRecorder.record(t);
                     recurrentALIFSpikeRecorder.record(t);
                     outputRecorder.record(t);
                 }
-            }
 
-            // Turn off both outputs
-            YStarOutput[0] = 0.0f;  YStarOutput[1] = 0.0f;
-            pushYStarOutputToDevice();
+                // Turn off both outputs
+                PiStarOutput[0] = 0.0f;  PiStarOutput[1] = 0.0f;
+                pushPiStarOutputToDevice();
+            }
 
             // Apply learning
             BatchLearning::adamOptimizerCUDA(d_DeltaGInputRecurrentLIF, d_MInputRecurrentLIF, d_VInputRecurrentLIF, d_gInputRecurrentLIF,

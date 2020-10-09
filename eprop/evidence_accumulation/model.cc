@@ -25,20 +25,24 @@ IMPLEMENT_MODEL(Input);
 class OutputClassification : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(OutputClassification, 2, 3);
+    DECLARE_MODEL(OutputClassification, 2, 4);
 
     SET_PARAM_NAMES({
         "TauOut",           // Membrane time constant [ms]
         "Bias"});           // Pattern length [ms]
 
-    SET_VARS({{"Y", "scalar"}, {"YStar", "scalar", VarAccess::READ_ONLY}, {"E", "scalar"}});
+    SET_VARS({{"Y", "scalar"}, {"PiStar", "scalar", VarAccess::READ_ONLY}, {"Pi", "scalar"}, {"E", "scalar"}});
 
     SET_DERIVED_PARAMS({
         {"Kappa", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }}});
 
     SET_SIM_CODE(
         "$(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(Bias);\n"
-        "$(E) = $(Y) - $(YStar);\n");
+        "const scalar expPi = exp($(Y));\n"
+        "scalar sumExpPi = expPi;\n"
+        "sumExpPi +=  __shfl_xor_sync(0x3, sumExpPi, 0x1);\n"
+        "$(Pi) = expPi / sumExpPi;\n"
+        "$(E) = $(Pi) - $(PiStar);\n");
 
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
@@ -99,7 +103,8 @@ void modelDefinition(ModelSpec &model)
 
     OutputClassification::VarValues outputInitVals(
         0.0,                                                // Y
-        0.0,                                                // Y*
+        0.0,                                                // Pi*
+        0.0,                                                // Pi
         0.0);                                               // E
     
     EProp::ParamValues epropLIFParamVals(
