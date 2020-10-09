@@ -1,6 +1,6 @@
 CUDA_ARCH			?=sm_75
 CUDA_PATH			?=/usr/local/cuda
-OBJECTS 			:=batch_learning.o
+OBJECTS 			:=batch_learning.o deep_r.o
 
 DEPS				:= $(OBJECTS:.o=.d)
 NVCC				:= $(CUDA_PATH)/bin/nvcc
