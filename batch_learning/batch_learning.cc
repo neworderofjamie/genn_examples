@@ -29,7 +29,7 @@ public:
     {
         return false;
     }
-    
+
     __forceinline__ __device__ void moveParams(unsigned int, unsigned int)
     {
     }
@@ -48,7 +48,7 @@ __global__ void transposeKernel(float *d_in, float *d_out,
         // Calculate coordinate of thread in input matrix
         const unsigned int x = (blockIdx.x * TILE_DIM) + threadIdx.x;
         const unsigned int y = (blockIdx.y * TILE_DIM) + threadIdx.y;
-        
+
         // If thread isn't off the 'right' edge of the input matrix
         if(x < numInCols) {
             // Loop through input rows 
@@ -58,26 +58,26 @@ __global__ void transposeKernel(float *d_in, float *d_out,
                     // Read forward weight from global memory
                     const unsigned int idxIn = ((y + j) * numInCols) + x;
                     float gIn = d_in[idxIn];
-                    
+
                     // Update parameter - if it's changed update global memory
                     if(operation.updateParameter(gIn, idxIn)) {
                         d_in[idxIn] = gIn;
                     }
-                    
+
                     // Write forward weight to share memory
                     shTile[threadIdx.y + j][threadIdx.x] = gIn;
                 }
             }
         }
     }
-    
+
     __syncthreads();
 
     {
         // Calculate (transposed) coordinate of thread in output matrix
         const unsigned int x = (blockIdx.y * TILE_DIM) + threadIdx.x;
         const unsigned int y = (blockIdx.x * TILE_DIM) + threadIdx.y;
-        
+
         // If thread isn't off the 'right' edge of the output matrix
         if(x < numInRows) {
             // Loop through output rows
@@ -92,11 +92,11 @@ __global__ void transposeKernel(float *d_in, float *d_out,
 }
 
 template<typename Operation>
-__global__ void updateKernel(float *d_G, unsigned int numSynapses, Operation operation)
+__global__ void updateKernel(float *d_G, unsigned int size, Operation operation)
 {
     const unsigned int idx = (blockIdx.x * 32) + threadIdx.x;
 
-    if(idx < numSynapses) {
+    if(idx < size) {
         // Update parameter - if it's changed update global memory
         float gIn = d_G[idx];
         if(operation.updateParameter(gIn, idx)) {
@@ -116,7 +116,7 @@ void transposeCUDA(float *d_in, float *d_out, unsigned int numInRows, unsigned i
     // Calculate number of blocks required to process matrix
     const unsigned int numBlockX = (numInCols + TILE_DIM - 1) / TILE_DIM;
     const unsigned int numBlockY = (numInRows + TILE_DIM - 1) / TILE_DIM;
-    
+
     NOP nop;
     const dim3 threads(32, BLOCK_HEIGHT);
     const dim3 grid(numBlockX, numBlockY);
@@ -128,9 +128,9 @@ void fixedRateLearningCUDA(float *d_DeltaG, float *d_G, unsigned int numRows, un
 {
     const unsigned int numSynapses = numRows * numCols;
     const unsigned int numBlocks = (numSynapses + 31) / 32;
-    
+
     FixedLearningRate fixedLearningRate(d_DeltaG, learningRate);
-    
+
     const dim3 threads(32, 1);
     const dim3 grid(numBlocks, 1);
     updateKernel<<<grid, threads>>>(d_G, numSynapses, fixedLearningRate);
@@ -142,9 +142,9 @@ void fixedRateLearningTransposeCUDA(float *d_DeltaGIn, float *d_GIn, float *d_GO
     // Calculate number of blocks required to process matrix
     const unsigned int numBlockX = (numInCols + TILE_DIM - 1) / TILE_DIM;
     const unsigned int numBlockY = (numInRows + TILE_DIM - 1) / TILE_DIM;
-    
+
     FixedLearningRate fixedLearningRate(d_DeltaGIn, learningRate);
-    
+
     const dim3 threads(32, BLOCK_HEIGHT);
     const dim3 grid(numBlockX, numBlockY);
     transposeKernel<<<grid, threads>>>(d_GIn, d_GOut, numInRows, numInCols, fixedLearningRate);
@@ -174,9 +174,9 @@ void adamOptimizerTransposeCUDA(float *d_DeltaGIn, float *d_MIn, float *d_VIn, f
     // Calculate number of blocks required to process matrix
     const unsigned int numBlockX = (numInCols + TILE_DIM - 1) / TILE_DIM;
     const unsigned int numBlockY = (numInRows + TILE_DIM - 1) / TILE_DIM;
-    
+
     AdamOptimizer adam(d_DeltaGIn, d_MIn, d_VIn, t, alpha, beta1, beta2, epsilon);
-    
+
     const dim3 threads(32, BLOCK_HEIGHT);
     const dim3 grid(numBlockX, numBlockY);
     transposeKernel<<<grid, threads>>>(d_GIn, d_GOut, numInRows, numInCols, adam);

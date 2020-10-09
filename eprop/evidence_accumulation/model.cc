@@ -25,24 +25,24 @@ IMPLEMENT_MODEL(Input);
 class OutputClassification : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(OutputClassification, 2, 4);
+    DECLARE_MODEL(OutputClassification, 1, 8);
 
-    SET_PARAM_NAMES({
-        "TauOut",           // Membrane time constant [ms]
-        "Bias"});           // Pattern length [ms]
+    SET_PARAM_NAMES({"TauOut"});    // Membrane time constant [ms]
 
-    SET_VARS({{"Y", "scalar"}, {"PiStar", "scalar", VarAccess::READ_ONLY}, {"Pi", "scalar"}, {"E", "scalar"}});
+    SET_VARS({{"Y", "scalar"}, {"PiStar", "scalar", VarAccess::READ_ONLY}, {"Pi", "scalar"}, {"E", "scalar"},
+              {"B", "scalar"}, {"DeltaB", "scalar"}, {"M", "scalar", VarAccess::READ_ONLY}, {"V", "scalar", VarAccess::READ_ONLY}});
 
     SET_DERIVED_PARAMS({
         {"Kappa", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }}});
 
     SET_SIM_CODE(
-        "$(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(Bias);\n"
+        "$(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);\n"
         "const scalar expPi = exp($(Y));\n"
         "scalar sumExpPi = expPi;\n"
         "sumExpPi +=  __shfl_xor_sync(0x3, sumExpPi, 0x1);\n"
         "$(Pi) = expPi / sumExpPi;\n"
-        "$(E) = $(Pi) - $(PiStar);\n");
+        "$(E) = $(Pi) - $(PiStar);\n"
+        "$(DeltaB) += $(E);\n");
 
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
@@ -95,24 +95,26 @@ void modelDefinition(ModelSpec &model)
         0.0,    // A
         0.0,    // RefracTime
         0.0);   // E
-    
+
     // Output population
-    OutputClassification::ParamValues outputParamVals(
-        20.0,       // Membrane time constant [ms]
-        0.0);       // Bias [mV]
+    OutputClassification::ParamValues outputParamVals(20.0);    // Membrane time constant [ms]
 
     OutputClassification::VarValues outputInitVals(
         0.0,                                                // Y
         0.0,                                                // Pi*
         0.0,                                                // Pi
-        0.0);                                               // E
-    
+        0.0,                                                // E
+        0.0,                                                // B
+        0.0,                                                // DeltaB
+        0.0,                                                // M
+        0.0);                                               // V
+
     EProp::ParamValues epropLIFParamVals(
         20.0,       // Eligibility trace time constant [ms]
         1.0,        // Regularizer strength
         10.0,       // Target spike rate [Hz]
         500.0);     // Firing rate averaging time constant [ms]
-    
+
     EPropALIF::ParamValues epropALIFParamVals(
         20.0,       // Eligibility trace time constant [ms]
         2000.0,     // Neuron adaption time constant [ms]
@@ -120,7 +122,7 @@ void modelDefinition(ModelSpec &model)
         10.0,       // Target spike rate [Hz]
         500.0,      // Firing rate averaging time constant [ms]
         0.0174);    // Scale of neuron adaption [mV]
-    
+
     EProp::PreVarValues epropPreInitVals(
         0.0);   // ZFilter
 
@@ -145,7 +147,7 @@ void modelDefinition(ModelSpec &model)
         0.0,                                                                // DeltaG
         0.0,                                                                // M
         0.0);                                                               // V
-    
+
      // Recurrent connections
     InitVarSnippet::Normal::ParamValues recurrentRecurrentALIFWeightDist(0.0, weight0 / sqrt(Parameters::numRecurrentNeurons * 2));
     EPropALIF::VarValues recurrentRecurrentALIFInitVals(
@@ -155,7 +157,7 @@ void modelDefinition(ModelSpec &model)
         0.0,                                                                // DeltaG
         0.0,                                                                // M
         0.0);                                                               // V
-        
+
     // Feedforward recurrent->output connections
     OutputLearning::ParamValues recurrentOutputParamVals(
         20.0);   // Eligibility trace time constant [ms]
@@ -169,23 +171,23 @@ void modelDefinition(ModelSpec &model)
         0.0,                                                        // DeltaG
         0.0,                                                        // M
         0.0);                                                       // V
-    
+
     // Feedback connections
     InitVarSnippet::Normal::ParamValues outputRecurrentWeightDist(0.0, 1.0);
     Continuous::VarValues outputRecurrentInitVals(initVar<InitVarSnippet::Normal>(outputRecurrentWeightDist));  // g
-    
+
     //---------------------------------------------------------------------------
     // Neuron populations
     //---------------------------------------------------------------------------
     model.addNeuronPopulation<Input>("Input", Parameters::numInputNeurons,
                                      {}, inputInitVals);
-                                     
+
     model.addNeuronPopulation<Recurrent>("RecurrentLIF", Parameters::numRecurrentNeurons,
                                          recurrentParamVals, recurrentInitVals);
-                                         
+
     model.addNeuronPopulation<RecurrentALIF>("RecurrentALIF", Parameters::numRecurrentNeurons,
                                              recurrentALIFParamVals, recurrentALIFInitVals);
-    
+
     model.addNeuronPopulation<OutputClassification>("Output", Parameters::numOutputNeurons,
                                                     outputParamVals, outputInitVals);
 
@@ -198,13 +200,13 @@ void modelDefinition(ModelSpec &model)
         "Input", "RecurrentLIF",
         epropLIFParamVals, inputRecurrentInitVals, epropPreInitVals, epropPostInitVals,
         {}, {});
-    
+
     model.addSynapsePopulation<EProp, PostsynapticModels::DeltaCurr>(
         "InputRecurrentALIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "RecurrentALIF",
         epropLIFParamVals, inputRecurrentInitVals, epropPreInitVals, epropPostInitVals,
         {}, {});
-        
+
     // Recurrent->recurrent connections
     model.addSynapsePopulation<EProp, PostsynapticModels::DeltaCurr>(
         "LIFLIFRecurrent", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
@@ -226,7 +228,7 @@ void modelDefinition(ModelSpec &model)
         "RecurrentALIF", "RecurrentALIF",
         epropALIFParamVals, recurrentRecurrentALIFInitVals, epropPreInitVals, epropPostInitVals,
         {}, {});
-        
+
     // Random feedback connections
     model.addSynapsePopulation<Continuous, Feedback>(
         "OutputRecurrentLIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
@@ -239,14 +241,14 @@ void modelDefinition(ModelSpec &model)
         "Output", "RecurrentALIF",
         {}, outputRecurrentInitVals,
         {}, {});
-    
+
     // Recurrent->output connections
     model.addSynapsePopulation<OutputLearning, PostsynapticModels::DeltaCurr>(
         "RecurrentLIFOutput", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "RecurrentLIF", "Output",
         recurrentOutputParamVals, recurrentOutputInitVals, recurrentOutputPreInitVals, {},
         {}, {});
-    
+
     model.addSynapsePopulation<OutputLearning, PostsynapticModels::DeltaCurr>(
         "RecurrentALIFOutput", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "RecurrentALIF", "Output",

@@ -46,14 +46,14 @@ int main()
 
         std::mt19937 rng;
         std::uniform_int_distribution<unsigned int> delayTimestepsDistribution(Parameters::minDelayTimesteps, Parameters::maxDelayTimesteps);
-    
+
         const std::mt19937::result_type midRNG = std::mt19937::min() + ((std::mt19937::max() - std::mt19937::min()) / 2);
 
         float learningRate = 0.005f;
 
         // Start with a single cue
         unsigned int numCues = 1;
-        for(unsigned int epoch = 0; epoch < 50; epoch++) {
+        for(unsigned int epoch = 0; epoch < 20; epoch++) {
             std::cout << "Epoch " << epoch << std::endl;
 
             // Loop through trials
@@ -74,7 +74,7 @@ int main()
                     if(timestep < cueTimesteps) {
                         // Figure out what timestep within the cue we're in
                         const unsigned int cueTimestep = timestep % (Parameters::cuePresentTimesteps + Parameters::cueDelayTimesteps);
-                    
+
                         // If this is the first timestep of the cue
                         if(cueTimestep == 0) {
                             // Activate either left or right neuron
@@ -128,7 +128,7 @@ int main()
                 pushPiStarOutputToDevice();
             }
 
-            // Apply learning
+            // Update weights
             BatchLearning::adamOptimizerCUDA(d_DeltaGInputRecurrentLIF, d_MInputRecurrentLIF, d_VInputRecurrentLIF, d_gInputRecurrentLIF,
                                              Parameters::numInputNeurons, Parameters::numRecurrentNeurons,
                                              epoch, learningRate);
@@ -152,6 +152,11 @@ int main()
                                              epoch, learningRate);
             BatchLearning::adamOptimizerCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput,
                                              Parameters::numRecurrentNeurons, Parameters::numOutputNeurons,
+                                             epoch, learningRate);
+
+            // Update biases
+            BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
+                                             Parameters::numOutputNeuronsm 1,
                                              epoch, learningRate);
         }
     }
