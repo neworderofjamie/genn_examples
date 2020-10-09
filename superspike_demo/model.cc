@@ -3,13 +3,10 @@
 #include "parameters.h"
 
 //----------------------------------------------------------------------------
-// SuperSpike
+// SuperSpikeBase
 //----------------------------------------------------------------------------
-class SuperSpike : public WeightUpdateModels::Base
+class SuperSpikeBase : public WeightUpdateModels::Base
 {
-public:
-    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpike, 3, 5, 2, 1);
-
     SET_PARAM_NAMES({
         "tauRise",      // 0 - Rise time constant (ms)
         "tauDecay",     // 1 - Decay time constant (ms)
@@ -22,22 +19,11 @@ public:
 
     SET_SIM_CODE("$(addToInSyn, $(w));\n");
 
-    SET_SYNAPSE_DYNAMICS_CODE(
-        "// Filtered eligibility trace\n"
-        "$(e) += ($(zTilda) * $(sigmaPrime) - $(e) / $(tauRise))*DT;\n"
-        "$(lambda) += ((-$(lambda) + $(e)) / $(tauDecay)) * DT;\n"
-        "// Get error from neuron model and compute full \n"
-        "// expression under integral and calculate m\n"
-        "$(m) += $(lambda) * $(errTilda_post);\n");
-
     SET_PRE_SPIKE_CODE("$(z) += 1.0;\n");
     SET_PRE_DYNAMICS_CODE(
         "// filtered presynaptic trace\n"
         "$(z) += (-$(z) / $(tauRise)) * DT;\n"
-        "$(zTilda) += ((-$(zTilda) + $(z)) / $(tauDecay)) * DT;\n"
-        "if ($(zTilda) < 0.0000001) {\n"
-        "    $(zTilda) = 0.0;\n"
-        "}\n");
+        "$(zTilda) += ((-$(zTilda) + $(z)) / $(tauDecay)) * DT;\n");
 
     SET_POST_DYNAMICS_CODE(
         "// filtered partial derivative\n"
@@ -50,7 +36,45 @@ public:
         "}\n");
 
 };
+
+//----------------------------------------------------------------------------
+// SuperSpike
+//----------------------------------------------------------------------------
+class SuperSpike : public SuperSpikeBase
+{
+public:
+    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpike, 3, 5, 2, 1);
+    
+    SET_SYNAPSE_DYNAMICS_CODE(
+        "// Filtered eligibility trace\n"
+        "$(e) += ($(zTilda) * $(sigmaPrime) - $(e) / $(tauRise))*DT;\n"
+        "$(lambda) += ((-$(lambda) + $(e)) / $(tauDecay)) * DT;\n"
+        "// Get error from neuron model and compute full \n"
+        "// expression under integral and calculate m\n"
+        "$(m) += $(lambda) * $(errTilda_post);\n");
+
+};
 IMPLEMENT_MODEL(SuperSpike);
+
+//----------------------------------------------------------------------------
+// SuperSpikeApprox
+//----------------------------------------------------------------------------
+class SuperSpikeApprox : public SuperSpikeBase
+{
+public:
+    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpikeApprox, 3, 5, 2, 1);
+    
+    SET_EVENT_THRESHOLD_CONDITION_CODE("$(zTilda) > 1.0E-4");
+    SET_EVENT_CODE(
+        "// Filtered eligibility trace\n"
+        "$(e) += ($(zTilda) * $(sigmaPrime) - $(e) / $(tauRise))*DT;\n"
+        "$(lambda) += ((-$(lambda) + $(e)) / $(tauDecay)) * DT;\n"
+        "// Get error from neuron model and compute full \n"
+        "// expression under integral and calculate m\n"
+        "$(m) += $(lambda) * $(errTilda_post);\n");
+
+};
+IMPLEMENT_MODEL(SuperSpikeApprox);
 
 //----------------------------------------------------------------------------
 // Feedback
