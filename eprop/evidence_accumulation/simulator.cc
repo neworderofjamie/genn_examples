@@ -156,7 +156,7 @@ int main()
 
             // Update biases
             BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
-                                             Parameters::numOutputNeuronsm 1,
+                                             Parameters::numOutputNeurons, 1,
                                              epoch, learningRate);
         }
     }
