@@ -18,7 +18,7 @@ axes[0].scatter(input_spikes["time"], input_spikes["neuron_id"], s=2, edgecolors
 axes[1].scatter(recurrent_lif_spikes["time"], recurrent_lif_spikes["neuron_id"], s=2, edgecolors="none")
 axes[2].scatter(recurrent_alif_spikes["time"], recurrent_alif_spikes["neuron_id"], s=2, edgecolors="none")
 
-axes[3].plot(output_data["time"], output_data["pi1"] - output_data["pi2"])
+axes[3].plot(output_data["time"], output_data["pi2"])
 axes[3].axhline(0.0, linestyle="--", color="gray")
 
 axes[0].set_title("Input")
