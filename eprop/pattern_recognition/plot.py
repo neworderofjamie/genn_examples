@@ -14,12 +14,12 @@ def plot_timeslice(subset_recurrent_neuron_ids, output_data, trial, axes):
     recurrent_spikes = np.loadtxt("recurrent_spikes_%u.csv" % trial, 
                                   delimiter=",", skiprows=1, dtype=spike_dtype)
     
-    #subset_recurrent_spikes = np.isin(recurrent_spikes["neuron_id"], 
-    #                                  subset_recurrent_neuron_ids)
+    subset_recurrent_spikes = np.isin(recurrent_spikes["neuron_id"], 
+                                      subset_recurrent_neuron_ids)
 
 
-    #recurrent_spikes = recurrent_spikes[:][subset_recurrent_spikes]
-    #recurrent_spikes["neuron_id"] = np.digitize(recurrent_spikes["neuron_id"], subset_recurrent_neuron_ids, right=True)
+    recurrent_spikes = recurrent_spikes[:][subset_recurrent_spikes]
+    recurrent_spikes["neuron_id"] = np.digitize(recurrent_spikes["neuron_id"], subset_recurrent_neuron_ids, right=True)
 
     output_data_mask = (output_data["time"] >= start_time) & (output_data["time"] < end_time)
     output_data = output_data[output_data_mask]
