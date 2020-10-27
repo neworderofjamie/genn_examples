@@ -140,7 +140,7 @@ public:
         "const scalar e = $(ZFilter) * $(Psi);\n"
         "scalar eFiltered = $(eFiltered);\n"
         "eFiltered = (eFiltered * $(Alpha)) + e;\n"
-        "$(DeltaG) += (eFiltered * $(E_post)) - (($(FAvg) - $(FTargetTimestep)) * $(CReg) * e);\n"
+        "$(DeltaG) += (eFiltered * $(E_post)) + (($(FAvg) - $(FTargetTimestep)) * $(CReg) * e);\n"
         "$(eFiltered) = eFiltered;\n");
 
     SET_PRE_SPIKE_CODE("$(ZFilter) += 1.0;\n");
