@@ -13,9 +13,9 @@ namespace Parameters
 
     
     // Learning procedure parameters
-    constexpr float activeRateHz = 40.0;
-    constexpr float inactiveRateHz = 0.00000001;
-    constexpr float backgroundRateHz = 10.0;
+    constexpr float activeRateHz = 40.0f;
+    constexpr float inactiveRateHz = 0.00000001f;
+    constexpr float backgroundRateHz = 10.0f;
 
     constexpr double cuePresentMs = 100.0;
     constexpr double cueDelayMs = 50.0;

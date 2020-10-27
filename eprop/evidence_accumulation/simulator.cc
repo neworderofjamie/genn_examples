@@ -1,4 +1,5 @@
 // Standard C++ includes
+#include <fstream>
 #include <iostream>
 #include <random>
 
@@ -37,6 +38,12 @@ int main()
     {
         allocateMem();
         initialize();
+        
+        // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
+        BatchLearning::transposeCUDA(d_gRecurrentLIFOutput, d_gOutputRecurrentLIF, 
+                                     Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
+        BatchLearning::transposeCUDA(d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
+                                     Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         initializeSparse();
 
         SpikeRecorder<SpikeWriterTextCached> inputSpikeRecorder(&getInputCurrentSpikes, &getInputCurrentSpikeCount, "input_spikes.csv", ",", true);
@@ -44,6 +51,7 @@ int main()
         SpikeRecorder<SpikeWriterTextCached> recurrentALIFSpikeRecorder(&getRecurrentALIFCurrentSpikes, &getRecurrentALIFCurrentSpikeCount, "recurrent_alif_spikes.csv", ",", true);
         AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, PiStarOutput}, Parameters::numOutputNeurons, ",");
 
+        std::ofstream times("times.csv");
         std::mt19937 rng;
         std::uniform_int_distribution<unsigned int> delayTimestepsDistribution(Parameters::minDelayTimesteps, Parameters::maxDelayTimesteps);
 
@@ -53,7 +61,7 @@ int main()
 
         // Start with a single cue
         unsigned int numCues = 1;
-        for(unsigned int epoch = 0; epoch < 20; epoch++) {
+        for(unsigned int epoch = 0; epoch < 200; epoch++) {
             std::cout << "Epoch " << epoch << std::endl;
 
             // Loop through trials
@@ -124,36 +132,31 @@ int main()
                 }
 
                 // Turn off both outputs
-                PiStarOutput[0] = 0.0f;  PiStarOutput[1] = 0.0f;
+                // **HACK** negative value turns off accumulation of gradients other than during decision
+                PiStarOutput[0] = -10.0f;  PiStarOutput[1] = -10.0f;
                 pushPiStarOutputToDevice();
             }
-
+            
+            // Record learning times
+            times << t << std::endl;
+            
             // Update weights
-            BatchLearning::adamOptimizerCUDA(d_DeltaGInputRecurrentLIF, d_MInputRecurrentLIF, d_VInputRecurrentLIF, d_gInputRecurrentLIF,
-                                             Parameters::numInputNeurons, Parameters::numRecurrentNeurons,
-                                             epoch, learningRate);
-            BatchLearning::adamOptimizerCUDA(d_DeltaGInputRecurrentALIF, d_MInputRecurrentALIF, d_VInputRecurrentALIF, d_gInputRecurrentALIF,
-                                             Parameters::numInputNeurons, Parameters::numRecurrentNeurons,
-                                             epoch, learningRate);
-            BatchLearning::adamOptimizerCUDA(d_DeltaGLIFLIFRecurrent, d_MLIFLIFRecurrent, d_VLIFLIFRecurrent, d_gLIFLIFRecurrent,
-                                             Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons,
-                                             epoch, learningRate);
-            BatchLearning::adamOptimizerCUDA(d_DeltaGALIFLIFRecurrent, d_MALIFLIFRecurrent, d_VALIFLIFRecurrent, d_gALIFLIFRecurrent,
-                                             Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons,
-                                             epoch, learningRate);
-            BatchLearning::adamOptimizerCUDA(d_DeltaGLIFALIFRecurrent, d_MLIFALIFRecurrent, d_VLIFALIFRecurrent, d_gLIFALIFRecurrent,
-                                             Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons,
-                                             epoch, learningRate);
-            BatchLearning::adamOptimizerCUDA(d_DeltaGALIFALIFRecurrent, d_MALIFALIFRecurrent, d_VALIFALIFRecurrent, d_gALIFALIFRecurrent,
-                                             Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons,
-                                             epoch, learningRate);
-            BatchLearning::adamOptimizerCUDA(d_DeltaGRecurrentLIFOutput, d_MRecurrentLIFOutput, d_VRecurrentLIFOutput, d_gRecurrentLIFOutput,
-                                             Parameters::numRecurrentNeurons, Parameters::numOutputNeurons,
-                                             epoch, learningRate);
-            BatchLearning::adamOptimizerCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput,
-                                             Parameters::numRecurrentNeurons, Parameters::numOutputNeurons,
-                                             epoch, learningRate);
+            #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
+             
+            ADAM_OPTIMIZER_CUDA(InputRecurrentLIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
+            ADAM_OPTIMIZER_CUDA(InputRecurrentALIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
+            ADAM_OPTIMIZER_CUDA(LIFLIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
+            ADAM_OPTIMIZER_CUDA(ALIFLIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
+            ADAM_OPTIMIZER_CUDA(LIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
+            ADAM_OPTIMIZER_CUDA(ALIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
 
+            BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentLIFOutput, d_MRecurrentLIFOutput, d_VRecurrentLIFOutput, d_gRecurrentLIFOutput, d_gOutputRecurrentLIF, 
+                                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
+                                                      epoch, learningRate);
+            BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
+                                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
+                                                      epoch, learningRate);
+                                                          
             // Update biases
             BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
                                              Parameters::numOutputNeurons, 1,

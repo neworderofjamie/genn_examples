@@ -41,7 +41,12 @@ public:
         "scalar sumExpPi = expPi;\n"
         "sumExpPi +=  __shfl_xor_sync(0x3, sumExpPi, 0x1);\n"
         "$(Pi) = expPi / sumExpPi;\n"
-        "$(E) = $(Pi) - $(PiStar);\n"
+        "if($(PiStar) < 0.0) {\n"
+        "   $(E) = 0.0;\n"
+        "}\n"
+        "else {\n"
+        "   $(E) = $(Pi) - $(PiStar);\n"
+        "}\n"
         "$(DeltaB) += $(E);\n");
 
     SET_NEEDS_AUTO_REFRACTORY(false);
@@ -63,6 +68,7 @@ void modelDefinition(ModelSpec &model)
     model.setName("evidence_accumulation");
     model.setMergePostsynapticModels(true);
     model.setTiming(Parameters::timingEnabled);
+    model.setSeed(1234);
 
     //---------------------------------------------------------------------------
     // Parameters and state variables
@@ -101,7 +107,7 @@ void modelDefinition(ModelSpec &model)
 
     OutputClassification::VarValues outputInitVals(
         0.0,                                                // Y
-        0.0,                                                // Pi*
+        -10.0,                                              // Pi*
         0.0,                                                // Pi
         0.0,                                                // E
         0.0,                                                // B
@@ -173,8 +179,10 @@ void modelDefinition(ModelSpec &model)
         0.0);                                                       // V
 
     // Feedback connections
-    InitVarSnippet::Normal::ParamValues outputRecurrentWeightDist(0.0, 1.0);
-    Continuous::VarValues outputRecurrentInitVals(initVar<InitVarSnippet::Normal>(outputRecurrentWeightDist));  // g
+    // **HACK** this is actually a nasty corner case for the initialisation rules
+    // We really want this uninitialised as we are going to copy over transpose 
+    // But then initialiseSparse would copy over host values
+    Continuous::VarValues outputRecurrentInitVals(0.0);  // g
 
     //---------------------------------------------------------------------------
     // Neuron populations
