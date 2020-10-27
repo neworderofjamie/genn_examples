@@ -9,7 +9,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pattern_recognition", "patt
 		{9FB8ACE6-4E35-49F9-A5FA-D385DAF6B800} = {9FB8ACE6-4E35-49F9-A5FA-D385DAF6B800}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "runner", "pattern_recognition_1_1_CODE\runner.vcxproj", "{9FB8ACE6-4E35-49F9-A5FA-D385DAF6B800}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "runner", "pattern_recognition_CODE\runner.vcxproj", "{9FB8ACE6-4E35-49F9-A5FA-D385DAF6B800}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "batch_learning", "..\..\batch_learning\batch_learning.vcxproj", "{F29630D3-7094-4F69-949E-F98046FB408E}"
 EndProject
