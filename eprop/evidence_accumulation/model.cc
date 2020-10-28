@@ -138,31 +138,38 @@ void modelDefinition(ModelSpec &model)
 
     // Feedforward input->recurrent connections
     InitVarSnippet::Normal::ParamValues inputRecurrentWeightDist(0.0, weight0 / sqrt(Parameters::numInputNeurons));
-    EProp::VarValues inputRecurrentInitVals(
+    EProp::VarValues inputRecurrentLIFInitVals(
         initVar<InitVarSnippet::Normal>(inputRecurrentWeightDist),  // g
         0.0,                                                        // eFiltered
         0.0,                                                        // DeltaG
         0.0,                                                        // M
         0.0);                                                       // V
-
+    
+    EPropALIF::VarValues inputRecurrentALIFInitVals(
+        initVar<InitVarSnippet::Normal>(inputRecurrentWeightDist),  // g
+        0.0,                                                        // eFiltered
+        0.0,                                                        // epsilonA
+        0.0,                                                        // DeltaG
+        0.0,                                                        // M
+        0.0);                                                       // V
+        
     // Recurrent connections
-    InitVarSnippet::Normal::ParamValues recurrentRecurrentLIFWeightDist(0.0, weight0 / sqrt(Parameters::numRecurrentNeurons * 2));
+    InitVarSnippet::Normal::ParamValues recurrentRecurrentWeightDist(0.0, weight0 / sqrt(Parameters::numRecurrentNeurons * 2));
     EProp::VarValues recurrentRecurrentLIFInitVals(
-        initVar<InitVarSnippet::Normal>(recurrentRecurrentLIFWeightDist),    // g
-        0.0,                                                                // eFiltered
-        0.0,                                                                // DeltaG
-        0.0,                                                                // M
-        0.0);                                                               // V
+        initVar<InitVarSnippet::Normal>(recurrentRecurrentWeightDist),  // g
+        0.0,                                                            // eFiltered
+        0.0,                                                            // DeltaG
+        0.0,                                                            // M
+        0.0);                                                           // V
 
      // Recurrent connections
-    InitVarSnippet::Normal::ParamValues recurrentRecurrentALIFWeightDist(0.0, weight0 / sqrt(Parameters::numRecurrentNeurons * 2));
     EPropALIF::VarValues recurrentRecurrentALIFInitVals(
-        initVar<InitVarSnippet::Normal>(recurrentRecurrentALIFWeightDist),  // g
-        0.0,                                                                // eFiltered
-        0.0,                                                                // epsilonA
-        0.0,                                                                // DeltaG
-        0.0,                                                                // M
-        0.0);                                                               // V
+        initVar<InitVarSnippet::Normal>(recurrentRecurrentWeightDist),  // g
+        0.0,                                                            // eFiltered
+        0.0,                                                            // epsilonA
+        0.0,                                                            // DeltaG
+        0.0,                                                            // M
+        0.0);                                                           // V
 
     // Feedforward recurrent->output connections
     OutputLearning::ParamValues recurrentOutputParamVals(
@@ -206,13 +213,13 @@ void modelDefinition(ModelSpec &model)
     model.addSynapsePopulation<EProp, PostsynapticModels::DeltaCurr>(
         "InputRecurrentLIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "RecurrentLIF",
-        epropLIFParamVals, inputRecurrentInitVals, epropPreInitVals, epropPostInitVals,
+        epropLIFParamVals, inputRecurrentLIFInitVals, epropPreInitVals, epropPostInitVals,
         {}, {});
 
-    model.addSynapsePopulation<EProp, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<EPropALIF, PostsynapticModels::DeltaCurr>(
         "InputRecurrentALIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "RecurrentALIF",
-        epropLIFParamVals, inputRecurrentInitVals, epropPreInitVals, epropPostInitVals,
+        epropALIFParamVals, inputRecurrentALIFInitVals, epropPreInitVals, epropPostInitVals,
         {}, {});
 
     // Recurrent->recurrent connections
