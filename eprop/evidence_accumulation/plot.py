@@ -9,7 +9,7 @@ recurrent_lif_spikes = read_csv("recurrent_lif_spikes.csv", header=None, names=[
                                 dtype={"time":float, "neuron_id":int})
 recurrent_alif_spikes = read_csv("recurrent_alif_spikes.csv", header=None, names=["time", "neuron_id"], skiprows=1, delimiter=",",
                                  dtype={"time":float, "neuron_id":int})
-output_data = read_csv("output.csv", header=None, names=["time", "pi1", "pi2", "pi_star1", "pi_star2"], skiprows=1, delimiter=",",
+output_data = read_csv("output.csv", header=None, index_col=False, names=["time", "pi1", "pi2", "pi_star1", "pi_star2"], skiprows=0, delimiter=",",
                         dtype={"time":float, "pi1":float, "pi2":float, "pi_star1":float, "pi_star2":float})
 times = np.loadtxt("times.csv")
 
