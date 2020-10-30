@@ -26,10 +26,10 @@ fusi_model = create_custom_weight_update_class(
     "fusi_model",
     param_names=["tauC", "a", "b", "thetaV", "thetaLUp", "thetaLDown", "thetaHUp", "thetaHDown",
                  "thetaX", "alpha", "beta", "Xmax", "Xmin", "JC", "Jplus", "Jminus"],
-    var_name_types=[("X", "scalar"), ("g", "scalar")],
+    var_name_types=[("X", "scalar")],
     post_var_name_types=[("C", "scalar")],
     sim_code="""
-    $(addToInSyn, $(g));
+    $(addToInSyn, (($(X) > $(thetaX)) ? $(Jplus) : $(Jminus)));
     const scalar dt = $(t) - $(sT_post);
     const scalar decayC = $(C) * exp(-dt / $(tauC));
     if ($(V_post) > $(thetaV) && $(thetaLUp) < decayC && decayC < $(thetaHUp)) {
@@ -48,7 +48,6 @@ fusi_model = create_custom_weight_update_class(
         }
     }
     $(X) = fmin($(Xmax), fmax($(Xmin), $(X)));
-    $(g) = ($(X) > $(thetaX)) ? $(Jplus) : $(Jminus);
     """,
     post_spike_code="""
     const scalar dt = $(t) - $(sT_post);
@@ -79,8 +78,7 @@ fusi_params = {"tauC": 60.0, "a": 0.1, "b": 0.1, "thetaV": 0.8, "thetaLUp": 3.0,
                "alpha": 0.0035, "beta": 0.0035, "Xmax": 1.0, "Xmin": 0.0, "JC": 1.0,
                "Jplus": 1.0, "Jminus": 0.0}
 
-fusi_init = {"X": 0.0,
-             "g": 0.0}
+fusi_init = {"X": 0.0}
 fusi_post_init = {"C": 2.0}
 
 presyn_params = {"rate" : 50.0}
@@ -109,7 +107,7 @@ extra_poisson2post = model.add_synapse_population(
             "StaticPulse", {}, {"g": POSTSYN_WT}, {}, {},
             "DeltaCurr", {}, {})
 
-model.build()
+#model.build()
 model.load()
 
 pre_spikes = []
