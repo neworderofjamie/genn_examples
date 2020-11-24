@@ -61,10 +61,11 @@ int main()
 
         // Start with a single cue
         unsigned int numCues = 1;
-        for(unsigned int epoch = 0; epoch < 200; epoch++) {
+        for(unsigned int epoch = 0; epoch < 50; epoch++) {
             std::cout << "Epoch " << epoch << std::endl;
 
             // Loop through trials
+            unsigned int numCorrect = 0;
             for(unsigned int trial = 0; trial < 64; trial++) {
                 std::cout << "\tTrial " << trial << std::endl;
                 // Calculate number of timesteps per cue in this trial
@@ -76,6 +77,8 @@ int main()
                 // Loop through trial timesteps
                 unsigned int numLeftCues = 0;
                 unsigned int numRightCues = 0;
+                float leftOutput = 0.0f;
+                float rightOutput = 0.0f;
                 const unsigned int trialTimesteps = cueTimesteps + delayTimesteps + Parameters::decisionTimesteps;
                 for(unsigned int timestep = 0; timestep < trialTimesteps; timestep++) {
                     // Cue
@@ -117,7 +120,7 @@ int main()
                         setInputRates(Parameters::inactiveRateHz, Parameters::inactiveRateHz, Parameters::activeRateHz);
                     }
                     stepTime();
-
+    
                     // Record spikes
                     // **NOTE** irregular trial lengths make it tricky to use spike recording
                     pullInputCurrentSpikesFromDevice();
@@ -129,12 +132,27 @@ int main()
                     recurrentLIFSpikeRecorder.record(t);
                     recurrentALIFSpikeRecorder.record(t);
                     outputRecorder.record(t);
+                    
+                    // If we're in decision state, accummulate left and right output
+                    if(timestep >= (cueTimesteps + delayTimesteps)){
+                        leftOutput += PiOutput[0];
+                        rightOutput += PiOutput[1];
+                    }
                 }
 
                 // Turn off both outputs
                 // **HACK** negative value turns off accumulation of gradients other than during decision
                 PiStarOutput[0] = -10.0f;  PiStarOutput[1] = -10.0f;
                 pushPiStarOutputToDevice();
+                
+                // If output was correct this trial, 
+                if((leftOutput > rightOutput) == (numLeftCues > numRightCues)) {
+                    std::cout << "\t\tCorrect" << std::endl;
+                    numCorrect++;
+                }
+                else {
+                    std::cout << "\t\tIncorrect" << std::endl;
+                }
             }
             
             // Record learning times
@@ -161,6 +179,8 @@ int main()
             BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
                                              Parameters::numOutputNeurons, 1,
                                              epoch, learningRate);
+                 
+            std::cout << "\t" << numCorrect << "/64 correct" << std::endl;
         }
     }
     catch(std::exception &ex) {
