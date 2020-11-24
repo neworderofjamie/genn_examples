@@ -106,14 +106,14 @@ void modelDefinition(ModelSpec &model)
     OutputClassification::ParamValues outputParamVals(20.0);    // Membrane time constant [ms]
 
     OutputClassification::VarValues outputInitVals(
-        0.0,                                                // Y
-        -10.0,                                              // Pi*
-        0.0,                                                // Pi
-        0.0,                                                // E
-        0.0,                                                // B
-        0.0,                                                // DeltaB
-        0.0,                                                // M
-        0.0);                                               // V
+        0.0,    // Y
+        -10.0,  // Pi*
+        0.0,    // Pi
+        0.0,    // E
+        0.0,    // B
+        0.0,    // DeltaB
+        0.0,    // M
+        0.0);   // V
 
     EProp::ParamValues epropLIFParamVals(
         20.0,                   // Eligibility trace time constant [ms]
@@ -162,7 +162,7 @@ void modelDefinition(ModelSpec &model)
         0.0,                                                            // M
         0.0);                                                           // V
 
-     // Recurrent connections
+    // Recurrent connections
     EPropALIF::VarValues recurrentRecurrentALIFInitVals(
         initVar<InitVarSnippet::Normal>(recurrentRecurrentWeightDist),  // g
         0.0,                                                            // eFiltered
