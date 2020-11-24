@@ -116,18 +116,18 @@ void modelDefinition(ModelSpec &model)
         0.0);                                               // V
 
     EProp::ParamValues epropLIFParamVals(
-        20.0,       // Eligibility trace time constant [ms]
-        1.0,        // Regularizer strength
-        10.0,       // Target spike rate [Hz]
-        500.0);     // Firing rate averaging time constant [ms]
+        20.0,                   // Eligibility trace time constant [ms]
+        1.0 / (64.0 * 1000.0),  // Regularizer strength
+        10.0,                   // Target spike rate [Hz]
+        500.0);                 // Firing rate averaging time constant [ms]
 
     EPropALIF::ParamValues epropALIFParamVals(
-        20.0,       // Eligibility trace time constant [ms]
-        2000.0,     // Neuron adaption time constant [ms]
-        1.0,        // Regularizer strength
-        10.0,       // Target spike rate [Hz]
-        500.0,      // Firing rate averaging time constant [ms]
-        0.0174);    // Scale of neuron adaption [mV]
+        20.0,                   // Eligibility trace time constant [ms]
+        2000.0,                 // Neuron adaption time constant [ms]
+        1.0 / (64.0 * 1000.0),  // Regularizer strength
+        10.0,                   // Target spike rate [Hz]
+        500.0,                  // Firing rate averaging time constant [ms]
+        0.0174);                // Scale of neuron adaption [mV]
 
     EProp::PreVarValues epropPreInitVals(
         0.0);   // ZFilter
