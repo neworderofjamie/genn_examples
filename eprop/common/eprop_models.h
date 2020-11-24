@@ -131,7 +131,7 @@ public:
 
     SET_DERIVED_PARAMS({
         {"Alpha", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }},
-        {"FTargetTimestep", [](const std::vector<double> &pars, double dt){ return pars[2] / (1000.0 * dt); }},
+        {"FTargetTimestep", [](const std::vector<double> &pars, double dt){ return (pars[2] * dt) / 1000.0; }},
         {"AlphaFAv", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[3]); }}});
 
     SET_SIM_CODE("$(addToInSyn, $(g));\n");
@@ -183,7 +183,7 @@ public:
     SET_DERIVED_PARAMS({
         {"Alpha", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }},
         {"Rho", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"FTargetTimestep", [](const std::vector<double> &pars, double dt){ return pars[3] / (1000.0 * dt); }},
+        {"FTargetTimestep", [](const std::vector<double> &pars, double dt){ return (pars[3] * dt) / 1000.0; }},
         {"AlphaFAv", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[4]); }}});
 
     SET_SIM_CODE("$(addToInSyn, $(g));\n");
