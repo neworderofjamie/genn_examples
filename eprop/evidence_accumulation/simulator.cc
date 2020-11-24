@@ -61,13 +61,12 @@ int main()
 
         // Start with a single cue
         unsigned int numCues = 1;
-        for(unsigned int epoch = 0; epoch < 50; epoch++) {
-            std::cout << "Epoch " << epoch << std::endl;
+        for(unsigned int epoch = 0;; epoch++) {
+            std::cout << "Epoch " << epoch << " (" << numCues << " cues)" << std::endl;
 
             // Loop through trials
             unsigned int numCorrect = 0;
             for(unsigned int trial = 0; trial < 64; trial++) {
-                std::cout << "\tTrial " << trial << std::endl;
                 // Calculate number of timesteps per cue in this trial
                 const unsigned int cueTimesteps = (Parameters::cuePresentTimesteps + Parameters::cueDelayTimesteps) * numCues;
 
@@ -147,11 +146,11 @@ int main()
                 
                 // If output was correct this trial, 
                 if((leftOutput > rightOutput) == (numLeftCues > numRightCues)) {
-                    std::cout << "\t\tCorrect" << std::endl;
+                    std::cout << "\tTrial " << trial << ": Correct" << std::endl;
                     numCorrect++;
                 }
                 else {
-                    std::cout << "\t\tIncorrect" << std::endl;
+                    std::cout << "\tTrial " << trial << ": Incorrect" << std::endl;
                 }
             }
             
@@ -179,8 +178,20 @@ int main()
             BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
                                              Parameters::numOutputNeurons, 1,
                                              epoch, learningRate);
-                 
+             
+            // Display performance in this epoch
             std::cout << "\t" << numCorrect << "/64 correct" << std::endl;
+            
+            // If enough trials were correct
+            if(numCorrect > 58) {
+                // Advance to next stage of curriculum
+                numCues++;
+                
+                // Stop if curriculum is complete
+                if(numCues > 7) {
+                    break;
+                }
+            }
         }
     }
     catch(std::exception &ex) {
