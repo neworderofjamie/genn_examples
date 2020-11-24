@@ -1,4 +1,3 @@
-import csv
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import read_csv
@@ -41,7 +40,6 @@ pi_star_decision = np.argmax(pi_star_output, axis=0)
 correct_decision = (pi_decision == pi_star_decision)
 correct_decision = np.reshape(correct_decision, (-1, 64))
 correct_decision = np.sum(correct_decision, axis=1)
-print(correct_decision)
 
 # Create plot
 figure, axes = plt.subplots(5, sharex=True)
@@ -64,6 +62,7 @@ axes[3].plot(output_data["time"], output_data["pi_star1"], label="$\pi^*_1$")
 axes[3].axhline(0.5, linestyle="--", color="gray")
 axes[3].vlines(times, 0.0, 1.0, linestyle="--", color="gray")
 axes[3].legend(loc="upper right")
+axes[3].set_ylim((-0.5, 1.5))
 
 axes[4].set_title("Output 2")
 axes[4].plot(output_data["time"], output_data["pi2"], label="$\pi_2$")
@@ -71,6 +70,7 @@ axes[4].plot(output_data["time"], output_data["pi_star2"], label="$\pi^*_2$")
 axes[4].axhline(0.5, linestyle="--", color="gray")
 axes[4].vlines(times, 0.0, 1.0, linestyle="--", color="gray")
 axes[4].legend(loc="upper right")
+axes[4].set_ylim((-0.5, 1.5))
 
 # Show plot
 plt.show()
