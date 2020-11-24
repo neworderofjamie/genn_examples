@@ -52,6 +52,9 @@ int main()
         AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, PiStarOutput}, Parameters::numOutputNeurons, ",");
 
         std::ofstream times("times.csv");
+        std::ofstream performance("performance.csv");
+        performance << "Epoch, Number of cues, Number correct" << std::endl;
+        
         std::mt19937 rng;
         std::uniform_int_distribution<unsigned int> delayTimestepsDistribution(Parameters::minDelayTimesteps, Parameters::maxDelayTimesteps);
 
@@ -182,10 +185,14 @@ int main()
             // Display performance in this epoch
             std::cout << "\t" << numCorrect << "/64 correct" << std::endl;
             
+            // Write performance to file
+            performance << epoch << ", " << numCues << ", " << numCorrect << std::endl;
+            
             // If enough trials were correct
             if(numCorrect > 58) {
                 // Advance to next stage of curriculum
-                numCues++;
+                // **NOTE** only odd numbers of cues have a clear winner
+                numCues += 2;
                 
                 // Stop if curriculum is complete
                 if(numCues > 7) {
