@@ -21,7 +21,7 @@ namespace Parameters
     constexpr double cueDelayMs = 50.0;
 
     constexpr double minDelayMs = 500.0;
-    constexpr double maxDelayMs = 1000.0;
+    constexpr double maxDelayMs = 1500.0;
 
     constexpr double decisionMs = 150.0;
 
