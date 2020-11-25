@@ -46,12 +46,6 @@ int main()
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         initializeSparse();
 
-        SpikeRecorder<SpikeWriterTextCached> inputSpikeRecorder(&getInputCurrentSpikes, &getInputCurrentSpikeCount, "input_spikes.csv", ",", true);
-        SpikeRecorder<SpikeWriterTextCached> recurrentLIFSpikeRecorder(&getRecurrentLIFCurrentSpikes, &getRecurrentLIFCurrentSpikeCount, "recurrent_lif_spikes.csv", ",", true);
-        SpikeRecorder<SpikeWriterTextCached> recurrentALIFSpikeRecorder(&getRecurrentALIFCurrentSpikes, &getRecurrentALIFCurrentSpikeCount, "recurrent_alif_spikes.csv", ",", true);
-        AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, PiStarOutput}, Parameters::numOutputNeurons, ",");
-
-        std::ofstream times("times.csv");
         std::ofstream performance("performance.csv");
         performance << "Epoch, Number of cues, Number correct" << std::endl;
         
@@ -65,8 +59,6 @@ int main()
         // Start with a single cue
         unsigned int numCues = 1;
         for(unsigned int epoch = 0;; epoch++) {
-            std::cout << "Epoch " << epoch << " (" << numCues << " cues)" << std::endl;
-
             // Loop through trials
             unsigned int numCorrect = 0;
             for(unsigned int trial = 0; trial < 64; trial++) {
@@ -123,20 +115,12 @@ int main()
                     }
                     stepTime();
     
-                    // Record spikes
-                    // **NOTE** irregular trial lengths make it tricky to use spike recording
-                    pullInputCurrentSpikesFromDevice();
-                    pullRecurrentLIFCurrentSpikesFromDevice();
-                    pullRecurrentALIFCurrentSpikesFromDevice();
-                    pullPiStarOutputFromDevice();
-                    pullPiOutputFromDevice();
-                    inputSpikeRecorder.record(t);
-                    recurrentLIFSpikeRecorder.record(t);
-                    recurrentALIFSpikeRecorder.record(t);
-                    outputRecorder.record(t);
-                    
-                    // If we're in decision state, accummulate left and right output
-                    if(timestep >= (cueTimesteps + delayTimesteps)){
+                    // If we're in decision state
+                    if(timestep >= (cueTimesteps + delayTimesteps)){ 
+                        // Download output
+                        pullPiOutputFromDevice();
+
+			// Accummulate left and right output
                         leftOutput += PiOutput[0];
                         rightOutput += PiOutput[1];
                     }
@@ -149,17 +133,10 @@ int main()
                 
                 // If output was correct this trial, 
                 if((leftOutput > rightOutput) == (numLeftCues > numRightCues)) {
-                    std::cout << "\tTrial " << trial << ": Correct" << std::endl;
                     numCorrect++;
                 }
-                else {
-                    std::cout << "\tTrial " << trial << ": Incorrect" << std::endl;
-                }
             }
-            
-            // Record learning times
-            times << t << std::endl;
-            
+                        
             // Update weights
             #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
              
@@ -182,10 +159,9 @@ int main()
                                              Parameters::numOutputNeurons, 1,
                                              epoch, learningRate);
              
-            // Display performance in this epoch
-            std::cout << "\t" << numCorrect << "/64 correct" << std::endl;
-            
-            // Write performance to file
+            // Display performance in this epoch	    
+            std::cout << "Epoch " << epoch << " (" << numCues << " cues): " << numCorrect << "/64 correct" << std::endl;
+// Write performance to file
             performance << epoch << ", " << numCues << ", " << numCorrect << std::endl;
             
             // If enough trials were correct
