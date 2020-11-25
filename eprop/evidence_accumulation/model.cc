@@ -72,6 +72,7 @@ void modelDefinition(ModelSpec &model)
     model.setName("evidence_accumulation");
     model.setMergePostsynapticModels(true);
     model.setTiming(Parameters::timingEnabled);
+    model.setSeed(1234);
 
     //---------------------------------------------------------------------------
     // Parameters and state variables
