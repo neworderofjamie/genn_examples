@@ -3,6 +3,12 @@
 #include <iostream>
 #include <random>
 
+// MPI includes
+#include <mpi.h>
+
+// NCCL includes
+#include <nccl.h>
+
 // GeNN userproject includes
 #include "analogueRecorder.h"
 #include "spikeRecorder.h"
@@ -15,6 +21,23 @@
 
 // Model parameters
 #include "parameters.h"
+
+#define CHECK_MPI_ERRORS(call) {\
+    int error = call;\
+    if (error != MPI_SUCCESS) {\
+        throw std::runtime_error(__FILE__": " + std::to_string(__LINE__) + ": MPI error " + std::to_s\
+tring(error));\
+    }\
+}
+
+#define CHECK_NCCL_ERRORS(call) {\
+    ncclResult_t error = call;\
+    if (error != ncclSuccess) {\
+        throw std::runtime_error(__FILE__": " + std::to_string(__LINE__) + ": NCCL error " + std::to_s\
+tring(error) + ": " + ncclGetErrorString(error));\
+    }\
+}
+
 
 namespace
 {
@@ -32,8 +55,15 @@ void setInputRates(float left = Parameters::inactiveRateHz, float right = Parame
 }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    // Initialize MPI
+    int rank = -1;
+    int numRanks = -1;
+    CHECK_MPI_ERRORS(MPI_Init(&argc, &argv));
+    CHECK_MPI_ERRORS(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+    CHECK_MPI_ERRORS(MPI_Comm_size(MPI_COMM_WORLD, &numRanks));
+    
     try
     {
         allocateMem();
@@ -46,7 +76,7 @@ int main()
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         initializeSparse();
 
-        std::ofstream performance("performance.csv");
+        std::ofstream performance("performance_" + std::to_string(rank) + ".csv");
         performance << "Epoch, Number of cues, Number correct" << std::endl;
         
         std::mt19937 rng;
@@ -160,7 +190,7 @@ int main()
                                              epoch, learningRate);
              
             // Display performance in this epoch	    
-            std::cout << "Epoch " << epoch << " (" << numCues << " cues): " << numCorrect << "/64 correct" << std::endl;
+            std::cout << "(" << rank << ") Epoch " << epoch << " (" << numCues << " cues): " << numCorrect << "/64 correct" << std::endl;
 // Write performance to file
             performance << epoch << ", " << numCues << ", " << numCorrect << std::endl;
             
