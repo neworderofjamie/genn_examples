@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{C97E87FC-B5D7-4627-8E88-CAF032220A28}</ProjectGuid>
+  </PropertyGroup>
+  <ItemGroup>
+    <CudaCompile Include="simulator.cc">
+      <AdditionalOptions Condition=" !$([System.String]::new('%(BaseCommandLineTemplate)').Contains('-x cu')) ">-x cu %(AdditionalOptions)</AdditionalOptions>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="parameters.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+    <WholeProgramOptimization Condition="'$(Configuration)'=='Release'">true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+    <!-- **HACK** determine the installed CUDA version by regexing CUDA path -->
+    <CudaVersion>$([System.Text.RegularExpressions.Regex]::Match($(CUDA_PATH), "\\v([0-9.]+)$").Groups[1].Value)</CudaVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).props" />
+  </ImportGroup>
+  <ImportGroup>
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <OutDir>.\</OutDir>
+    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_$(Configuration)</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
+      <Optimization>Disabled</Optimization>
+      <FunctionLevelLinking Condition="'$(Configuration)'=='Release'">true</FunctionLevelLinking>
+      <IntrinsicFunctions Condition="'$(Configuration)'=='Release'">true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding Condition="'$(Configuration)'=='Release'">true</EnableCOMDATFolding>
+      <OptimizeReferences Condition="'$(Configuration)'=='Release'">true</OptimizeReferences>
+      <AdditionalDependencies Condition="'$(Configuration)'=='Release'">cudart_static.lib;runner_Release.lib;batch_learning_Release.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)'=='Debug'">cudart_static.lib;runner_Debug.lib;batch_learning_Debug.lib;;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\..\batch_learning;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+    </Link>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
+      <FastMath>false</FastMath>
+      <GenerateLineInfo>false</GenerateLineInfo>
+      <Include>superspike_demo_CODE;..\..\batch_learning;%(Include)</Include>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).targets" />
+  </ImportGroup>
+  <Target Name="FindUserProjects" BeforeTargets="PrepareForBuild">
+    <Exec Command="where genn-buildmodel.bat" ConsoleToMsBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GeNNBuildModelPath" />
+    </Exec>
+    <ItemGroup>
+      <CudaCompile>
+        <Include>%(Include);$([System.IO.Path]::GetFullPath($([System.IO.Path]::GetDirectoryName($(GeNNBuildModelPath)))\..\userproject\include))</Include>
+      </CudaCompile>
+    </ItemGroup>
+  </Target>
+</Project>
