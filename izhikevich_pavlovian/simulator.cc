@@ -59,9 +59,18 @@ std::pair<float, float> getMeanOutgoingWeight(unsigned int maxRowLength, const u
 
 int main()
 {
+    // Convert simulation regime parameters to timesteps
+    const unsigned int duration = convertMsToTimesteps(Parameters::durationMs);
+    const unsigned int recordTime = convertMsToTimesteps(Parameters::recordTimeMs);
+    const unsigned int weightRecordInterval = convertMsToTimesteps(Parameters::weightRecordIntervalMs);
+
+    // Assert that duration is a multiple of record time
+    assert((duration % recordTime) == 0);
+
     std::mt19937 gen;
 
     allocateMem();
+    allocateRecordingBuffers(recordTime);
     initialize();
     initializeSparse();
 
@@ -96,10 +105,6 @@ int main()
         }
     }
 
-    // Open CSV output files
-    SpikeRecorder<SpikeWriterTextCached> e_spikes(&getECurrentSpikes, &getECurrentSpikeCount, "e_spikes.csv", ",", true);
-    SpikeRecorder<SpikeWriterTextCached> i_spikes(&getICurrentSpikes, &getICurrentSpikeCount, "i_spikes.csv", ",", true);
-
     std::ofstream stimulusStream("stimulus_times.csv");
     std::ofstream rewardStream("reward_times.csv");
     std::ofstream weightEvolutionStream("weight_evolution.csv");
@@ -122,16 +127,10 @@ int main()
         // Invalidate next reward timestep
         unsigned int nextRewardTimestep = std::numeric_limits<unsigned int>::max();
 
-        // Convert simulation regime parameters to timesteps
-        const unsigned int duration = convertMsToTimesteps(Parameters::durationMs);
-        const unsigned int recordBeginningStop = convertMsToTimesteps(Parameters::recordStartMs);
-        const unsigned int recordEndStart = convertMsToTimesteps(Parameters::durationMs - Parameters::recordEndMs);
-        const unsigned int weightRecordInterval = convertMsToTimesteps(Parameters::weightRecordIntervalMs);
-
         // Loop through timesteps
         while(iT < duration) {
             // Are we in one of the stages of the simulation where we should record spikes
-            const bool shouldRecordSpikes = (iT < recordBeginningStop) || (iT > recordEndStart);
+            const bool shouldRecordSpikes = (iT < recordTime) || (iT > recordTime);
             const bool shouldStimulate = (iT == nextStimuliTimestep);
             const bool shouldReward = (iT == nextRewardTimestep);
 
@@ -190,12 +189,6 @@ int main()
             // Simulate on GPU
             stepTime();
 
-            // If we should be recording spikes, download them from GPU
-            if(shouldRecordSpikes) {
-                pullECurrentSpikesFromDevice();
-                pullICurrentSpikesFromDevice();
-            }
-
             // If we should record weights this time step, download them from GPU
            /* if((t % weightRecordInterval) == 0) {
                 CHECK_CUDA_ERRORS(cudaMemcpy(gEE, d_gEE, CEE.connN * sizeof(scalar), cudaMemcpyDeviceToHost));
@@ -242,17 +235,20 @@ int main()
 
             }*/
 
-            // If we should be recording spikes, write spikes to file
-            if(shouldRecordSpikes) {
-                e_spikes.record(t);
-                i_spikes.record(t);
+            if(iT == recordTime || iT == duration) {
+                const bool firstRecordingBlock = (iT == recordTime);
+                const double recordingBlockStart = t - Parameters::recordTimeMs;
+                pullRecordingBuffersFromDevice();
+                
+                writeTextSpikeRecording("e_spikes.csv", recordSpkE, Parameters::numExcitatory, 
+                                        recordTime, Parameters::timestepMs, ",", firstRecordingBlock, 
+                                        !firstRecordingBlock, recordingBlockStart);
+                writeTextSpikeRecording("i_spikes.csv", recordSpkE, Parameters::numInhibitory, 
+                                        recordTime, Parameters::timestepMs, ",", firstRecordingBlock,
+                                        !firstRecordingBlock, recordingBlockStart);
             }
         }
     }
-    
-    // Write spike data to disk
-    e_spikes.writeCache();
-    i_spikes.writeCache();
 
     if(Parameters::measureTiming) {
         std::cout << "Init:" << initTime << std::endl;

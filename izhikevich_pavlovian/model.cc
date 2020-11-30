@@ -95,9 +95,11 @@ void modelDefinition(NNmodel &model)
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(Parameters::inhWeight);
 
-    // Create IF_curr neuron
-    model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
-    model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
+    // Create IF_curr neuron and enable spike recording
+    auto *e = model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
+    auto *i = model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
+    e->setSpikeRecordingEnabled(true);
+    i->setSpikeRecordingEnabled(true);
 
     model.addCurrentSource<UniformNoise>("ECurr", "E", currSourceParams, {});
     model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceParams, {});
