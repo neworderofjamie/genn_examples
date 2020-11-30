@@ -1,7 +1,5 @@
 #pragma once
 
-//#define MEASURE_TIMING
-
 //------------------------------------------------------------------------
 // Parameters
 //------------------------------------------------------------------------
@@ -52,4 +50,6 @@ namespace Parameters
 
     // reward
     const double rewardDelayMs = 1000.0;
+    
+    const bool measureTiming = false;
 }

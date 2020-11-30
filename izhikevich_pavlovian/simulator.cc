@@ -254,11 +254,13 @@ int main()
     e_spikes.writeCache();
     i_spikes.writeCache();
 
-    std::cout << "Init:" << initTime << std::endl;
-    std::cout << "Init sparse:" << initSparseTime << std::endl;
-    std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
-    std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
-    std::cout << "Postsynaptic update:" << postsynapticUpdateTime << std::endl;
+    if(Parameters::measureTiming) {
+        std::cout << "Init:" << initTime << std::endl;
+        std::cout << "Init sparse:" << initSparseTime << std::endl;
+        std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
+        std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
+        std::cout << "Postsynaptic update:" << postsynapticUpdateTime << std::endl;
+    }
 
     return 0;
 }

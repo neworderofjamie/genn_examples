@@ -47,9 +47,7 @@ void modelDefinition(NNmodel &model)
     model.setDT(Parameters::timestepMs);
     model.setName("izhikevich_pavlovian");
     
-#ifdef MEASURE_TIMING
-    model.setTiming(true);
-#endif
+    model.setTiming(Parameters::measureTiming);
     
     //---------------------------------------------------------------------------
     // Build model
@@ -92,8 +90,7 @@ void modelDefinition(NNmodel &model)
 
     STDPDopamine::VarValues dopeInitVars(
         Parameters::initExcWeight,  // Synaptic weight
-        0.0,                        // Synaptic tag
-        0.0);                       // Time of last synaptic tag update
+        0.0);                       // Synaptic tag
 
     // Static synapse parameters
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(Parameters::inhWeight);
