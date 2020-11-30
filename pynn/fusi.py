@@ -106,7 +106,7 @@ extra_poisson2post = model.add_synapse_population(
             "StaticPulse", {}, {"g": POSTSYN_WT}, {}, {},
             "DeltaCurr", {}, {})
 
-#model.build()
+model.build()
 model.load()
 
 pre_spikes = []
