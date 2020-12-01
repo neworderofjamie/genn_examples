@@ -205,10 +205,6 @@ int main()
                 dEE += Parameters::dopamineStrength;
                 dEI += Parameters::dopamineStrength;
 
-                // Update last reward time
-                tDEE = t;
-                tDEI = t;
-
                 // Clear dopamine injection flags
                 injectDopamineEE = false;
                 injectDopamineEI = false;

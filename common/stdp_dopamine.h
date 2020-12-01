@@ -29,14 +29,14 @@ public:
     SET_SIM_CODE(
         "$(addToInSyn, $(g));\n"
         "// Calculate how much tag has decayed since last update\n"
-        "const scalar tc = fmax($(sT_pre), fmax($(sT_post), $(tD)));\n"
+        "const scalar tc = fmax($(prev_sT_pre), fmax($(prev_sT_post), $(prev_seT_pre)));\n"
         "const scalar tagDT = $(t) - tc;\n"
         "const scalar tagDecay = exp(-tagDT / $(tauC));\n"
         "// Calculate how much dopamine has decayed since last update\n"
-        "const scalar dopamineDT = $(t) - $(tD);\n"
+        "const scalar dopamineDT = $(t) - $(seT_pre);\n"
         "const scalar dopamineDecay = exp(-dopamineDT / $(tauD));\n"
         "// Calculate offset to integrate over correct area\n"
-        "const scalar offset = (tc <= $(tD)) ? exp(-($(tD) - tc) / $(tauC)) : exp(-(tc - $(tD)) / $(tauD));\n"
+        "const scalar offset = (tc <= $(seT_pre)) ? exp(-($(seT_pre) - tc) / $(tauC)) : exp(-(tc - $(seT_pre)) / $(tauD));\n"
         "// Update weight and clamp\n"
         "$(g) += ($(c) * $(d) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
         "$(g) = fmax($(wMin), fmin($(wMax), $(g)));\n"
@@ -53,14 +53,14 @@ public:
 
     SET_EVENT_CODE(
         "// Calculate how much tag has decayed since last update\n"
-        "const scalar tc = fmax($(sT_pre), fmax($(sT_post), $(tD)));\n"
+        "const scalar tc = fmax($(sT_pre), fmax($(prev_sT_post), $(prev_seT_pre)));\n"
         "const scalar tagDT = $(t) - tc;\n"
         "const scalar tagDecay = exp(-tagDT / $(tauC));\n"
         "// Calculate how much dopamine has decayed since last update\n"
-        "const scalar dopamineDT = $(t) - $(tD);\n"
+        "const scalar dopamineDT = $(t) - $(seT_pre);\n"
         "const scalar dopamineDecay = exp(-dopamineDT / $(tauD));\n"
         "// Calculate offset to integrate over correct area\n"
-        "const scalar offset = (tc <= $(tD)) ? exp(-($(tD) - tc) / $(tauC)) : exp(-(tc - $(tD)) / $(tauD));\n"
+        "const scalar offset = (tc <= $(seT_pre)) ? exp(-($(seT_pre) - tc) / $(tauC)) : exp(-(tc - $(seT_pre)) / $(tauD));\n"
         "// Update weight and clamp\n"
         "$(g) += ($(c) * $(d) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
         "$(g) = fmax($(wMin), fmin($(wMax), $(g)));\n"
@@ -69,14 +69,14 @@ public:
 
     SET_LEARN_POST_CODE(
         "// Calculate how much tag has decayed since last update\n"
-        "const scalar tc = fmax($(sT_pre), fmax($(sT_post), $(tD)));\n"
+        "const scalar tc = fmax($(sT_pre), fmax($(prev_sT_post), $(seT_pre)));\n"
         "const scalar tagDT = $(t) - tc;\n"
         "const scalar tagDecay = exp(-tagDT / $(tauC));\n"
         "// Calculate how much dopamine has decayed since last update\n"
-        "const scalar dopamineDT = $(t) - $(tD);\n"
+        "const scalar dopamineDT = $(t) - $(seT_pre);\n"
         "const scalar dopamineDecay = exp(-dopamineDT / $(tauD));\n"
         "// Calculate offset to integrate over correct area\n"
-        "const scalar offset = (tc <= $(tD)) ? exp(-($(tD) - tc) / $(tauC)) : exp(-(tc - $(tD)) / $(tauD));\n"
+        "const scalar offset = (tc <= $(seT_pre)) ? exp(-($(seT_pre) - tc) / $(tauC)) : exp(-(tc - $(seT_pre)) / $(tauD));\n"
         "// Update weight and clamp\n"
         "$(g) += ($(c) * $(d) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
         "$(g) = max($(wMin), min($(wMax), $(g)));\n"
@@ -95,17 +95,19 @@ public:
 
     SET_EXTRA_GLOBAL_PARAMS({
         {"injectDopamine", "bool"},
-        {"tD", "scalar"},
-        {"d", "scalar"}
-    });
+        {"d", "scalar"}});
 
     SET_DERIVED_PARAMS({
         {"scale", [](const std::vector<double> &pars, double){ return 1.0 / -((1.0 / pars[2]) + (1.0 / pars[3])); }}
     });
 
-    SET_RESET_SPIKE_TIMES_AFTER_UPDATE(true);
-    SET_NEEDS_PRE_SPIKE_TIME(true);
+    SET_NEEDS_PRE_SPIKE_TIME(true);  
     SET_NEEDS_POST_SPIKE_TIME(true);
+    SET_NEEDS_PRE_SPIKE_EVENT_TIME(true);
+    
+    SET_NEEDS_PREV_PRE_SPIKE_TIME(true);  
+    SET_NEEDS_PREV_POST_SPIKE_TIME(true);
+    SET_NEEDS_PREV_PRE_SPIKE_EVENT_TIME(true);
 };
 
 IMPLEMENT_MODEL(STDPDopamine);
