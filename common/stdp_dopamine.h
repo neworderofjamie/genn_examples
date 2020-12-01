@@ -19,8 +19,7 @@ public:
         "aPlus",    // 4 - Rate of potentiation
         "aMinus",   // 5 - Rate of depression
         "wMin",     // 6 - Minimum weight
-        "wMax",     // 7 - Maximum weight
-    });
+        "wMax"});   // 7 - Maximum weight
 
     SET_VARS({
         {"g", "scalar"},    // Synaptic weight
@@ -28,8 +27,9 @@ public:
 
     SET_SIM_CODE(
         "$(addToInSyn, $(g));\n"
-        "// Calculate how much tag has decayed since last update\n"
+        "// Calculate time of last tag update\n"
         "const scalar tc = fmax($(prev_sT_pre), fmax($(prev_sT_post), $(prev_seT_pre)));\n"
+        "// Calculate how much tag has decayed since last update\n"
         "const scalar tagDT = $(t) - tc;\n"
         "const scalar tagDecay = exp(-tagDT / $(tauC));\n"
         "// Calculate how much dopamine has decayed since last update\n"
@@ -52,8 +52,9 @@ public:
         "$(c) = newTag;\n");
 
     SET_EVENT_CODE(
-        "// Calculate how much tag has decayed since last update\n"
+        "// Calculate time of last tag update\n"
         "const scalar tc = fmax($(sT_pre), fmax($(prev_sT_post), $(prev_seT_pre)));\n"
+        "// Calculate how much tag has decayed since last update\n"
         "const scalar tagDT = $(t) - tc;\n"
         "const scalar tagDecay = exp(-tagDT / $(tauC));\n"
         "// Calculate how much dopamine has decayed since last update\n"
@@ -68,8 +69,9 @@ public:
         "$(c) *= tagDecay;\n");
 
     SET_LEARN_POST_CODE(
-        "// Calculate how much tag has decayed since last update\n"
+        "// Calculate time of last tag update\n"
         "const scalar tc = fmax($(sT_pre), fmax($(prev_sT_post), $(seT_pre)));\n"
+        "// Calculate how much tag has decayed since last update\n"
         "const scalar tagDT = $(t) - tc;\n"
         "const scalar tagDecay = exp(-tagDT / $(tauC));\n"
         "// Calculate how much dopamine has decayed since last update\n"
@@ -98,8 +100,7 @@ public:
         {"d", "scalar"}});
 
     SET_DERIVED_PARAMS({
-        {"scale", [](const std::vector<double> &pars, double){ return 1.0 / -((1.0 / pars[2]) + (1.0 / pars[3])); }}
-    });
+        {"scale", [](const std::vector<double> &pars, double){ return 1.0 / -((1.0 / pars[2]) + (1.0 / pars[3])); }}});
 
     SET_NEEDS_PRE_SPIKE_TIME(true);  
     SET_NEEDS_POST_SPIKE_TIME(true);
