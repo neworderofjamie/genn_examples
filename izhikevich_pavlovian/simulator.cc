@@ -72,15 +72,20 @@ int main()
     allocateMem();
     allocateRecordingBuffers(recordTime);
     initialize();
-    initializeSparse();
 
-    std::vector<std::vector<unsigned int>> inputSets;
+    // Allocate a bit per timestep for dopamine injection times
+    const unsigned int numTimestepWords = (duration + 31) / 32;
+    allocatedTimeE(numTimestepWords);
+    
+    // Initially zero all dopamine injection times
+    std::fill_n(dTimeE, numTimestepWords, 0);
+    
     std::bitset<Parameters::numExcitatory> rewardedExcStimuliSet;
-
     {
         Timer timer("Stimuli generation:");
 
         // Resize input sets vector
+        std::vector<std::vector<unsigned int>> inputSets;
         inputSets.resize(Parameters::numStimuliSets);
 
         // Build array of neuron indices
@@ -103,125 +108,136 @@ int main()
                 rewardedExcStimuliSet.set(n);
             }
         }
+        
+        // Create distributions to pick inter stimuli intervals, stimuli sets and reward delays
+        std::uniform_int_distribution<> interStimuliIntervalDist(convertMsToTimesteps(Parameters::minInterStimuliIntervalMs),
+                                                                 convertMsToTimesteps(Parameters::maxInterStimuliIntervalMs));
+
+        std::uniform_int_distribution<> stimuliSetDist(0, Parameters::numStimuliSets - 1);
+
+        std::uniform_int_distribution<> rewardDelayDist(0, (unsigned int)std::round(Parameters::rewardDelayMs / Parameters::timestepMs));
+
+        // Draw time until first stimuli and which set that should be
+        unsigned int nextStimuliTimestep = interStimuliIntervalDist(gen);
+
+        // Allocate vector of vectors to hold stimuli times
+        std::vector<std::vector<float>> neuronStimuliTimes;
+        neuronStimuliTimes.resize(Parameters::numCells);
+        
+        std::ofstream stimulusStream("stimulus_times.csv");
+        std::ofstream rewardStream("reward_times.csv");
+    
+        // While we're within duration
+        size_t totalNumEStimuli = 0;
+        size_t totalNumIStimuli = 0;
+        while(nextStimuliTimestep < duration) {
+            // Determine what stimuli to present
+            const unsigned int stimululiSet = stimuliSetDist(gen);
+            
+            // Loop through neurons to stimulate and add spike times to correct vector
+            for(unsigned int n : inputSets[stimululiSet]) {
+                neuronStimuliTimes[n].push_back((float)nextStimuliTimestep * (float)Parameters::timestepMs);
+                
+                if(n < Parameters::numExcitatory) {
+                    totalNumEStimuli++;
+                }
+                else {
+                    totalNumIStimuli++;
+                }
+            }
+            
+            // If we should be recording at this point, write stimuli to file
+            if((nextStimuliTimestep < recordTime) || (nextStimuliTimestep > (duration - recordTime))) {
+                stimulusStream << nextStimuliTimestep << "," << stimululiSet << std::endl;
+            }
+            
+            // If this is the rewarded stimuli
+            if(stimululiSet == 0) {
+                // Draw time until next reward
+                const unsigned int rewardTimestep = nextStimuliTimestep + rewardDelayDist(gen);
+                
+                // Set bit in dopamine times bitset
+                if(rewardTimestep < duration) {
+                    dTimeE[rewardTimestep / 32] |= (1 << (rewardTimestep % 32));
+                    
+                    // If we should be recording at this point, write reward to file
+                    if((rewardTimestep < recordTime) || (rewardTimestep > (duration - recordTime))) {
+                        rewardStream << rewardTimestep << std::endl;
+                    }
+                }
+            }
+
+            // Advance to next stimuli
+            nextStimuliTimestep += interStimuliIntervalDist(gen);
+        }
+        
+        // Upload dopamine data
+        pushdTimeEToDevice(numTimestepWords);
+        
+        {
+            // Allocate stimuli times array
+            allocatestimTimesECurr(totalNumEStimuli);
+            
+            unsigned int numStim = 0;
+            for(unsigned int i = 0; i < Parameters::numExcitatory; i++) {
+                startStimECurr[i] = numStim;
+                
+                const auto &stimTimes = neuronStimuliTimes[i];
+                std::copy(stimTimes.cbegin(), stimTimes.cend(), &stimTimesECurr[numStim]);
+                
+
+                numStim += stimTimes.size();
+                endStimECurr[i] = numStim;
+            }
+            assert(numStim == totalNumEStimuli);
+            
+            // Upload stimuli times to GPU
+            pushstimTimesECurrToDevice(totalNumEStimuli);
+        }
+        {
+            
+            // Allocate stimuli times array
+            allocatestimTimesICurr(totalNumIStimuli);
+            
+            unsigned int numStim = 0;
+            for(unsigned int i = 0; i < Parameters::numInhibitory; i++) {
+                startStimICurr[i] = numStim;
+                
+                const auto &stimTimes = neuronStimuliTimes[i + Parameters::numExcitatory];
+                std::copy(stimTimes.cbegin(), stimTimes.cend(), &stimTimesICurr[numStim]);
+                
+
+                numStim += stimTimes.size();
+                endStimICurr[i] = numStim;
+            }
+            assert(numStim == totalNumIStimuli);
+            
+            // Upload stimuli times to GPU
+            pushstimTimesICurrToDevice(totalNumIStimuli);
+        }
     }
 
-    std::ofstream stimulusStream("stimulus_times.csv");
-    std::ofstream rewardStream("reward_times.csv");
+    // Complete initialization
+    initializeSparse();
+    
     std::ofstream weightEvolutionStream("weight_evolution.csv");
 
     {
         Timer timer("Simulation:");
 
-        // Create distribution to pick inter stimuli intervals
-        std::uniform_int_distribution<> interStimuliInterval(convertMsToTimesteps(Parameters::minInterStimuliIntervalMs),
-                                                             convertMsToTimesteps(Parameters::maxInterStimuliIntervalMs));
-
-        std::uniform_int_distribution<> stimuliSet(0, Parameters::numStimuliSets - 1);
-
-        std::uniform_int_distribution<> rewardDelay(0, (unsigned int)std::round(Parameters::rewardDelayMs / Parameters::timestepMs));
-
-        // Draw time until first stimuli and which set that should be
-        unsigned int nextStimuliTimestep = interStimuliInterval(gen);
-        unsigned int nextStimuliSet = stimuliSet(gen);
-
-        // Invalidate next reward timestep
-        unsigned int nextRewardTimestep = std::numeric_limits<unsigned int>::max();
-
         // Loop through timesteps
         while(iT < duration) {
-            // Are we in one of the stages of the simulation where we should record spikes
-            const bool shouldRecordSpikes = (iT < recordTime) || (iT > recordTime);
-            const bool shouldStimulate = (iT == nextStimuliTimestep);
-            const bool shouldReward = (iT == nextRewardTimestep);
-
-            // If we should be applying stimuli this timestep
-            if(shouldStimulate) {
-                std::cout << "\tApplying stimuli set " << nextStimuliSet << " at time " << t << std::endl;
-
-                // Zero
-                std::fill_n(IextE, Parameters::numExcitatory, 0.0f);
-                std::fill_n(IextI, Parameters::numInhibitory, 0.0f);
-
-                // Loop through neurons in input set and add stimuli current
-                for(unsigned int n : inputSets[nextStimuliSet]) {
-                    if(n < Parameters::numExcitatory) {
-                        IextE[n] += (scalar)Parameters::stimuliCurrent;
-                    }
-                    else {
-                        IextI[n] += (scalar)Parameters::stimuliCurrent;
-                    }
-                }
-
-                // Upload stimuli input to GPU
-                pushIextEToDevice();
-                pushIextIToDevice();
-
-                // Record stimulus time and set
-                if(shouldRecordSpikes) {
-                    stimulusStream << t << "," << nextStimuliSet << std::endl;
-                }
-
-                // If this is the rewarded stimuli
-                if(nextStimuliSet == 0) {
-                    // Draw time until next reward
-                    nextRewardTimestep = iT + rewardDelay(gen);
-
-                    std::cout << "\t\tRewarding at timestep " << nextRewardTimestep << std::endl;
-                }
-
-                // Pick time and set for next stimuli
-                nextStimuliTimestep = iT + interStimuliInterval(gen);
-                nextStimuliSet = stimuliSet(gen);
-            }
-
-            // If we should reward in this timestep, inject dopamine
-            if(shouldReward) {
-                std::cout << "\tApplying reward at time " << t << std::endl;
-                injectDopamineEE = true;
-                injectDopamineEI = true;
-
-                // Record reward time
-                if(shouldRecordSpikes) {
-                    rewardStream << t << std::endl;
-                }
-            }
-
-            // Simulate on GPU
+            // Simulate
             stepTime();
 
             // If we should record weights this time step, download them from GPU
            /* if((t % weightRecordInterval) == 0) {
                 CHECK_CUDA_ERRORS(cudaMemcpy(gEE, d_gEE, CEE.connN * sizeof(scalar), cudaMemcpyDeviceToHost));
                 CHECK_CUDA_ERRORS(cudaMemcpy(gEI, d_gEI, CEI.connN * sizeof(scalar), cudaMemcpyDeviceToHost));
-            }*/
-
-            // If a dopamine spike has been injected this timestep
-            if(shouldReward) {
-                // Decay global dopamine traces
-                dEE = dEE * std::exp(-t / Parameters::tauD);
-                dEI = dEI * std::exp(-t / Parameters::tauD);
-
-                // Add effect of dopamine spike
-                dEE += Parameters::dopamineStrength;
-                dEI += Parameters::dopamineStrength;
-
-                // Clear dopamine injection flags
-                injectDopamineEE = false;
-                injectDopamineEI = false;
             }
-
-            // If stimulation was applied this timestep
-            if(shouldStimulate) {
-                // Re-zero external stimuli arrays
-                std::fill_n(IextE, Parameters::numExcitatory, 0.0f);
-                std::fill_n(IextI, Parameters::numInhibitory, 0.0f);
-
-                // Upload stimuli input to GPU
-                pushIextEToDevice();
-                pushIextIToDevice();
-            }
+           
              // If we should record weights this time step
-            /*if((t % weightRecordInterval) == 0) {
+            if((t % weightRecordInterval) == 0) {
                 // Calculate the mean outgoing weights within the EE and EI projections
                 auto eeOutgoing = getMeanOutgoingWeight<Parameters::numExcitatory>(CEE, gEE, rewardedExcStimuliSet);
                 auto eiOutgoing = getMeanOutgoingWeight<Parameters::numExcitatory>(CEI, gEI, rewardedExcStimuliSet);
@@ -231,15 +247,20 @@ int main()
 
             }*/
 
+            // If we've just filled the recording buffer with data we want
             if(iT == recordTime || iT == duration) {
                 const bool firstRecordingBlock = (iT == recordTime);
                 const double recordingBlockStart = t - Parameters::recordTimeMs;
+                
+                // Download recording data
                 pullRecordingBuffersFromDevice();
                 
+                // Write spike data to CSV, starting a new file with a header if this is the 
+                // first recording phase and appending without a header if it is the second
                 writeTextSpikeRecording("e_spikes.csv", recordSpkE, Parameters::numExcitatory, 
                                         recordTime, Parameters::timestepMs, ",", firstRecordingBlock, 
                                         !firstRecordingBlock, recordingBlockStart);
-                writeTextSpikeRecording("i_spikes.csv", recordSpkE, Parameters::numInhibitory, 
+                writeTextSpikeRecording("i_spikes.csv", recordSpkI, Parameters::numInhibitory, 
                                         recordTime, Parameters::timestepMs, ",", firstRecordingBlock,
                                         !firstRecordingBlock, recordingBlockStart);
             }

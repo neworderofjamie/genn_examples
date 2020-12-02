@@ -7,37 +7,55 @@
 // Model includes
 #include "parameters.h"
 
-// Standard Izhikevich model with external input current
-class Izhikevich : public NeuronModels::Base
+// Standard Izhikevich model
+class IzhikevichDopamine : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Izhikevich, 4, 3);
+    DECLARE_MODEL(IzhikevichDopamine, 6, 3);
 
     SET_SIM_CODE(
-        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT; //at two times for numerical stability\n"
-        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn)+$(Iext))*DT;\n"
-        "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n");
+        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn))*DT; //at two times for numerical stability\n"
+        "$(V)+=0.5*(0.04*$(V)*$(V)+5.0*$(V)+140.0-$(U)+$(Isyn))*DT;\n"
+        "$(U)+=$(a)*($(b)*$(V)-$(U))*DT;\n"
+        "const unsigned int timestep = (unsigned int)($(t) / DT);\n"
+        "const bool injectDopamine = (($(dTime)[timestep / 32] & (1 << (timestep % 32))) != 0);\n"
+        "if(injectDopamine) {\n"
+        "   const scalar dopamineDT = $(t) - $(prev_seT);\n"
+        "   const scalar dopamineDecay = exp(-dopamineDT / $(tauD));\n"
+        "   $(D) = ($(D) * dopamineDecay) + $(dStrength);\n"
+        "}\n");
 
     SET_THRESHOLD_CONDITION_CODE("$(V) >= 30.0");
     SET_RESET_CODE(
         "$(V)=$(c);\n"
         "$(U)+=$(d);\n");
 
-    SET_PARAM_NAMES({"a", "b", "c", "d"});
-    SET_VARS({{"V","scalar"}, {"U", "scalar"}, {"Iext", "scalar"}});
+    SET_PARAM_NAMES({"a", "b", "c", "d", "tauD", "dStrength"});
+    SET_VARS({{"V","scalar"}, {"U", "scalar"}, {"D", "scalar"}});
+    
+    SET_EXTRA_GLOBAL_PARAMS({{"dTime", "uint32_t*"}});
 };
-IMPLEMENT_MODEL(Izhikevich);
+IMPLEMENT_MODEL(IzhikevichDopamine);
 
 // Uniformly distributed input current
-class UniformNoise : public CurrentSourceModels::Base
+class StimAndNoiseSource : public CurrentSourceModels::Base
 {
 public:
-    DECLARE_MODEL(UniformNoise, 1, 0);
+    DECLARE_MODEL(StimAndNoiseSource, 2, 2);
 
-    SET_INJECTION_CODE("$(injectCurrent, ($(gennrand_uniform) * $(n) * 2.0) - $(n));\n");
-    SET_PARAM_NAMES({"n"});
+    SET_INJECTION_CODE(
+        "scalar current = ($(gennrand_uniform) * $(n) * 2.0) - $(n);\n"
+        "if($(startStim) != $(endStim) && $(t) >= $(stimTimes)[$(startStim)]) {\n"
+        "   current += $(stimMagnitude);\n"
+        "   $(startStim)++;\n"
+        "}\n"
+        "$(injectCurrent, current);\n");
+    
+    SET_PARAM_NAMES({"n", "stimMagnitude"});
+    SET_VARS( {{"startStim", "unsigned int"}, {"endStim", "unsigned int", VarAccess::READ_ONLY}} );
+    SET_EXTRA_GLOBAL_PARAMS( {{"stimTimes", "scalar*"}} );
 };
-IMPLEMENT_MODEL(UniformNoise);
+IMPLEMENT_MODEL(StimAndNoiseSource);
 
 void modelDefinition(NNmodel &model)
 {
@@ -56,28 +74,40 @@ void modelDefinition(NNmodel &model)
         Parameters::probabilityConnection); // 0 - prob
     
     // Excitatory model parameters
-    Izhikevich::ParamValues excParams(
-        0.02,   // a
-        0.2,    // b
-        -65.0,  // c
-        8.0);   // d
+    IzhikevichDopamine::ParamValues excParams(
+        0.02,                           // a
+        0.2,                            // b
+        -65.0,                          // c
+        8.0,                            // d
+        Parameters::tauD,               // Dopamine time constant [ms]
+        Parameters::dopamineStrength);  // Dopamine strength
+    
+    // Excitatory initial conditions
+    IzhikevichDopamine::VarValues excInit(
+        -65.0,  // V
+        -13.0,  // U
+        0.0);   // D
 
     // Inhibitory model parameters
-    Izhikevich::ParamValues inhParams(
+    NeuronModels::Izhikevich::ParamValues inhParams(
         0.1,    // a
         0.2,    // b
         -65.0,  // c
         2.0);   // d
 
-    // LIF initial conditions
-    Izhikevich::VarValues izkInit(
+    // Inhibitory initial conditions
+    NeuronModels::Izhikevich::VarValues inhInit(
         -65.0,  // V
-        -13.0,  // U
-        0.0);   // Iext
-
-    UniformNoise::ParamValues currSourceParams(
-        6.5);
-
+        -13.0); // U
+        
+    StimAndNoiseSource::ParamValues currSourceParams(
+        6.5,                            // n
+        Parameters::stimuliCurrent);    // Stimuli magnitude
+    
+    StimAndNoiseSource::VarValues currSourceInit(
+        uninitialisedVar(),   // startStim
+        uninitialisedVar());  // endStim
+    
     STDPDopamine::ParamValues dopeParams(
         20.0,                       // 0 - Potentiation time constant (ms)
         20.0,                       // 1 - Depression time constant (ms)
@@ -96,13 +126,13 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues inhSynInit(Parameters::inhWeight);
 
     // Create IF_curr neuron and enable spike recording
-    auto *e = model.addNeuronPopulation<Izhikevich>("E", Parameters::numExcitatory, excParams, izkInit);
-    auto *i = model.addNeuronPopulation<Izhikevich>("I", Parameters::numInhibitory, inhParams, izkInit);
+    auto *e = model.addNeuronPopulation<IzhikevichDopamine>("E", Parameters::numExcitatory, excParams, excInit);
+    auto *i = model.addNeuronPopulation<NeuronModels::Izhikevich>("I", Parameters::numInhibitory, inhParams, inhInit);
     e->setSpikeRecordingEnabled(true);
     i->setSpikeRecordingEnabled(true);
 
-    model.addCurrentSource<UniformNoise>("ECurr", "E", currSourceParams, {});
-    model.addCurrentSource<UniformNoise>("ICurr", "I", currSourceParams, {});
+    model.addCurrentSource<StimAndNoiseSource>("ECurr", "E", currSourceParams, currSourceInit);
+    model.addCurrentSource<StimAndNoiseSource>("ICurr", "I", currSourceParams, currSourceInit);
 
     model.addSynapsePopulation<STDPDopamine, PostsynapticModels::DeltaCurr>(
         "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,

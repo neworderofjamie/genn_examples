@@ -38,7 +38,7 @@ public:
         "// Calculate offset to integrate over correct area\n"
         "const scalar offset = (tc <= $(seT_pre)) ? exp(-($(seT_pre) - tc) / $(tauC)) : exp(-(tc - $(seT_pre)) / $(tauD));\n"
         "// Update weight and clamp\n"
-        "$(g) += ($(c) * $(d) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
+        "$(g) += ($(c) * $(D_pre) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
         "$(g) = fmax($(wMin), fmin($(wMax), $(g)));\n"
         "// Decay tag and apply STDP\n"
         "scalar newTag = $(c) * tagDecay;\n"
@@ -63,7 +63,7 @@ public:
         "// Calculate offset to integrate over correct area\n"
         "const scalar offset = (tc <= $(seT_pre)) ? exp(-($(seT_pre) - tc) / $(tauC)) : exp(-(tc - $(seT_pre)) / $(tauD));\n"
         "// Update weight and clamp\n"
-        "$(g) += ($(c) * $(d) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
+        "$(g) += ($(c) * $(D_pre) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
         "$(g) = fmax($(wMin), fmin($(wMax), $(g)));\n"
         "// Write back updated tag and update time\n"
         "$(c) *= tagDecay;\n");
@@ -80,7 +80,7 @@ public:
         "// Calculate offset to integrate over correct area\n"
         "const scalar offset = (tc <= $(seT_pre)) ? exp(-($(seT_pre) - tc) / $(tauC)) : exp(-(tc - $(seT_pre)) / $(tauD));\n"
         "// Update weight and clamp\n"
-        "$(g) += ($(c) * $(d) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
+        "$(g) += ($(c) * $(D_pre) * $(scale)) * ((tagDecay * dopamineDecay) - offset);\n"
         "$(g) = max($(wMin), min($(wMax), $(g)));\n"
         "// Decay tag and apply STDP\n"
         "scalar newTag = $(c) * tagDecay;\n"
@@ -93,11 +93,7 @@ public:
         "// Write back updated tag and update time\n"
         "$(c) = newTag;\n");
 
-    SET_EVENT_THRESHOLD_CONDITION_CODE("$(injectDopamine)");
-
-    SET_EXTRA_GLOBAL_PARAMS({
-        {"injectDopamine", "bool"},
-        {"d", "scalar"}});
+    SET_EVENT_THRESHOLD_CONDITION_CODE("injectDopamine");
 
     SET_DERIVED_PARAMS({
         {"scale", [](const std::vector<double> &pars, double){ return 1.0 / -((1.0 / pars[2]) + (1.0 / pars[3])); }}});
