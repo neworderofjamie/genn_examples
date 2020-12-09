@@ -8,15 +8,16 @@ int main()
 {
     allocateMem();
     initialize();
+    startSpikeStim[0] = 0;
+    endSpikeStim[0] = 1;
     initializeSparse();
+
+    allocatespikeTimesStim(1);
+    spikeTimesStim[0] = 0.0f;
+    pushspikeTimesStimToDevice(1);
 
     std::ofstream os("tenHHRing_output.V.dat");
     while(t < 200.0f) {
-        if(iT == 0) {
-            glbSpkStim[0] = 0;
-            glbSpkCntStim[0] = 1;
-            pushStimSpikesToDevice();
-        }
         stepTime();
         pullPop1StateFromDevice();
 
