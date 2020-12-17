@@ -117,6 +117,8 @@ int main()
         std::ofstream performance("performance.csv");
         performance << "Epoch, Batch, Num trials, Number correct" << std::endl;
     
+        AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
+
         float learningRate = 0.005f;
 
         // Loop through epochs
@@ -132,10 +134,10 @@ int main()
                 const unsigned int numTrialsInBatch = (batch == (numBatches - 1)) ? ((numTrainingImages - 1) % Parameters::batchSize) + 1 : Parameters::batchSize;
 
                 // Loop through trials
-                std::array<scalar, 10> output{0};
                 unsigned int numCorrect = 0;
                 for(unsigned int trial = 0; trial < numTrialsInBatch; trial++) {
                     // Loop through timesteps
+                    std::array<scalar, 10> output{0};
                     for(unsigned int timestep = 0; timestep < Parameters::trialTimesteps; timestep++) {
                         stepTime();
     
@@ -143,6 +145,10 @@ int main()
                         if(timestep > (Parameters::inputWidth * Parameters::inputHeight * Parameters::inputRepeats)) {
                             // Download network output
                             pullPiOutputFromDevice();
+                            pullEOutputFromDevice();
+
+                            // Record outputs
+                            outputRecorder.record(t);
 
                             // Add output to total
                             std::transform(output.begin(), output.end(), PiOutput, output.begin(),

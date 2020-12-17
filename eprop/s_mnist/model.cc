@@ -4,6 +4,9 @@
 
 #include "parameters.h"
 
+//----------------------------------------------------------------------------
+// InputSequential
+//----------------------------------------------------------------------------
 class InputSequential : public NeuronModels::Base
 {
 public:
