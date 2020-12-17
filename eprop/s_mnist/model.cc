@@ -51,30 +51,39 @@ IMPLEMENT_MODEL(InputSequential);
 class OutputClassification : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(OutputClassification, 1, 8);
+    DECLARE_MODEL(OutputClassification, 1, 7);
 
     SET_PARAM_NAMES({"TauOut"});    // Membrane time constant [ms]
 
-    SET_VARS({{"Y", "scalar"}, {"PiStar", "scalar", VarAccess::READ_ONLY}, {"Pi", "scalar"}, {"E", "scalar"},
+    SET_VARS({{"Y", "scalar"}, {"Pi", "scalar"}, {"E", "scalar"},
               {"B", "scalar"}, {"DeltaB", "scalar"}, {"M", "scalar", VarAccess::READ_ONLY}, {"V", "scalar", VarAccess::READ_ONLY}});
 
     SET_DERIVED_PARAMS({
         {"Kappa", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }}});
 
     SET_SIM_CODE(
+        "const int globalTimestep = (int)$(t);\n"
+        "const int trial = globalTimestep / ((28 * 28 * 2) + 20);\n"
+        "const int timestep = globalTimestep % ((28 * 28 * 2) + 20);\n"
         "$(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);\n"
         "const scalar expPi = exp($(Y));\n"
         "scalar sumExpPi = expPi;\n"
-        "sumExpPi +=  __shfl_xor_sync(0x3, sumExpPi, 0x1);\n"
+        "sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x1);\n"
+        "sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x2);\n"
+        "sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x4);\n"
+        "sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x8);\n"
         "$(Pi) = expPi / sumExpPi;\n"
-        "if($(PiStar) < 0.0) {\n"
+        "if(timestep < (28 * 28 * 2)) {\n"
         "   $(E) = 0.0;\n"
         "}\n"
         "else {\n"
-        "   $(E) = $(Pi) - $(PiStar);\n"
+        "   const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;\n"
+        "   $(E) = $(Pi) - piStar;\n"
         "}\n"
         "$(DeltaB) += $(E);\n");
-
+    
+    SET_EXTRA_GLOBAL_PARAMS({{"labels", "uint8_t*"}});
+    
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
 IMPLEMENT_MODEL(OutputClassification);
@@ -129,7 +138,6 @@ void modelDefinition(ModelSpec &model)
 
     OutputClassification::VarValues outputInitVals(
         0.0,    // Y
-        -10.0,  // Pi*
         0.0,    // Pi
         0.0,    // E
         0.0,    // B
@@ -216,17 +224,21 @@ void modelDefinition(ModelSpec &model)
     //---------------------------------------------------------------------------
     // Neuron populations
     //---------------------------------------------------------------------------
-    model.addNeuronPopulation<InputSequential>("Input", Parameters::numInputNeurons,
-                                               {}, {});
+    auto *input = model.addNeuronPopulation<InputSequential>("Input", Parameters::numInputNeurons,
+                                                             {}, {});
 
-    model.addNeuronPopulation<Recurrent>("RecurrentLIF", Parameters::numRecurrentNeurons,
-                                         recurrentParamVals, recurrentInitVals);
+    auto *recurrentLIF = model.addNeuronPopulation<Recurrent>("RecurrentLIF", Parameters::numRecurrentNeurons,
+                                                              recurrentParamVals, recurrentInitVals);
 
-    model.addNeuronPopulation<RecurrentALIF>("RecurrentALIF", Parameters::numRecurrentNeurons,
-                                             recurrentALIFParamVals, recurrentALIFInitVals);
+    auto *recurrentALIF = model.addNeuronPopulation<RecurrentALIF>("RecurrentALIF", Parameters::numRecurrentNeurons,
+                                                                   recurrentALIFParamVals, recurrentALIFInitVals);
 
     model.addNeuronPopulation<OutputClassification>("Output", Parameters::numOutputNeurons,
                                                     outputParamVals, outputInitVals);
+    
+    input->setSpikeRecordingEnabled(true);
+    recurrentLIF->setSpikeRecordingEnabled(true);
+    recurrentALIF->setSpikeRecordingEnabled(true);
 
     //---------------------------------------------------------------------------
     // Synapse populations
