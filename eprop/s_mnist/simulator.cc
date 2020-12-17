@@ -96,10 +96,12 @@ int main()
     try
     {
         allocateMem();
+        allocateRecordingBuffers(Parameters::batchSize * Parameters::trialTimesteps);
         initialize();
 
+        // Load training data and labels
         const unsigned int numTrainingImages = loadImageData("mnist/train-images.idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
-        //loadLabelData("mnist/train-labels.idx1-ubyte", )
+        loadLabelData("mnist/train-labels.idx1-ubyte", numTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
         
         // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
         BatchLearning::transposeCUDA(d_gRecurrentLIFOutput, d_gOutputRecurrentLIF, 
@@ -108,7 +110,7 @@ int main()
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         initializeSparse();
 
-        AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, PiStarOutput}, Parameters::numOutputNeurons, ",");
+        AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput}, Parameters::numOutputNeurons, ",");
 
         std::ofstream performance("performance.csv");
         performance << "Epoch, Number of cues, Number correct" << std::endl;
@@ -121,18 +123,27 @@ int main()
 
             // Loop through trials
             //unsigned int numCorrect = 0;
-            for(unsigned int trial = 0; trial < 64; trial++) {
+            for(unsigned int batch = 0; batch < Parameters::batchSize; batch++) {
+                std::cout << "\tBatch " << batch << std::endl;
                 for(unsigned int timestep = 0; timestep < Parameters::trialTimesteps; timestep++) {
                     stepTime();
     
                     // Record output
-                    pullPiStarOutputFromDevice();
                     pullPiOutputFromDevice();
                     outputRecorder.record(t);
                 }
             }
 
-            
+            pullRecordingBuffersFromDevice();
+            writeTextSpikeRecording("input_spikes_" + std::to_string(epoch) + ".csv", recordSpkInput,
+                                    Parameters::numInputNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
+                                    ",", true);
+            writeTextSpikeRecording("recurrent_lif_spikes_" + std::to_string(epoch) + ".csv", recordSpkRecurrentLIF,
+                                    Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
+                                    ",", true);
+            writeTextSpikeRecording("recurrent_alif_spikes_" + std::to_string(epoch) + ".csv", recordSpkRecurrentALIF,
+                                    Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
+                                    ",", true);
             // Update weights
             #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
              
