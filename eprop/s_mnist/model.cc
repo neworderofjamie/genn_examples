@@ -22,7 +22,7 @@ public:
         "       spike = (imgData[mirroredTimestep] == 255);\n"
         "   }\n"
         "   else if($(id) < 98 && mirroredTimestep < ((28 * 28) - 1)){\n"
-        "       const int threshold = (int)((float)($(id) / 2) * (254.0 / 48.0));\n"
+        "       const int threshold = (int)((float)($(id) % 49) * (254.0 / 48.0));\n"
         "       // If this is an 'onset' neuron\n"
         "       if($(id) < 49) {\n"
         "           spike = ((imgData[mirroredTimestep] < threshold) && (imgData[mirroredTimestep + 1] >= threshold));\n"
