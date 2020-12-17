@@ -161,13 +161,14 @@ int main()
                 }
 
                 pullRecordingBuffersFromDevice();
-                writeTextSpikeRecording("input_spikes_" + std::to_string(epoch) + ".csv", recordSpkInput,
+                const std::string filenameSuffix = std::to_string(epoch) + "_" + std::to_string(batch);
+                writeTextSpikeRecording("input_spikes_" + filenameSuffix + ".csv", recordSpkInput,
                                         Parameters::numInputNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
-                writeTextSpikeRecording("recurrent_lif_spikes_" + std::to_string(epoch) + ".csv", recordSpkRecurrentLIF,
+                writeTextSpikeRecording("recurrent_lif_spikes_" + filenameSuffix + ".csv", recordSpkRecurrentLIF,
                                         Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
-                writeTextSpikeRecording("recurrent_alif_spikes_" + std::to_string(epoch) + ".csv", recordSpkRecurrentALIF,
+                writeTextSpikeRecording("recurrent_alif_spikes_" + filenameSuffix + ".csv", recordSpkRecurrentALIF,
                                         Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
                 // Update weights
