@@ -38,6 +38,7 @@ int main()
         // Simulate
         stepTime();
 
+        pullinSynStimToExcitatoryFromDevice();
         pullVExcitatoryFromDevice();
         pullPsiExcitatoryFromDevice();
 

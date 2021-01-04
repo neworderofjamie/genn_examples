@@ -194,8 +194,8 @@ for layer in LAYER_NAMES:
         neuron_pop = model.add_neuron_population(pop_name, pop_size, "LIF", lif_params, lif_init)
         model.add_current_source(pop_name + "_poisson", "PoissonExp", pop_name, poisson_params, poisson_init)
 
-        # Set spike location so they can be accessed on host
-        neuron_pop.pop.set_spike_location(genn_wrapper.VarLocation_HOST_DEVICE)
+        # Enable spike recording
+        neuron_pop.spike_recording_enabled = True
 
         print("\tPopulation %s: num neurons:%u, external input rate:%f, external weight:%f, external DC offset:%f" % (pop_name, pop_size, ext_input_rate, ext_weight, ext_input_current))
 
@@ -301,16 +301,13 @@ print("Total neurons=%u, total synapses=%u" % (total_neurons, total_synapses))
 if BUILD_MODEL:
     print("Building Model")
     model.build()
-print("Loading Model")
-model.load()
 
-print("Simulating")
+print("Loading Model")
 duration_timesteps = int(round(DURATION_MS / DT_MS))
 ten_percent_timestep = duration_timesteps // 10
+model.load(num_recording_timesteps=duration_timesteps)
 
-# Create dictionary to hold spikes for each population
-pop_spikes = [[pop, []] 
-              for pop in itervalues(neuron_populations)]
+print("Simulating")
 
 # Loop through timesteps
 sim_start_time = perf_counter()
@@ -321,16 +318,12 @@ while model.t < DURATION_MS:
     # Indicate every 10%
     if (model.timestep % ten_percent_timestep) == 0:
         print("%u%%" % (model.timestep / 100))
-
-
-    for i, spikes in enumerate(pop_spikes):
-        # Download spikes
-        spikes[0].pull_current_spikes_from_device()
-
-        # Add to data structure
-        spikes[1].append(np.copy(spikes[0].current_spikes))
-
+        
 sim_end_time =  perf_counter()
+
+
+# Download recording data
+model.pull_recording_buffers_from_device()
 
 print("Timing:")
 print("\tSimulation:%f" % ((sim_end_time - sim_start_time) * 1000.0))
@@ -345,12 +338,15 @@ if MEASURE_TIMING:
 # Create plot
 figure, axes = plt.subplots(1, 2)
 
+# **YUCK** re-order neuron populationsf for plotting
+ordered_neuron_populations = list(reversed(list(itervalues(neuron_populations))))
+
 start_id = 0
 bar_y = 0.0
-for pop, spikes in reversed(pop_spikes):
-    spike_ids = np.concatenate(spikes)
-    spike_times = np.concatenate([np.ones_like(s) * i * DT_MS 
-                                  for i, s in enumerate(spikes)])
+for pop in ordered_neuron_populations:
+    # Get recording data
+    spike_times, spike_ids = pop.spike_recording_data
+    
     # Plot spikes
     actor = axes[0].scatter(spike_times, spike_ids + start_id, s=2, edgecolors="none")
 
@@ -364,13 +360,12 @@ for pop, spikes in reversed(pop_spikes):
     # Update bar pos
     bar_y += 1.0
 
-
 axes[0].set_xlabel("Time [ms]")
 axes[0].set_ylabel("Neuron number")
 
-axes[1].set_xlabel("Mean firing rate [Hz]")
-axes[1].set_yticks(np.arange(0.0, len(pop_spikes) * 1.0, 1.0))
-axes[1].set_yticklabels([s[0].name for s in pop_spikes])
+axes[1].set_xlabel("Mean firingrate [Hz]")
+axes[1].set_yticks(np.arange(0.0, len(neuron_populations), 1.0))
+axes[1].set_yticklabels([n.name for n in ordered_neuron_populations])
 
 # Show plot
 plt.show()

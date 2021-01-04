@@ -44,8 +44,10 @@ inhibitory_post_syn_params = {"tau": 10.0}
 excitatory_pop = model.add_neuron_population("E", NUM_EXCITATORY, "LIF", lif_params, lif_init)
 inhibitory_pop = model.add_neuron_population("I", NUM_INHIBITORY, "LIF", lif_params, lif_init)
 
+excitatory_pop.spike_recording_enabled = True
+
 model.add_synapse_population("EE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
-    excitatory_pop, inhibitory_pop,
+    excitatory_pop, excitatory_pop,
     "StaticPulse", {}, excitatory_synapse_init, {}, {},
     "ExpCurr", excitatory_post_syn_params, {},
     genn_model.init_connectivity("FixedProbabilityNoAutapse", fixed_prob))
@@ -71,29 +73,20 @@ model.add_synapse_population("IE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
 print("Building Model")
 model.build()
 print("Loading Model")
-model.load()
-
-spike_ids = None
-spike_times = None
+model.load(num_recording_timesteps=10000)
 
 sim_start_time = time()
-while model.t < 10000.0:
+while model.timestep < 10000:
     model.step_time()
-
-    model.pull_current_spikes_from_device("E")
-
-    i = excitatory_pop.current_spikes
-    t = np.ones(i.shape) * model.t
-
-    if spike_ids is None:
-        spike_ids = np.copy(i)
-        spike_times = t
-    else:
-        spike_ids = np.hstack((spike_ids, i))
-        spike_times = np.hstack((spike_times, t))
 
 sim_end_time = time()
 print("Simulation time:%fs" % (sim_end_time - sim_start_time))
+
+# Download recording data
+model.pull_recording_buffers_from_device()
+
+# Get recording data
+spike_times, spike_ids = excitatory_pop.spike_recording_data
 
 fig, axes = plt.subplots(2)
 

@@ -10,6 +10,7 @@ void modelDefinition(NNmodel &model)
         uninitialisedVar(),     // 0 - startSpike
         uninitialisedVar());    // 1 - endSpike
     
-    model.addNeuronPopulation<NeuronModels::SpikeSourceArray>(
+    auto *n = model.addNeuronPopulation<NeuronModels::SpikeSourceArray>(
         "SSA", 100, {}, ssaInit);
+    n->setSpikeRecordingEnabled(true);
 }
