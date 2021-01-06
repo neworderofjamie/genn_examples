@@ -1,7 +1,5 @@
 #pragma once
 
-//#define MEASURE_TIMING
-
 //------------------------------------------------------------------------
 // Parameters
 //------------------------------------------------------------------------
@@ -14,8 +12,7 @@ namespace Parameters
 
     // How much of start and end of simulation to record
     // **NOTE** we want to see at least one rewarded stimuli in each recording window
-    const double recordStartMs = 50.0 * 1000.0;
-    const double recordEndMs = 50.0 * 1000.0;
+    const double recordTimeMs = 50.0 * 1000.0;
 
     // How often should outgoing weights from each synapse be recorded
     const double weightRecordIntervalMs = durationMs;//10.0 * 1000.0;
@@ -52,4 +49,6 @@ namespace Parameters
 
     // reward
     const double rewardDelayMs = 1000.0;
+    
+    const bool measureTiming = false;
 }
