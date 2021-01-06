@@ -66,27 +66,27 @@ int main(int argc, char *argv[])
         CHECK_MPI_ERRORS(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
         CHECK_MPI_ERRORS(MPI_Comm_size(MPI_COMM_WORLD, &numRanks));
 
-	// Due to laziness, check number of trials can be divided by number of ranks
-	assert((64 % numRanks) == 0);
-	
-	// Allocate a unique NCCL ID on first rank
-        ncclUniqueId ncclID;
-        ncclComm_t ncclCommunicator;
-        if(rank == 0) {
-            CHECK_NCCL_ERRORS(ncclGetUniqueId(&ncclID));
-        }
+        // Due to laziness, check number of trials can be divided by number of ranks
+        assert((64 % numRanks) == 0);
 
-	// Broadcast NCCL ID to all nodes
-	// **NOTE** this always sends value from first rank
-	CHECK_MPI_ERRORS(MPI_Bcast((void*)&ncclID, sizeof(ncclUniqueId), MPI_BYTE, 0, MPI_COMM_WORLD));
+        // Allocate a unique NCCL ID on first rank
+            ncclUniqueId ncclID;
+            ncclComm_t ncclCommunicator;
+            if(rank == 0) {
+                CHECK_NCCL_ERRORS(ncclGetUniqueId(&ncclID));
+            }
+
+        // Broadcast NCCL ID to all nodes
+        // **NOTE** this always sends value from first rank
+        CHECK_MPI_ERRORS(MPI_Bcast((void*)&ncclID, sizeof(ncclUniqueId), MPI_BYTE, 0, MPI_COMM_WORLD));
 
         allocateMem();
 
-	// Create NCCL communicator
-	CHECK_NCCL_ERRORS(ncclCommInitRank(&ncclCommunicator, numRanks, ncclID, rank));
+        // Create NCCL communicator
+        CHECK_NCCL_ERRORS(ncclCommInitRank(&ncclCommunicator, numRanks, ncclID, rank));
 
-	initialize();
-        
+        initialize();
+            
         // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
         BatchLearning::transposeCUDA(d_gRecurrentLIFOutput, d_gOutputRecurrentLIF, 
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
@@ -98,15 +98,15 @@ int main(int argc, char *argv[])
         performance << "Epoch, Number of cues, Number correct" << std::endl;
         
         std::mt19937 rng;
-	{
-	    uint32_t seedData[std::mt19937::state_size];
-	    std::random_device seedSource;
-	    for(int i = 0; i < std::mt19937::state_size; i++) {
-	      seedData[i] = seedSource();
-	    }
-	    std::seed_seq seeds(std::begin(seedData), std::end(seedData));
-	    rng.seed(seeds);
-	}
+        {
+            uint32_t seedData[std::mt19937::state_size];
+            std::random_device seedSource;
+            for(int i = 0; i < std::mt19937::state_size; i++) {
+              seedData[i] = seedSource();
+            }
+            std::seed_seq seeds(std::begin(seedData), std::end(seedData));
+            rng.seed(seeds);
+        }
         std::uniform_int_distribution<unsigned int> delayTimestepsDistribution(Parameters::minDelayTimesteps, Parameters::maxDelayTimesteps);
 
         const std::mt19937::result_type midRNG = std::mt19937::min() + ((std::mt19937::max() - std::mt19937::min()) / 2);
@@ -196,9 +196,9 @@ int main(int argc, char *argv[])
                         
             // Update weights
             #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS) \
-	      CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaG##POP_NAME, d_DeltaG##POP_NAME, NUM_SRC_NEURONS * NUM_TRG_NEURONS, ncclFloat, ncclSum, ncclCommunicator, 0)); \
-	        BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
-             
+                CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaG##POP_NAME, d_DeltaG##POP_NAME, NUM_SRC_NEURONS * NUM_TRG_NEURONS, ncclFloat, ncclSum, ncclCommunicator, 0)); \
+                BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
+                 
             ADAM_OPTIMIZER_CUDA(InputRecurrentLIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
             ADAM_OPTIMIZER_CUDA(InputRecurrentALIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
             ADAM_OPTIMIZER_CUDA(LIFLIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
@@ -206,28 +206,29 @@ int main(int argc, char *argv[])
             ADAM_OPTIMIZER_CUDA(LIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
             ADAM_OPTIMIZER_CUDA(ALIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
 
-	    CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentLIFOutput, d_DeltaGRecurrentLIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
+            CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentLIFOutput, d_DeltaGRecurrentLIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
             BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentLIFOutput, d_MRecurrentLIFOutput, d_VRecurrentLIFOutput, d_gRecurrentLIFOutput, d_gOutputRecurrentLIF, 
                                                       Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
                                                       epoch, learningRate);
 
-			      CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentALIFOutput, d_DeltaGRecurrentALIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
-	    BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
+            CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentALIFOutput, d_DeltaGRecurrentALIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
+            BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                                       Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
                                                       epoch, learningRate);
                                                           
             // Update biases
-			      CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaBOutput, d_DeltaBOutput, Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
+            CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaBOutput, d_DeltaBOutput, Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
             BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
                                              Parameters::numOutputNeurons, 1,
                                              epoch, learningRate);
 
-	    // Use MPI to sum number of correct trials across ranks
-	    CHECK_MPI_ERRORS(MPI_Allreduce(&numCorrect, &numCorrect, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD));
-	    
+            // Use MPI to sum number of correct trials across ranks
+            CHECK_MPI_ERRORS(MPI_Allreduce(&numCorrect, &numCorrect, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD));
+            
             // Display performance in this epoch	    
             std::cout << "(" << rank << ") Epoch " << epoch << " (" << numCues << " cues): " << numCorrect << "/64 correct" << std::endl;
-// Write performance to file
+            
+            // Write performance to file
             performance << epoch << ", " << numCues << ", " << numCorrect << std::endl;
             
             // If enough trials were correct
@@ -243,11 +244,11 @@ int main(int argc, char *argv[])
             }
         }
 
-	// Free memory allocated by GeNN
-	freeMem();
+        // Free memory allocated by GeNN
+        freeMem();
 
-	// Destroy NCCL communicator and finalize MPI
-	CHECK_NCCL_ERRORS(ncclCommDestroy(ncclCommunicator));
+        // Destroy NCCL communicator and finalize MPI
+        CHECK_NCCL_ERRORS(ncclCommDestroy(ncclCommunicator));
         CHECK_MPI_ERRORS(MPI_Finalize());
     }
     catch(std::exception &ex) {
