@@ -46,6 +46,7 @@ unsigned int loadImageData(const std::string &imageDatafilename, uint8_t *&egp,
 {
     // Open binary file
     std::ifstream imageData(imageDatafilename, std::ifstream::binary);
+    assert(imageData.good());
 
     // Read header words
     const uint32_t magic = readBigEndian(imageData);
@@ -75,6 +76,7 @@ void loadLabelData(const std::string &labelDataFilename, unsigned int desiredNum
 {
     // Open binary file
     std::ifstream labelData(labelDataFilename, std::ifstream::binary);
+    assert(labelData.good());
 
     // Read header words
     const uint32_t magic = readBigEndian(labelData);
