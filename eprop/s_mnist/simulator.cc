@@ -3,6 +3,12 @@
 #include <fstream>
 #include <iostream>
 
+// MPI includes
+#include <mpi.h>
+
+// NCCL includes
+#include <nccl.h>
+
 // GeNN userproject includes
 #include "analogueRecorder.h"
 #include "spikeRecorder.h"
@@ -16,6 +22,21 @@
 // Model parameters
 #include "parameters.h"
 
+#define CHECK_MPI_ERRORS(call) {\
+    int error = call;\
+    if (error != MPI_SUCCESS) {\
+        throw std::runtime_error(__FILE__": " + std::to_string(__LINE__) + ": MPI error " + std::to_s\
+tring(error));\
+    }\
+}
+
+#define CHECK_NCCL_ERRORS(call) {\
+    ncclResult_t error = call;\
+    if (error != ncclSuccess) {\
+        throw std::runtime_error(__FILE__": " + std::to_string(__LINE__) + ": NCCL error " + std::to_s\
+tring(error) + ": " + ncclGetErrorString(error));\
+    }\
+}
 //----------------------------------------------------------------------------
 // Anonynous namespace
 //----------------------------------------------------------------------------
@@ -96,8 +117,34 @@ int main()
 {
     try
     {
+        // Initialize MPI
+        int rank = -1;
+        int numRanks = -1;
+        CHECK_MPI_ERRORS(MPI_Init(&argc, &argv));
+        CHECK_MPI_ERRORS(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
+        CHECK_MPI_ERRORS(MPI_Comm_size(MPI_COMM_WORLD, &numRanks));
+
+        // Due to laziness, check number of trials can be divided by number of ranks
+        assert((64 % numRanks) == 0);
+
+        // Allocate a unique NCCL ID on first rank
+        ncclUniqueId ncclID;
+        ncclComm_t ncclCommunicator;
+        if(rank == 0) {
+            CHECK_NCCL_ERRORS(ncclGetUniqueId(&ncclID));
+        }
+
+        // Broadcast NCCL ID to all nodes
+        // **NOTE** this always sends value from first rank
+        CHECK_MPI_ERRORS(MPI_Bcast((void*)&ncclID, sizeof(ncclUniqueId), MPI_BYTE, 0, MPI_COMM_WORLD));
+
         allocateMem();
+
         allocateRecordingBuffers(Parameters::batchSize * Parameters::trialTimesteps);
+
+        // Create NCCL communicator
+        CHECK_NCCL_ERRORS(ncclCommInitRank(&ncclCommunicator, numRanks, ncclID, rank));
+
         initialize();
 
         // Load training data and labels
@@ -114,21 +161,21 @@ int main()
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         initializeSparse();
 
-        std::ofstream performance("performance.csv");
+        std::ofstream performance("performance" + std::to_string(rank) + ".csv");
         performance << "Epoch, Batch, Num trials, Number correct" << std::endl;
     
-        AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
+        AnalogueRecorder<float> outputRecorder("output" + std::to_string(rank) + ".csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
 
         float learningRate = 0.005f;
 
         // Loop through epochs
         for(unsigned int epoch = 0; epoch < 1; epoch++) {
-            std::cout << "Epoch " << epoch << std::endl;
+            std::cout << "(" << rank << ") Epoch " << epoch << std::endl;
 
             // Loop through batches in epoch
             unsigned int i = 0;
             for(unsigned int batch = 0; batch < numBatches; batch++) {
-                std::cout << "\tBatch " << batch << "/" << numBatches << std::endl;
+                std::cout << "\t(" << rank << ") Batch " << batch << "/" << numBatches << std::endl;
 
                 // Calculate number of trials in this batch
                 const unsigned int numTrialsInBatch = (batch == (numBatches - 1)) ? ((numTrainingImages - 1) % Parameters::batchSize) + 1 : Parameters::batchSize;
@@ -167,7 +214,7 @@ int main()
                 }
 
                 pullRecordingBuffersFromDevice();
-                const std::string filenameSuffix = std::to_string(epoch) + "_" + std::to_string(batch);
+                const std::string filenameSuffix = std::to_string(epoch) + "_" + std::to_string(batch) + "_" + std::to_string(rank);
                 writeTextSpikeRecording("input_spikes_" + filenameSuffix + ".csv", recordSpkInput,
                                         Parameters::numInputNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
@@ -178,7 +225,9 @@ int main()
                                         Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
                 // Update weights
-                #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
+                #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS) \
+                    CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaG##POP_NAME, d_DeltaG##POP_NAME, NUM_SRC_NEURONS * NUM_TRG_NEURONS, ncclFloat, ncclSum, ncclCommunicator, 0)); \
+                    BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
              
                 ADAM_OPTIMIZER_CUDA(InputRecurrentLIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
                 ADAM_OPTIMIZER_CUDA(InputRecurrentALIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
@@ -187,20 +236,27 @@ int main()
                 ADAM_OPTIMIZER_CUDA(LIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
                 ADAM_OPTIMIZER_CUDA(ALIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
 
+                CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentLIFOutput, d_DeltaGRecurrentLIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
                 BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentLIFOutput, d_MRecurrentLIFOutput, d_VRecurrentLIFOutput, d_gRecurrentLIFOutput, d_gOutputRecurrentLIF, 
                                                           Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
                                                           epoch, learningRate);
+
+                CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentALIFOutput, d_DeltaGRecurrentALIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
                 BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                                           Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
                                                           epoch, learningRate);
                                                           
                 // Update biases
+                CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaBOutput, d_DeltaBOutput, Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
                 BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
                                                  Parameters::numOutputNeurons, 1,
                                                  epoch, learningRate);
-             
+                
+                // Use MPI to sum number of correct trials across ranks
+                CHECK_MPI_ERRORS(MPI_Allreduce(&numCorrect, &numCorrect, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD));
+            
                 // Display performance in this epoch
-                std::cout << "\t\t" << numCorrect << "/" << numTrialsInBatch << "  correct" << std::endl;
+                std::cout << "\t\t(" << rank << ") " << numCorrect << "/" << numTrialsInBatch << "  correct" << std::endl;
             
                 // Write performance to file
                 performance << epoch << ", " << batch << ", " << numTrialsInBatch << ", " << numCorrect << std::endl;

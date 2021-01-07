@@ -93,6 +93,10 @@ IMPLEMENT_MODEL(OutputClassification);
 
 void modelDefinition(ModelSpec &model)
 {
+    // Allow device to be selected by device ID (rather than PCI bus ID)
+    // **NOTE** by using CUDA_VISIBLE_DEVICES this means each process can just use GPU 0
+    GENN_PREFERENCES.selectGPUByDeviceID = true;
+
     // Calculate weight scaling factor
     // **NOTE** "Long short-term memory and 
     // learning-to-learn in networks of spiking neurons"
