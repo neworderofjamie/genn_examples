@@ -16,7 +16,7 @@ public:
         "const int globalTimestep = (int)$(t);\n"
         "const int trial = globalTimestep / ((28 * 28 * 2) + 20);\n"
         "const int timestep = globalTimestep % ((28 * 28 * 2) + 20);\n"
-        "const uint8_t *imgData = &$(dataset)[$(indices)[trial * 28 * 28]];\n"
+        "const uint8_t *imgData = &$(dataset)[$(indices)[trial] * 28 * 28];\n"
         "bool spike = false;\n"
         "// If we should be presenting the image\n"
         "if(timestep < (28 * 28 * 2)) {\n"
