@@ -12,19 +12,6 @@ public:
 };
 IMPLEMENT_SNIPPET(Ring);
 
-class FirstToFirst : public InitSparseConnectivitySnippet::Base
-{
-public:
-    DECLARE_SNIPPET(FirstToFirst, 0);
-    SET_ROW_BUILD_CODE(
-        "if($(id_pre) == 0) {\n"
-        "   $(addSynapse, $(id_pre));\n"
-        "}\n"
-        "$(endRow);\n");
-    SET_CALC_MAX_ROW_LENGTH_FUNC([](unsigned int, unsigned int, const std::vector<double> &){ return 1;});
-};
-IMPLEMENT_SNIPPET(FirstToFirst);
-
 void modelDefinition(NNmodel &model)
 {
     // definition of tenHHRing
@@ -46,8 +33,12 @@ void modelDefinition(NNmodel &model)
         0.3176767,     // 2 - prob. for not Na channel blocking h
         0.5961207);    // 3 - prob. for K channel activation n
 
+    NeuronModels::SpikeSourceArray::VarValues stim_ini(
+        uninitialisedVar(),     // 0 - startSpike indices
+        uninitialisedVar());    // 1 - endSpike indices
+
     model.addNeuronPopulation<NeuronModels::TraubMiles>("Pop1", 10, p, ini);
-    model.addNeuronPopulation<NeuronModels::SpikeSource>("Stim", 1, {}, {});
+    model.addNeuronPopulation<NeuronModels::SpikeSourceArray>("Stim", 1, {}, stim_ini);
 
     WeightUpdateModels::StaticPulse::VarValues s_ini(
          -0.2); // 0 - g: the synaptic conductance value
@@ -68,5 +59,5 @@ void modelDefinition(NNmodel &model)
         "Stim", "Pop1",
         {}, s_ini,
         ps_p, {},
-        initConnectivity<FirstToFirst>());
+        initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 }

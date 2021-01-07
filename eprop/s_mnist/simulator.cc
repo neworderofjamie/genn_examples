@@ -1,7 +1,10 @@
 // Standard C++ includes
+#include <algorithm>
 #include <array>
 #include <fstream>
 #include <iostream>
+#include <numeric>
+#include <random>
 
 // MPI includes
 #include <mpi.h>
@@ -151,12 +154,15 @@ int main()
         const unsigned int numTrainingImages = loadImageData("mnist/train-images.idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
         loadLabelData("mnist/train-labels.idx1-ubyte", numTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
         
+        // Allocate indices buffer and initialize host indices
+        allocateindicesInput(numTrainingImages);
+        allocateindicesOutput(numTrainingImages);
+        std::iota(&indicesInput[0], &indicesInput[numTrainingImages], 0);
+        
         // Calculate number of batches this equates to
         const unsigned int numBatches = ((numTrainingImages + Parameters::batchSize - 1) / Parameters::batchSize);
 
         // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
-        BatchLearning::transposeCUDA(d_gRecurrentLIFOutput, d_gOutputRecurrentLIF, 
-                                     Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         BatchLearning::transposeCUDA(d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         initializeSparse();
@@ -171,6 +177,13 @@ int main()
         // Loop through epochs
         for(unsigned int epoch = 0; epoch < 1; epoch++) {
             std::cout << "(" << rank << ") Epoch " << epoch << std::endl;
+
+            // Shuffle indices, duplicate to output and upload
+            // **TODO** some sort of shared pointer business
+            std::random_shuffle(&indicesInput[0], &indicesInput[numTrainingImages]);
+            std::copy_n(indicesInput, numTrainingImages, indicesOutput);
+            pushindicesInputToDevice(numTrainingImages);
+            pushindicesOutputToDevice(numTrainingImages);
 
             // Loop through batches in epoch
             unsigned int i = 0;
@@ -218,9 +231,6 @@ int main()
                 writeTextSpikeRecording("input_spikes_" + filenameSuffix + ".csv", recordSpkInput,
                                         Parameters::numInputNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
-                writeTextSpikeRecording("recurrent_lif_spikes_" + filenameSuffix + ".csv", recordSpkRecurrentLIF,
-                                        Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
-                                        ",", true);
                 writeTextSpikeRecording("recurrent_alif_spikes_" + filenameSuffix + ".csv", recordSpkRecurrentALIF,
                                         Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
@@ -229,17 +239,8 @@ int main()
                     CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaG##POP_NAME, d_DeltaG##POP_NAME, NUM_SRC_NEURONS * NUM_TRG_NEURONS, ncclFloat, ncclSum, ncclCommunicator, 0)); \
                     BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
              
-                ADAM_OPTIMIZER_CUDA(InputRecurrentLIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
                 ADAM_OPTIMIZER_CUDA(InputRecurrentALIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
-                ADAM_OPTIMIZER_CUDA(LIFLIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
-                ADAM_OPTIMIZER_CUDA(ALIFLIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
-                ADAM_OPTIMIZER_CUDA(LIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
                 ADAM_OPTIMIZER_CUDA(ALIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
-
-                CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentLIFOutput, d_DeltaGRecurrentLIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
-                BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentLIFOutput, d_MRecurrentLIFOutput, d_VRecurrentLIFOutput, d_gRecurrentLIFOutput, d_gOutputRecurrentLIF, 
-                                                          Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
-                                                          epoch, learningRate);
 
                 CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentALIFOutput, d_DeltaGRecurrentALIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
                 BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 

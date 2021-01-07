@@ -39,7 +39,7 @@ fusi_model = create_custom_weight_update_class(
         $(X) -= $(b);
     }
     else {
-        const scalar X_dt = $(t) - $(sT_pre);
+        const scalar X_dt = $(t) - $(prev_sT_pre);
         if ($(X) > $(thetaX)) {
             $(X) += $(alpha) * X_dt;
         }
@@ -53,9 +53,8 @@ fusi_model = create_custom_weight_update_class(
     const scalar dt = $(t) - $(sT_post);
     $(C) = ($(C) * exp(-dt / $(tauC))) + $(JC);
     """,
-    is_pre_spike_time_required=True,
-    is_post_spike_time_required=True,
-    should_reset_spike_times_after_update=True)
+    is_prev_pre_spike_time_required=True,
+    is_post_spike_time_required=True)
 
 TIMESTEP = 1.0
 PRESENT_TIMESTEPS = 1500
@@ -107,7 +106,7 @@ extra_poisson2post = model.add_synapse_population(
             "StaticPulse", {}, {"g": POSTSYN_WT}, {}, {},
             "DeltaCurr", {}, {})
 
-#model.build()
+model.build()
 model.load()
 
 pre_spikes = []

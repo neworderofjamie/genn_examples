@@ -16,7 +16,7 @@ public:
         "const int globalTimestep = (int)$(t);\n"
         "const int trial = globalTimestep / ((28 * 28 * 2) + 20);\n"
         "const int timestep = globalTimestep % ((28 * 28 * 2) + 20);\n"
-        "const uint8_t *imgData = &$(dataset)[trial * 28 * 28];\n"
+        "const uint8_t *imgData = &$(dataset)[$(indices)[trial * 28 * 28]];\n"
         "bool spike = false;\n"
         "// If we should be presenting the image\n"
         "if(timestep < (28 * 28 * 2)) {\n"
@@ -42,7 +42,7 @@ public:
         "}\n");
     SET_THRESHOLD_CONDITION_CODE("spike");
     
-    SET_EXTRA_GLOBAL_PARAMS({{"dataset", "uint8_t*"}});
+    SET_EXTRA_GLOBAL_PARAMS({{"indices", "unsigned int*"}, {"dataset", "uint8_t*"}});
     
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
@@ -80,12 +80,12 @@ public:
         "   $(E) = 0.0;\n"
         "}\n"
         "else {\n"
-        "   const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;\n"
+        "   const scalar piStar = ($(id) == $(labels)[$(indices)[trial]]) ? 1.0 : 0.0;\n"
         "   $(E) = $(Pi) - piStar;\n"
         "}\n"
         "$(DeltaB) += $(E);\n");
     
-    SET_EXTRA_GLOBAL_PARAMS({{"labels", "uint8_t*"}});
+    SET_EXTRA_GLOBAL_PARAMS({{"indices", "unsigned int*"}, {"labels", "uint8_t*"}});
     
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
@@ -115,17 +115,6 @@ void modelDefinition(ModelSpec &model)
     //---------------------------------------------------------------------------
     // Parameters and state variables
     //---------------------------------------------------------------------------
-    // Recurrent LIF population
-    Recurrent::ParamValues recurrentParamVals(
-        20.0,   // Membrane time constant [ms]
-        0.6,    // Spiking threshold [mV]
-        5.0);   // Refractory time constant [ms]
-
-    Recurrent::VarValues recurrentInitVals(
-        0.0,    // V
-        0.0,    // RefracTime
-        0.0);   // E
-
     // Recurrent ALIF population
     RecurrentALIF::ParamValues recurrentALIFParamVals(
         20.0,       // Membrane time constant [ms]
@@ -152,19 +141,13 @@ void modelDefinition(ModelSpec &model)
         0.0,    // M
         0.0);   // V
 
-    EProp::ParamValues epropLIFParamVals(
-        20.0,                   // Eligibility trace time constant [ms]
-        1.0 / (64.0 * 1000.0),  // Regularizer strength
-        10.0,                   // Target spike rate [Hz]
-        500.0);                 // Firing rate averaging time constant [ms]
-
     EPropALIF::ParamValues epropALIFParamVals(
-        20.0,                   // Eligibility trace time constant [ms]
-        2000.0,                 // Neuron adaption time constant [ms]
-        1.0 / (64.0 * 1000.0),  // Regularizer strength
-        10.0,                   // Target spike rate [Hz]
-        500.0,                  // Firing rate averaging time constant [ms]
-        0.0174);                // Scale of neuron adaption [mV]
+        20.0,                                           // Eligibility trace time constant [ms]
+        2000.0,                                         // Neuron adaption time constant [ms]
+        1.0 / ((double)Parameters::batchSize * 1000.0), // Regularizer strength
+        10.0,                                           // Target spike rate [Hz]
+        500.0,                                          // Firing rate averaging time constant [ms]
+        0.0174);                                        // Scale of neuron adaption [mV]
 
     EProp::PreVarValues epropPreInitVals(
         0.0);   // ZFilter
@@ -175,13 +158,6 @@ void modelDefinition(ModelSpec &model)
 
     // Feedforward input->recurrent connections
     InitVarSnippet::Normal::ParamValues inputRecurrentWeightDist(0.0, weight0 / sqrt(Parameters::numInputNeurons));
-    EProp::VarValues inputRecurrentLIFInitVals(
-        initVar<InitVarSnippet::Normal>(inputRecurrentWeightDist),  // g
-        0.0,                                                        // eFiltered
-        0.0,                                                        // DeltaG
-        0.0,                                                        // M
-        0.0);                                                       // V
-    
     EPropALIF::VarValues inputRecurrentALIFInitVals(
         initVar<InitVarSnippet::Normal>(inputRecurrentWeightDist),  // g
         0.0,                                                        // eFiltered
@@ -192,14 +168,6 @@ void modelDefinition(ModelSpec &model)
         
     // Recurrent connections
     InitVarSnippet::Normal::ParamValues recurrentRecurrentWeightDist(0.0, weight0 / sqrt(Parameters::numRecurrentNeurons * 2));
-    EProp::VarValues recurrentRecurrentLIFInitVals(
-        initVar<InitVarSnippet::Normal>(recurrentRecurrentWeightDist),  // g
-        0.0,                                                            // eFiltered
-        0.0,                                                            // DeltaG
-        0.0,                                                            // M
-        0.0);                                                           // V
-
-    // Recurrent connections
     EPropALIF::VarValues recurrentRecurrentALIFInitVals(
         initVar<InitVarSnippet::Normal>(recurrentRecurrentWeightDist),  // g
         0.0,                                                            // eFiltered
@@ -234,9 +202,6 @@ void modelDefinition(ModelSpec &model)
     auto *input = model.addNeuronPopulation<InputSequential>("Input", Parameters::numInputNeurons,
                                                              {}, {});
 
-    auto *recurrentLIF = model.addNeuronPopulation<Recurrent>("RecurrentLIF", Parameters::numRecurrentNeurons,
-                                                              recurrentParamVals, recurrentInitVals);
-
     auto *recurrentALIF = model.addNeuronPopulation<RecurrentALIF>("RecurrentALIF", Parameters::numRecurrentNeurons,
                                                                    recurrentALIFParamVals, recurrentALIFInitVals);
 
@@ -244,19 +209,12 @@ void modelDefinition(ModelSpec &model)
                                                     outputParamVals, outputInitVals);
     
     input->setSpikeRecordingEnabled(true);
-    recurrentLIF->setSpikeRecordingEnabled(true);
     recurrentALIF->setSpikeRecordingEnabled(true);
 
     //---------------------------------------------------------------------------
     // Synapse populations
     //---------------------------------------------------------------------------
     // Input->recurrent connections
-    model.addSynapsePopulation<EProp, PostsynapticModels::DeltaCurr>(
-        "InputRecurrentLIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "Input", "RecurrentLIF",
-        epropLIFParamVals, inputRecurrentLIFInitVals, epropPreInitVals, epropPostInitVals,
-        {}, {});
-
     model.addSynapsePopulation<EPropALIF, PostsynapticModels::DeltaCurr>(
         "InputRecurrentALIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "RecurrentALIF",
@@ -264,34 +222,13 @@ void modelDefinition(ModelSpec &model)
         {}, {});
 
     // Recurrent->recurrent connections
-    model.addSynapsePopulation<EProp, PostsynapticModels::DeltaCurr>(
-        "LIFLIFRecurrent", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "RecurrentLIF", "RecurrentLIF",
-        epropLIFParamVals, recurrentRecurrentLIFInitVals, epropPreInitVals, epropPostInitVals,
-        {}, {});
-    model.addSynapsePopulation<EProp, PostsynapticModels::DeltaCurr>(
-        "ALIFLIFRecurrent", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "RecurrentALIF", "RecurrentLIF",
-        epropLIFParamVals, recurrentRecurrentLIFInitVals, epropPreInitVals, epropPostInitVals,
-        {}, {});
-    model.addSynapsePopulation<EPropALIF, PostsynapticModels::DeltaCurr>(
-        "LIFALIFRecurrent", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "RecurrentLIF", "RecurrentALIF",
-        epropALIFParamVals, recurrentRecurrentALIFInitVals, epropPreInitVals, epropPostInitVals,
-        {}, {});
     model.addSynapsePopulation<EPropALIF, PostsynapticModels::DeltaCurr>(
         "ALIFALIFRecurrent", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "RecurrentALIF", "RecurrentALIF",
         epropALIFParamVals, recurrentRecurrentALIFInitVals, epropPreInitVals, epropPostInitVals,
         {}, {});
 
-    // Random feedback connections
-    model.addSynapsePopulation<Continuous, Feedback>(
-        "OutputRecurrentLIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "Output", "RecurrentLIF",
-        {}, outputRecurrentInitVals,
-        {}, {});
-
+    // Output->recurrent populations
     model.addSynapsePopulation<Continuous, Feedback>(
         "OutputRecurrentALIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Output", "RecurrentALIF",
@@ -299,12 +236,6 @@ void modelDefinition(ModelSpec &model)
         {}, {});
 
     // Recurrent->output connections
-    model.addSynapsePopulation<OutputLearning, PostsynapticModels::DeltaCurr>(
-        "RecurrentLIFOutput", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "RecurrentLIF", "Output",
-        recurrentOutputParamVals, recurrentOutputInitVals, recurrentOutputPreInitVals, {},
-        {}, {});
-
     model.addSynapsePopulation<OutputLearning, PostsynapticModels::DeltaCurr>(
         "RecurrentALIFOutput", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "RecurrentALIF", "Output",
