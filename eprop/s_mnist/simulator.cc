@@ -108,12 +108,12 @@ int main()
         // Load training data and labels
         const unsigned int numTrainingImages = loadImageData("mnist/train-images.idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
         loadLabelData("mnist/train-labels.idx1-ubyte", numTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
-        
+
         // Allocate indices buffer and initialize host indices
         allocateindicesInput(numTrainingImages);
         allocateindicesOutput(numTrainingImages);
         std::iota(&indicesInput[0], &indicesInput[numTrainingImages], 0);
-        
+
         // Calculate number of batches this equates to
         const unsigned int numBatches = ((numTrainingImages + Parameters::batchSize - 1) / Parameters::batchSize);
 
@@ -124,7 +124,7 @@ int main()
 
         std::ofstream performance("performance.csv");
         performance << "Epoch, Batch, Num trials, Number correct" << std::endl;
-    
+
         AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
 
         float learningRate = 0.005f;
@@ -132,14 +132,14 @@ int main()
         // Loop through epochs
         for(unsigned int epoch = 0; epoch < 1; epoch++) {
             std::cout << "Epoch " << epoch << std::endl;
-            
+
             // Shuffle indices, duplicate to output and upload
             // **TODO** some sort of shared pointer business
             std::random_shuffle(&indicesInput[0], &indicesInput[numTrainingImages]);
             std::copy_n(indicesInput, numTrainingImages, indicesOutput);
             pushindicesInputToDevice(numTrainingImages);
             pushindicesOutputToDevice(numTrainingImages);
-            
+
             // Loop through batches in epoch
             unsigned int i = 0;
             for(unsigned int batch = 0; batch < numBatches; batch++) {
@@ -155,7 +155,7 @@ int main()
                     std::array<scalar, 10> output{0};
                     for(unsigned int timestep = 0; timestep < Parameters::trialTimesteps; timestep++) {
                         stepTime();
-    
+
                         // If we're in the cue region
                         if(timestep > (Parameters::inputWidth * Parameters::inputHeight * Parameters::inputRepeats)) {
                             // Download network output
@@ -191,22 +191,22 @@ int main()
                                         ",", true);
                 // Update weights
                 #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
-             
+
                 ADAM_OPTIMIZER_CUDA(InputRecurrentALIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
                 ADAM_OPTIMIZER_CUDA(ALIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
 
                 BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                                           Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
                                                           epoch, learningRate);
-                                                          
+
                 // Update biases
                 BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
                                                  Parameters::numOutputNeurons, 1,
                                                  epoch, learningRate);
-             
+
                 // Display performance in this epoch
                 std::cout << "\t\t" << numCorrect << "/" << numTrialsInBatch << "  correct" << std::endl;
-            
+
                 // Write performance to file
                 performance << epoch << ", " << batch << ", " << numTrialsInBatch << ", " << numCorrect << std::endl;
             }
