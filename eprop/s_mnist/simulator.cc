@@ -171,7 +171,7 @@ int main()
 
                     // If maximum output matches label, increment counter
                     const auto classification = std::distance(output.cbegin(), std::max_element(output.cbegin(), output.cend()));
-                    if(classification == labelsOutput[i]) {
+                    if(classification == labelsOutput[indicesOutput[i]]) {
                         numCorrect++;
                     }
 
