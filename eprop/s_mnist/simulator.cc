@@ -118,7 +118,7 @@ void loadLabelData(const std::string &labelDataFilename, unsigned int desiredNum
 }
 }   // Anonymous namespace
 
-int main()
+int main(int argc, char *argv[])
 {
     try
     {
