@@ -133,6 +133,10 @@ int main()
         for(unsigned int epoch = 0; epoch < 1; epoch++) {
             std::cout << "Epoch " << epoch << std::endl;
 
+            // Reset GeNN timestep
+            t = 0.0f;
+            iT = 0;
+            
             // Shuffle indices, duplicate to output and upload
             // **TODO** some sort of shared pointer business
             std::random_shuffle(&indicesInput[0], &indicesInput[numTrainingImages]);
