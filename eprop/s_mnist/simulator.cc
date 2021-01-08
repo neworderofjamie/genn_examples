@@ -67,6 +67,7 @@ unsigned int loadImageData(const std::string &imageDatafilename, uint8_t *&egp,
 {
     // Open binary file
     std::ifstream imageData(imageDatafilename, std::ifstream::binary);
+    assert(imageData.good());
 
     // Read header words
     const uint32_t magic = readBigEndian(imageData);
@@ -96,6 +97,7 @@ void loadLabelData(const std::string &labelDataFilename, unsigned int desiredNum
 {
     // Open binary file
     std::ifstream labelData(labelDataFilename, std::ifstream::binary);
+    assert(labelData.good());
 
     // Read header words
     const uint32_t magic = readBigEndian(labelData);
@@ -153,12 +155,12 @@ int main()
         // Load training data and labels
         const unsigned int numTrainingImages = loadImageData("mnist/train-images.idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
         loadLabelData("mnist/train-labels.idx1-ubyte", numTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
-        
+
         // Allocate indices buffer and initialize host indices
         allocateindicesInput(numTrainingImages);
         allocateindicesOutput(numTrainingImages);
         std::iota(&indicesInput[0], &indicesInput[numTrainingImages], 0);
-        
+
         // Calculate number of batches this equates to
         const unsigned int numBatches = ((numTrainingImages + Parameters::batchSize - 1) / Parameters::batchSize);
 
@@ -200,7 +202,7 @@ int main()
                     std::array<scalar, 10> output{0};
                     for(unsigned int timestep = 0; timestep < Parameters::trialTimesteps; timestep++) {
                         stepTime();
-    
+
                         // If we're in the cue region
                         if(timestep > (Parameters::inputWidth * Parameters::inputHeight * Parameters::inputRepeats)) {
                             // Download network output
@@ -218,7 +220,7 @@ int main()
 
                     // If maximum output matches label, increment counter
                     const auto classification = std::distance(output.cbegin(), std::max_element(output.cbegin(), output.cend()));
-                    if(classification == labelsOutput[i]) {
+                    if(classification == labelsOutput[indicesOutput[i]]) {
                         numCorrect++;
                     }
 
@@ -246,7 +248,7 @@ int main()
                 BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                                           Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
                                                           epoch, learningRate);
-                                                          
+
                 // Update biases
                 CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaBOutput, d_DeltaBOutput, Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
                 BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
