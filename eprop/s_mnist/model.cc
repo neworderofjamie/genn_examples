@@ -36,7 +36,7 @@ public:
         "       }\n"
         "   }\n"
         "}\n"
-        "// Otherise, spike if this is the last 'touch' neuron\n"
+        "// Otherwise, spike if this is the last 'touch' neuron\n"
         "else {\n"
         "   spike = ($(id) == 99);\n"
         "}\n");
