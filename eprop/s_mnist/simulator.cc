@@ -130,8 +130,10 @@ int main()
         CHECK_MPI_ERRORS(MPI_Comm_size(MPI_COMM_WORLD, &numRanks));
 
         // Due to laziness, check number of trials can be divided by number of ranks
-        assert((64 % numRanks) == 0);
-
+        assert((Parameters::batchSize % numRanks) == 0);
+        const unsigned int rankBatchSize = Parameters::batchSize / numRanks;
+        std::cout << "(" << rank << ") Batch size:" << rankBatchSize << std::endl;
+        
         // Allocate a unique NCCL ID on first rank
         ncclUniqueId ncclID;
         ncclComm_t ncclCommunicator;
@@ -145,33 +147,42 @@ int main()
 
         allocateMem();
 
-        allocateRecordingBuffers(Parameters::batchSize * Parameters::trialTimesteps);
+        allocateRecordingBuffers(rankBatchSize * Parameters::trialTimesteps);
 
         // Create NCCL communicator
         CHECK_NCCL_ERRORS(ncclCommInitRank(&ncclCommunicator, numRanks, ncclID, rank));
 
         initialize();
-
+        
         // Load training data and labels
-        const unsigned int numTrainingImages = loadImageData("mnist/train-images.idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
-        loadLabelData("mnist/train-labels.idx1-ubyte", numTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
+        const unsigned int totalNumTrainingImages = loadImageData("mnist/train-images.idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
+        loadLabelData("mnist/train-labels.idx1-ubyte", totalNumTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
 
+        // Calculate number of batches this equates to
+        const unsigned int numBatches = ((totalNumTrainingImages + Parameters::batchSize - 1) / Parameters::batchSize);
+        
+        // Calculate number of training images that should be processed on this rank
+        const unsigned int maxNumTrainingImages = (totalNumTrainingImages + numRanks - 1) / numRanks;
+        const unsigned int numTrainingImages = (rank == (numRanks - 1)) ? ((totalNumTrainingImages - 1) % maxNumTrainingImages) + 1 : maxNumTrainingImages;
+
+        std::cout << "(" << rank << ") Num training images:" << numTrainingImages << std::endl;
+        
         // Allocate indices buffer and initialize host indices
         allocateindicesInput(numTrainingImages);
         allocateindicesOutput(numTrainingImages);
-        std::iota(&indicesInput[0], &indicesInput[numTrainingImages], 0);
+        std::iota(&indicesInput[0], &indicesInput[numTrainingImages], maxNumTrainingImages * rank);
 
-        // Calculate number of batches this equates to
-        const unsigned int numBatches = ((numTrainingImages + Parameters::batchSize - 1) / Parameters::batchSize);
 
         // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
         BatchLearning::transposeCUDA(d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         initializeSparse();
 
-        std::ofstream performance("performance" + std::to_string(rank) + ".csv");
-        performance << "Epoch, Batch, Num trials, Number correct" << std::endl;
-    
+        std::ofstream performance;
+        if(rank == 0) {
+            performance.open("performance.csv");
+            performance << "Epoch, Batch, Num trials, Number correct" << std::endl;
+        }
         AnalogueRecorder<float> outputRecorder("output" + std::to_string(rank) + ".csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
 
         float learningRate = 0.005f;
@@ -192,9 +203,10 @@ int main()
             for(unsigned int batch = 0; batch < numBatches; batch++) {
                 std::cout << "\t(" << rank << ") Batch " << batch << "/" << numBatches << std::endl;
 
-                // Calculate number of trials in this batch
-                const unsigned int numTrialsInBatch = (batch == (numBatches - 1)) ? ((numTrainingImages - 1) % Parameters::batchSize) + 1 : Parameters::batchSize;
-
+                const unsigned int numTrialsInBatch = (batch == (numBatches - 1)) ? ((numTrainingImages - 1) % rankBatchSize) + 1 : rankBatchSize;
+                
+                std::cout << "\t(" << rank << ") Batch " << batch << "/" << numBatches << "(" << numTrialsInBatch << ")" << std::endl;
+                
                 // Loop through trials
                 unsigned int numCorrect = 0;
                 for(unsigned int trial = 0; trial < numTrialsInBatch; trial++) {
@@ -258,11 +270,16 @@ int main()
                 // Use MPI to sum number of correct trials across ranks
                 CHECK_MPI_ERRORS(MPI_Allreduce(&numCorrect, &numCorrect, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD));
             
+                // Calculate number of trials in this batch
+                const unsigned int totalNumTrialsInBatch = (batch == (numBatches - 1)) ? ((totalNumTrainingImages - 1) % Parameters::batchSize) + 1 : Parameters::batchSize;
+
                 // Display performance in this epoch
-                std::cout << "\t\t(" << rank << ") " << numCorrect << "/" << numTrialsInBatch << "  correct" << std::endl;
+                std::cout << "\t\t(" << rank << ") " << numCorrect << "/" << totalNumTrialsInBatch << "  correct" << std::endl;
             
                 // Write performance to file
-                performance << epoch << ", " << batch << ", " << numTrialsInBatch << ", " << numCorrect << std::endl;
+                if(rank == 0) {
+                    performance << epoch << ", " << batch << ", " << totalNumTrialsInBatch << ", " << numCorrect << std::endl;
+                }
             }
         }
     }
