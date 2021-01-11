@@ -125,9 +125,7 @@ int main()
         std::ofstream performance("performance.csv");
         performance << "Epoch, Batch, Num trials, Number correct" << std::endl;
 
-        AnalogueRecorder<float> outputRecorder("output.csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
-
-        float learningRate = 0.005f;
+        float learningRate = 0.001f;
 
         // Loop through epochs
         for(unsigned int epoch = 0; epoch < 1; epoch++) {
@@ -139,7 +137,7 @@ int main()
             
             // Shuffle indices, duplicate to output and upload
             // **TODO** some sort of shared pointer business
-            std::random_shuffle(&indicesInput[0], &indicesInput[numTrainingImages]);
+            //std::random_shuffle(&indicesInput[0], &indicesInput[numTrainingImages]);
             std::copy_n(indicesInput, numTrainingImages, indicesOutput);
             pushindicesInputToDevice(numTrainingImages);
             pushindicesOutputToDevice(numTrainingImages);
@@ -148,6 +146,9 @@ int main()
             unsigned int i = 0;
             for(unsigned int batch = 0; batch < numBatches; batch++) {
                 std::cout << "\tBatch " << batch << "/" << numBatches << std::endl;
+                
+                const std::string filenameSuffix = std::to_string(epoch) + "_" + std::to_string(batch);
+                AnalogueRecorder<scalar> outputRecorder("output_" + filenameSuffix + ".csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
 
                 // Calculate number of trials in this batch
                 const unsigned int numTrialsInBatch = (batch == (numBatches - 1)) ? ((numTrainingImages - 1) % Parameters::batchSize) + 1 : Parameters::batchSize;
@@ -167,7 +168,7 @@ int main()
                             pullEOutputFromDevice();
 
                             // Record outputs
-                            outputRecorder.record(t);
+                            outputRecorder.record((double)((Parameters::trialTimesteps * trial) + timestep));
 
                             // Add output to total
                             std::transform(output.begin(), output.end(), PiOutput, output.begin(),
@@ -186,7 +187,6 @@ int main()
                 }
 
                 pullRecordingBuffersFromDevice();
-                const std::string filenameSuffix = std::to_string(epoch) + "_" + std::to_string(batch);
                 writeTextSpikeRecording("input_spikes_" + filenameSuffix + ".csv", recordSpkInput,
                                         Parameters::numInputNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
