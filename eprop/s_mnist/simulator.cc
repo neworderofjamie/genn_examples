@@ -9,6 +9,7 @@
 // GeNN userproject includes
 #include "analogueRecorder.h"
 #include "spikeRecorder.h"
+#include "timer.h"
 
 // Auto-generated model code
 #include "s_mnist_CODE/definitions.h"
@@ -114,8 +115,8 @@ int main()
         initialize();
 
         // Load training data and labels
-        const unsigned int numTrainingImages = loadImageData("mnist/train-images.idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
-        loadLabelData("mnist/train-labels.idx1-ubyte", numTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
+        const unsigned int numTrainingImages = loadImageData("mnist/train-images-idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
+        loadLabelData("mnist/train-labels-idx1-ubyte", numTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
 
         // Allocate indices buffer and initialize host indices
         allocateindicesInput(numTrainingImages);
@@ -145,7 +146,7 @@ int main()
             
             // Shuffle indices, duplicate to output and upload
             // **TODO** some sort of shared pointer business
-            //std::random_shuffle(&indicesInput[0], &indicesInput[numTrainingImages]);
+            std::random_shuffle(&indicesInput[0], &indicesInput[numTrainingImages]);
             std::copy_n(indicesInput, numTrainingImages, indicesOutput);
             pushindicesInputToDevice(numTrainingImages);
             pushindicesOutputToDevice(numTrainingImages);
@@ -153,6 +154,7 @@ int main()
             // Loop through batches in epoch
             unsigned int i = 0;
             for(unsigned int batch = 0; batch < numBatches; batch++) {
+                Timer batchTimer("\t\tTime: ");
                 std::cout << "\tBatch " << batch << "/" << numBatches << std::endl;
 
 #ifdef ENABLE_RECORDING
