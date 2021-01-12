@@ -18,91 +18,8 @@
 #include "batch_learning.h"
 
 // Model parameters
+#include "mnist_helpers.h"
 #include "parameters.h"
-
-//----------------------------------------------------------------------------
-// Anonynous namespace
-//----------------------------------------------------------------------------
-namespace
-{
-uint32_t readBigEndian(std::ifstream &data)
-{
-    union
-    {
-        char b[4];
-        uint32_t w;
-    } swizzle;
-
-    // Read data into swizzle union
-    data.read(&swizzle.b[0], 4);
-
-    // Swap endianess
-    std::swap(swizzle.b[0], swizzle.b[3]);
-    std::swap(swizzle.b[1], swizzle.b[2]);
-    return swizzle.w;
-}
-
-unsigned int loadImageData(const std::string &imageDatafilename, uint8_t *&egp,
-                           void (*allocateEGPFn)(unsigned int), void (*pushEGPFn)(unsigned int))
-{
-    // Open binary file
-    std::ifstream imageData(imageDatafilename, std::ifstream::binary);
-    assert(imageData.good());
-
-    // Read header words
-    const uint32_t magic = readBigEndian(imageData);
-    const uint32_t numImages = readBigEndian(imageData);
-    const uint32_t numRows = readBigEndian(imageData);
-    const uint32_t numCols = readBigEndian(imageData);
-
-    // Validate header words
-    assert(magic == 0x803);
-    assert(numRows == Parameters::inputHeight);
-    assert(numCols == Parameters::inputWidth);
-
-    // Allocate EGP for data
-    allocateEGPFn(numRows * numCols * numImages);
-
-    // Read data into EGP
-    imageData.read(reinterpret_cast<char *>(egp), numRows * numCols * numImages);
-
-    // Push EGP
-    pushEGPFn(numRows * numCols * numImages);
-
-    return numImages;
-}
-
-void loadLabelData(const std::string &labelDataFilename, unsigned int desiredNumLabels, uint8_t *&egp,
-                   void (*allocateEGPFn)(unsigned int), void (*pushEGPFn)(unsigned int))
-{
-    // Open binary file
-    std::ifstream labelData(labelDataFilename, std::ifstream::binary);
-    assert(labelData.good());
-
-    // Read header words
-    const uint32_t magic = readBigEndian(labelData);
-    const uint32_t numLabels = readBigEndian(labelData);
-
-    // Validate header words
-    assert(magic == 0x801);
-    assert(numLabels == desiredNumLabels);
-
-    // Allocate EGP for data
-    allocateEGPFn(numLabels);
-
-    // Read data into EGP
-    labelData.read(reinterpret_cast<char *>(egp), numLabels);
-
-    // Push EGP
-    pushEGPFn(numLabels);
-}
-
-void saveDenseWeights(const std::string &weightFilename, const scalar *weights, unsigned int numPre, unsigned int numPost)
-{
-    std::ofstream file(weightFilename, std::ifstream::binary);    
-    file.write(reinterpret_cast<const char*>(weights), sizeof(scalar) * numPre * numPost);
-}
-}   // Anonymous namespace
 
 int main()
 {
@@ -115,8 +32,10 @@ int main()
         initialize();
 
         // Load training data and labels
-        const unsigned int numTrainingImages = loadImageData("mnist/train-images-idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
-        loadLabelData("mnist/train-labels-idx1-ubyte", numTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
+        const unsigned int numTrainingImages = loadImageData("mnist/train-images-idx3-ubyte", datasetInput, 
+                                                             &allocatedatasetInput, &pushdatasetInputToDevice);
+        loadLabelData("mnist/train-labels-idx1-ubyte", numTrainingImages, labelsOutput, 
+                      &allocatelabelsOutput, &pushlabelsOutputToDevice);
 
         // Allocate indices buffer and initialize host indices
         allocateindicesInput(numTrainingImages);
@@ -126,10 +45,25 @@ int main()
         // Calculate number of batches this equates to
         const unsigned int numBatches = ((numTrainingImages + Parameters::batchSize - 1) / Parameters::batchSize);
 
+#ifdef RESUME_EPOCH
+        // Load from disk
+        loadDense("g_input_recurrent_" + std::to_string(RESUME_EPOCH) + ".bin", gInputRecurrentALIF, 
+                  Parameters::numInputNeurons * Parameters::numRecurrentNeurons);
+        loadDense("g_recurrent_recurrent_" + std::to_string(RESUME_EPOCH) + ".bin", gALIFALIFRecurrent, 
+                  Parameters::numRecurrentNeurons * Parameters::numRecurrentNeurons);
+        loadDense("g_recurrent_output_" + std::to_string(RESUME_EPOCH) + ".bin", gRecurrentALIFOutput, 
+                  Parameters::numRecurrentNeurons * Parameters::numOutputNeurons);
+        loadDense("b_output_" + std::to_string(RESUME_EPOCH) + ".bin", BOutput,
+                  Parameters::numOutputNeurons);
+        const unsigned int startEpoch = RESUME_EPOCH + 1;
+#else
+        const unsigned int startEpoch = 0;
+#endif
+        initializeSparse();
+        
         // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
         BatchLearning::transposeCUDA(d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
-        initializeSparse();
 
         std::ofstream performance("performance.csv");
         performance << "Epoch, Batch, Num trials, Number correct" << std::endl;
@@ -137,7 +71,7 @@ int main()
         float learningRate = 0.001f;
 
         // Loop through epochs
-        for(unsigned int epoch = 0; epoch < 10; epoch++) {
+        for(unsigned int epoch = startEpoch; epoch < 10; epoch++) {
             std::cout << "Epoch " << epoch << std::endl;
 
             // Reset GeNN timestep
@@ -236,14 +170,14 @@ int main()
             pullBOutputFromDevice();
 
             // Save to disk
-            saveDenseWeights("g_input_recurrent_" + std::to_string(epoch) + ".bin", gInputRecurrentALIF, 
-                             Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
-            saveDenseWeights("g_recurrent_recurrent_" + std::to_string(epoch) + ".bin", gALIFALIFRecurrent, 
-                             Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
-            saveDenseWeights("g_recurrent_output_" + std::to_string(epoch) + ".bin", gRecurrentALIFOutput, 
-                             Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
-            saveDenseWeights("b_output_" + std::to_string(epoch) + ".bin", BOutput,
-                             Parameters::numOutputNeurons, 1);
+            saveDense("g_input_recurrent_" + std::to_string(epoch) + ".bin", gInputRecurrentALIF, 
+                      Parameters::numInputNeurons * Parameters::numRecurrentNeurons);
+            saveDense("g_recurrent_recurrent_" + std::to_string(epoch) + ".bin", gALIFALIFRecurrent, 
+                      Parameters::numRecurrentNeurons * Parameters::numRecurrentNeurons);
+            saveDense("g_recurrent_output_" + std::to_string(epoch) + ".bin", gRecurrentALIFOutput, 
+                      Parameters::numRecurrentNeurons * Parameters::numOutputNeurons);
+            saveDense("b_output_" + std::to_string(epoch) + ".bin", BOutput,
+                      Parameters::numOutputNeurons);
         }
     }
     catch(std::exception &ex) {
