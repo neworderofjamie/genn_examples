@@ -137,7 +137,7 @@ int main()
         float learningRate = 0.001f;
 
         // Loop through epochs
-        for(unsigned int epoch = 0; epoch < 1; epoch++) {
+        for(unsigned int epoch = 0; epoch < 10; epoch++) {
             std::cout << "Epoch " << epoch << std::endl;
 
             // Reset GeNN timestep
