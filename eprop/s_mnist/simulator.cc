@@ -95,6 +95,12 @@ void loadLabelData(const std::string &labelDataFilename, unsigned int desiredNum
     // Push EGP
     pushEGPFn(numLabels);
 }
+
+void saveDenseWeights(const std::string &weightFilename, const scalar *weights, unsigned int numPre, unsigned int numPost)
+{
+    std::ofstream file(weightFilename, std::ifstream::binary);    
+    file.write(reinterpret_cast<const char*>(weights), sizeof(scalar) * numPre * numPost);
+}
 }   // Anonymous namespace
 
 int main()
@@ -214,6 +220,19 @@ int main()
                 // Write performance to file
                 performance << epoch << ", " << batch << ", " << numTrialsInBatch << ", " << numCorrect << std::endl;
             }
+            
+            // Copy feedforward weights from device
+            pullgInputRecurrentALIFFromDevice();
+            pullgALIFALIFRecurrentFromDevice();
+            pullgRecurrentALIFOutputFromDevice();
+            
+            // Save to disk
+            saveDenseWeights("g_input_recurrent_" + std::to_string(epoch) + ".bin", gInputRecurrentALIF, 
+                             Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
+            saveDenseWeights("g_recurrent_recurrent_" + std::to_string(epoch) + ".bin", gALIFALIFRecurrent, 
+                             Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
+            saveDenseWeights("g_recurrent_output_" + std::to_string(epoch) + ".bin", gRecurrentALIFOutput, 
+                             Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
         }
     }
     catch(std::exception &ex) {
