@@ -228,12 +228,13 @@ int main()
                 // Write performance to file
                 performance << epoch << ", " << batch << ", " << numTrialsInBatch << ", " << numCorrect << std::endl;
             }
-            
-            // Copy feedforward weights from device
+
+            // Copy feedforward weights and biases from device
             pullgInputRecurrentALIFFromDevice();
             pullgALIFALIFRecurrentFromDevice();
             pullgRecurrentALIFOutputFromDevice();
-            
+            pullBOutputFromDevice();
+
             // Save to disk
             saveDenseWeights("g_input_recurrent_" + std::to_string(epoch) + ".bin", gInputRecurrentALIF, 
                              Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
@@ -241,6 +242,8 @@ int main()
                              Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
             saveDenseWeights("g_recurrent_output_" + std::to_string(epoch) + ".bin", gRecurrentALIFOutput, 
                              Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
+            saveDenseWeights("b_output_" + std::to_string(epoch) + ".bin", BOutput,
+                             Parameters::numOutputNeurons, 1);
         }
     }
     catch(std::exception &ex) {
