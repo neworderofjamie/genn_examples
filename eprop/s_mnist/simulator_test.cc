@@ -112,7 +112,7 @@ int main()
 #endif
 
         // Display performance
-        std::cout << numCorrect << "/" << numTestingImages << "  correct" << std::endl;
+        std::cout << numCorrect << "/" << numTestingImages << "  correct = " << ((double)numCorrect / (double)numTestingImages) * 100.0 << "% accuracy" << std::endl;
     }
     catch(std::exception &ex) {
         std::cerr << ex.what() << std::endl;
