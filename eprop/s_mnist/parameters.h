@@ -1,5 +1,6 @@
 #pragma once
 
+//#define ENABLE_RECORDING
 namespace Parameters
 {
     constexpr double timestepMs = 1.0;

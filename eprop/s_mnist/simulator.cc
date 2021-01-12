@@ -108,7 +108,9 @@ int main()
     try
     {
         allocateMem();
+#ifdef ENABLE_RECORDING
         allocateRecordingBuffers(Parameters::batchSize * Parameters::trialTimesteps);
+#endif
         initialize();
 
         // Load training data and labels
@@ -152,10 +154,11 @@ int main()
             unsigned int i = 0;
             for(unsigned int batch = 0; batch < numBatches; batch++) {
                 std::cout << "\tBatch " << batch << "/" << numBatches << std::endl;
-                
+
+#ifdef ENABLE_RECORDING
                 const std::string filenameSuffix = std::to_string(epoch) + "_" + std::to_string(batch);
                 AnalogueRecorder<scalar> outputRecorder("output_" + filenameSuffix + ".csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
-
+#endif
                 // Calculate number of trials in this batch
                 const unsigned int numTrialsInBatch = (batch == (numBatches - 1)) ? ((numTrainingImages - 1) % Parameters::batchSize) + 1 : Parameters::batchSize;
 
@@ -171,10 +174,12 @@ int main()
                         if(timestep > (Parameters::inputWidth * Parameters::inputHeight * Parameters::inputRepeats)) {
                             // Download network output
                             pullPiOutputFromDevice();
+#ifdef ENABLE_RECORDING
                             pullEOutputFromDevice();
 
                             // Record outputs
                             outputRecorder.record((double)((Parameters::trialTimesteps * trial) + timestep));
+#endif
 
                             // Add output to total
                             std::transform(output.begin(), output.end(), PiOutput, output.begin(),
@@ -191,7 +196,7 @@ int main()
                     // Advance to next stimuli
                     i++;
                 }
-
+#ifdef ENABLE_RECORDING
                 pullRecordingBuffersFromDevice();
                 writeTextSpikeRecording("input_spikes_" + filenameSuffix + ".csv", recordSpkInput,
                                         Parameters::numInputNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
@@ -199,6 +204,7 @@ int main()
                 writeTextSpikeRecording("recurrent_alif_spikes_" + filenameSuffix + ".csv", recordSpkRecurrentALIF,
                                         Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
+#endif
                 // Update weights
                 #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
 

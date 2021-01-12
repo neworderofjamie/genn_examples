@@ -208,9 +208,11 @@ void modelDefinition(ModelSpec &model)
 
     model.addNeuronPopulation<OutputClassification>("Output", Parameters::numOutputNeurons,
                                                     outputParamVals, outputInitVals);
-    
+
+#ifdef ENABLE_RECORDING
     input->setSpikeRecordingEnabled(true);
     recurrentALIF->setSpikeRecordingEnabled(true);
+#endif
 
     //---------------------------------------------------------------------------
     // Synapse populations
