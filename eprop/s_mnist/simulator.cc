@@ -15,6 +15,7 @@
 // GeNN userproject includes
 #include "analogueRecorder.h"
 #include "spikeRecorder.h"
+#include "timer.h"
 
 // Auto-generated model code
 #include "s_mnist_CODE/definitions.h"
@@ -23,6 +24,7 @@
 #include "batch_learning.h"
 
 // Model parameters
+#include "mnist_helpers.h"
 #include "parameters.h"
 
 #define CHECK_MPI_ERRORS(call) {\
@@ -40,83 +42,6 @@ tring(error));\
 tring(error) + ": " + ncclGetErrorString(error));\
     }\
 }
-//----------------------------------------------------------------------------
-// Anonynous namespace
-//----------------------------------------------------------------------------
-namespace
-{
-uint32_t readBigEndian(std::ifstream &data)
-{
-    union
-    {
-        char b[4];
-        uint32_t w;
-    } swizzle;
-
-    // Read data into swizzle union
-    data.read(&swizzle.b[0], 4);
-
-    // Swap endianess
-    std::swap(swizzle.b[0], swizzle.b[3]);
-    std::swap(swizzle.b[1], swizzle.b[2]);
-    return swizzle.w;
-}
-
-unsigned int loadImageData(const std::string &imageDatafilename, uint8_t *&egp,
-                           void (*allocateEGPFn)(unsigned int), void (*pushEGPFn)(unsigned int))
-{
-    // Open binary file
-    std::ifstream imageData(imageDatafilename, std::ifstream::binary);
-    assert(imageData.good());
-
-    // Read header words
-    const uint32_t magic = readBigEndian(imageData);
-    const uint32_t numImages = readBigEndian(imageData);
-    const uint32_t numRows = readBigEndian(imageData);
-    const uint32_t numCols = readBigEndian(imageData);
-
-    // Validate header words
-    assert(magic == 0x803);
-    assert(numRows == Parameters::inputHeight);
-    assert(numCols == Parameters::inputWidth);
-
-    // Allocate EGP for data
-    allocateEGPFn(numRows * numCols * numImages);
-
-    // Read data into EGP
-    imageData.read(reinterpret_cast<char *>(egp), numRows * numCols * numImages);
-
-    // Push EGP
-    pushEGPFn(numRows * numCols * numImages);
-
-    return numImages;
-}
-
-void loadLabelData(const std::string &labelDataFilename, unsigned int desiredNumLabels, uint8_t *&egp,
-                   void (*allocateEGPFn)(unsigned int), void (*pushEGPFn)(unsigned int))
-{
-    // Open binary file
-    std::ifstream labelData(labelDataFilename, std::ifstream::binary);
-    assert(labelData.good());
-
-    // Read header words
-    const uint32_t magic = readBigEndian(labelData);
-    const uint32_t numLabels = readBigEndian(labelData);
-
-    // Validate header words
-    assert(magic == 0x801);
-    assert(numLabels == desiredNumLabels);
-
-    // Allocate EGP for data
-    allocateEGPFn(numLabels);
-
-    // Read data into EGP
-    labelData.read(reinterpret_cast<char *>(egp), numLabels);
-
-    // Push EGP
-    pushEGPFn(numLabels);
-}
-}   // Anonymous namespace
 
 int main(int argc, char *argv[])
 {
@@ -147,6 +72,9 @@ int main(int argc, char *argv[])
 
         allocateMem();
 
+#ifdef ENABLE_RECORDING
+        allocateRecordingBuffers(rankBatchSize * Parameters::trialTimesteps);
+#endif
         allocateRecordingBuffers(rankBatchSize * Parameters::trialTimesteps);
 
         // Create NCCL communicator
@@ -155,8 +83,8 @@ int main(int argc, char *argv[])
         initialize();
         
         // Load training data and labels
-        const unsigned int totalNumTrainingImages = loadImageData("mnist/train-images.idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
-        loadLabelData("mnist/train-labels.idx1-ubyte", totalNumTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
+        const unsigned int totalNumTrainingImages = loadImageData("mnist/train-images-idx3-ubyte", datasetInput, &allocatedatasetInput, &pushdatasetInputToDevice);
+        loadLabelData("mnist/train-labels-idx1-ubyte", totalNumTrainingImages, labelsOutput, &allocatelabelsOutput, &pushlabelsOutputToDevice);
 
         // Calculate number of batches this equates to
         const unsigned int numBatches = ((totalNumTrainingImages + Parameters::batchSize - 1) / Parameters::batchSize);
@@ -173,10 +101,26 @@ int main(int argc, char *argv[])
         std::iota(&indicesInput[0], &indicesInput[numTrainingImages], maxNumTrainingImages * rank);
 
 
+#ifdef RESUME_EPOCH
+        // Load from disk
+        loadDense("g_input_recurrent_" + std::to_string(RESUME_EPOCH) + ".bin", gInputRecurrentALIF, 
+                  Parameters::numInputNeurons * Parameters::numRecurrentNeurons);
+        loadDense("g_recurrent_recurrent_" + std::to_string(RESUME_EPOCH) + ".bin", gALIFALIFRecurrent, 
+                  Parameters::numRecurrentNeurons * Parameters::numRecurrentNeurons);
+        loadDense("g_recurrent_output_" + std::to_string(RESUME_EPOCH) + ".bin", gRecurrentALIFOutput, 
+                  Parameters::numRecurrentNeurons * Parameters::numOutputNeurons);
+        loadDense("b_output_" + std::to_string(RESUME_EPOCH) + ".bin", BOutput,
+                  Parameters::numOutputNeurons);
+        const unsigned int startEpoch = RESUME_EPOCH + 1;
+#else
+        const unsigned int startEpoch = 0;
+#endif
+        initializeSparse();
+        
         // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
         BatchLearning::transposeCUDA(d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                      Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
-        initializeSparse();
+
 
         std::ofstream performance;
         if(rank == 0) {
@@ -185,12 +129,16 @@ int main(int argc, char *argv[])
         }
         AnalogueRecorder<float> outputRecorder("output" + std::to_string(rank) + ".csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
 
-        float learningRate = 0.005f;
+        float learningRate = 0.001f;
 
         // Loop through epochs
-        for(unsigned int epoch = 0; epoch < 1; epoch++) {
+        for(unsigned int epoch = startEpoch; epoch < 1; epoch++) {
             std::cout << "(" << rank << ") Epoch " << epoch << std::endl;
 
+            // Reset GeNN timestep
+            t = 0.0f;
+            iT = 0;
+            
             // Shuffle indices, duplicate to output and upload
             // **TODO** some sort of shared pointer business
             std::random_shuffle(&indicesInput[0], &indicesInput[numTrainingImages]);
@@ -201,11 +149,15 @@ int main(int argc, char *argv[])
             // Loop through batches in epoch
             unsigned int i = 0;
             for(unsigned int batch = 0; batch < numBatches; batch++) {
+                Timer batchTimer("\t\tTime: ");
                 std::cout << "\t(" << rank << ") Batch " << batch << "/" << numBatches << std::endl;
 
+#ifdef ENABLE_RECORDING
+                const std::string filenameSuffix = std::to_string(rank) + "_" + std::to_string(epoch) + "_" + std::to_string(batch);
+                AnalogueRecorder<scalar> outputRecorder("output_" + filenameSuffix + ".csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
+#endif
+                // Calculate number of trials in this batch
                 const unsigned int numTrialsInBatch = (batch == (numBatches - 1)) ? ((numTrainingImages - 1) % rankBatchSize) + 1 : rankBatchSize;
-                
-                std::cout << "\t(" << rank << ") Batch " << batch << "/" << numBatches << "(" << numTrialsInBatch << ")" << std::endl;
                 
                 // Loop through trials
                 unsigned int numCorrect = 0;
@@ -219,10 +171,12 @@ int main(int argc, char *argv[])
                         if(timestep > (Parameters::inputWidth * Parameters::inputHeight * Parameters::inputRepeats)) {
                             // Download network output
                             pullPiOutputFromDevice();
+#ifdef ENABLE_RECORDING
                             pullEOutputFromDevice();
 
                             // Record outputs
-                            outputRecorder.record(t);
+                            outputRecorder.record((double)((Parameters::trialTimesteps * trial) + timestep));
+#endif
 
                             // Add output to total
                             std::transform(output.begin(), output.end(), PiOutput, output.begin(),
@@ -239,15 +193,15 @@ int main(int argc, char *argv[])
                     // Advance to next stimuli
                     i++;
                 }
-
+#ifdef ENABLE_RECORDING
                 pullRecordingBuffersFromDevice();
-                const std::string filenameSuffix = std::to_string(epoch) + "_" + std::to_string(batch) + "_" + std::to_string(rank);
                 writeTextSpikeRecording("input_spikes_" + filenameSuffix + ".csv", recordSpkInput,
                                         Parameters::numInputNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
                 writeTextSpikeRecording("recurrent_alif_spikes_" + filenameSuffix + ".csv", recordSpkRecurrentALIF,
                                         Parameters::numRecurrentNeurons, Parameters::batchSize * Parameters::trialTimesteps, Parameters::timestepMs,
                                         ",", true);
+#endif
                 // Update weights
                 #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS) \
                     CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaG##POP_NAME, d_DeltaG##POP_NAME, NUM_SRC_NEURONS * NUM_TRG_NEURONS, ncclFloat, ncclSum, ncclCommunicator, 0)); \
@@ -281,6 +235,24 @@ int main(int argc, char *argv[])
                     performance << epoch << ", " << batch << ", " << totalNumTrialsInBatch << ", " << numCorrect << std::endl;
                 }
             }
+
+            if(rank == 0) {
+                // Copy feedforward weights and biases from device
+                pullgInputRecurrentALIFFromDevice();
+                pullgALIFALIFRecurrentFromDevice();
+                pullgRecurrentALIFOutputFromDevice();
+                pullBOutputFromDevice();
+
+                // Save to disk
+                saveDense("g_input_recurrent_" + std::to_string(epoch) + ".bin", gInputRecurrentALIF, 
+                          Parameters::numInputNeurons * Parameters::numRecurrentNeurons);
+                saveDense("g_recurrent_recurrent_" + std::to_string(epoch) + ".bin", gALIFALIFRecurrent, 
+                          Parameters::numRecurrentNeurons * Parameters::numRecurrentNeurons);
+                saveDense("g_recurrent_output_" + std::to_string(epoch) + ".bin", gRecurrentALIFOutput, 
+                          Parameters::numRecurrentNeurons * Parameters::numOutputNeurons);
+                saveDense("b_output_" + std::to_string(epoch) + ".bin", BOutput,
+                          Parameters::numOutputNeurons);
+             }
         }
     }
     catch(std::exception &ex) {
