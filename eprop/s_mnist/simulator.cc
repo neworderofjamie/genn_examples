@@ -203,9 +203,10 @@ int main(int argc, char *argv[])
                                         ",", true);
 #endif
                 // Update weights
+                const unsigned int adamStep = (epoch * numBatches) + batch;
                 #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS) \
                     CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaG##POP_NAME, d_DeltaG##POP_NAME, NUM_SRC_NEURONS * NUM_TRG_NEURONS, ncclFloat, ncclSum, ncclCommunicator, 0)); \
-                    BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
+                    BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, adamStep, learningRate)
              
                 ADAM_OPTIMIZER_CUDA(InputRecurrentALIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
                 ADAM_OPTIMIZER_CUDA(ALIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
@@ -213,13 +214,13 @@ int main(int argc, char *argv[])
                 CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaGRecurrentALIFOutput, d_DeltaGRecurrentALIFOutput, Parameters::numRecurrentNeurons * Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
                 BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                                           Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
-                                                          epoch, learningRate);
+                                                          adamStep, learningRate);
 
                 // Update biases
                 CHECK_NCCL_ERRORS(ncclAllReduce(d_DeltaBOutput, d_DeltaBOutput, Parameters::numOutputNeurons, ncclFloat, ncclSum, ncclCommunicator, 0));
                 BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
                                                  Parameters::numOutputNeurons, 1,
-                                                 epoch, learningRate);
+                                                 adamStep, learningRate);
                 
                 // Use MPI to sum number of correct trials across ranks
                 CHECK_MPI_ERRORS(MPI_Allreduce(&numCorrect, &numCorrect, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD));

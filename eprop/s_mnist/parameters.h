@@ -1,7 +1,7 @@
 #pragma once
 
 //#define ENABLE_RECORDING
-#define RESUME_EPOCH 0
+//#define RESUME_EPOCH 0
 
 namespace Parameters
 {

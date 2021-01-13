@@ -29,20 +29,31 @@ int main()
         initialize();
 
         // Load testing data and labels
-        const unsigned int numTestingImages = loadImageData("mnist/t10k-images.idx3-ubyte", datasetInput, 
+        const unsigned int numTestingImages = loadImageData("mnist/t10k-images-idx3-ubyte", datasetInput,
                                                             &allocatedatasetInput, &pushdatasetInputToDevice);
-                                                            
-        std::vector<uint8_t> testingLabels(numTestingImages)
-        loadLabelData("mnist/t10k-labels.idx1-ubyte", numTestingImages, testingLabels.data());
+
+        std::vector<uint8_t> testingLabels(numTestingImages);
+        loadLabelData("mnist/t10k-labels-idx1-ubyte", numTestingImages, testingLabels.data());
 
 #ifdef ENABLE_RECORDING
         allocateRecordingBuffers(numTestingImages * Parameters::trialTimesteps);
 #endif
 
         // Allocate indices buffer and initialize host indices
-        allocateindicesInput(numTrainingImages);
-        std::iota(&indicesInput[0], &indicesInput[numTrainingImages], 0);
-        pushindicesInputToDevice(numTrainingImages);
+        allocateindicesInput(numTestingImages);
+        std::iota(&indicesInput[0], &indicesInput[numTestingImages], 0);
+        pushindicesInputToDevice(numTestingImages);
+
+        // Load from disk
+        const unsigned int loadEpoch = 1;
+        loadDense("g_input_recurrent_" + std::to_string(loadEpoch) + ".bin", gInputRecurrentALIF,
+                    Parameters::numInputNeurons * Parameters::numRecurrentNeurons);
+        loadDense("g_recurrent_recurrent_" + std::to_string(loadEpoch) + ".bin", gALIFALIFRecurrent,
+                    Parameters::numRecurrentNeurons * Parameters::numRecurrentNeurons);
+        loadDense("g_recurrent_output_" + std::to_string(loadEpoch) + ".bin", gRecurrentALIFOutput,
+                    Parameters::numRecurrentNeurons * Parameters::numOutputNeurons);
+        loadDense("b_output_" + std::to_string(loadEpoch) + ".bin", BOutput,
+                    Parameters::numOutputNeurons);
 
         initializeSparse();
 
@@ -52,7 +63,11 @@ int main()
 
         // Loop through images
         unsigned int numCorrect = 0;
-        for(unsigned int image = 0; image < numTestingImages; image++) {        
+        for(unsigned int image = 0; image < numTestingImages; image++) {
+            if((image % 100) == 0) {
+                std::cout << "Image " << image << "/" << numTestingImages << std::endl;
+            }
+
             // Loop through timesteps
             std::array<scalar, 10> output{0};
             for(unsigned int timestep = 0; timestep < Parameters::trialTimesteps; timestep++) {
@@ -80,8 +95,12 @@ int main()
                 numCorrect++;
             }
 
+            if(image != 0 && ((image % 100) == 0)) {
+                std::cout << "\t" << ((double)numCorrect / (double)image) * 100.0 << "% accuracy" << std::endl;
+            }
+
         }
-        
+
 #ifdef ENABLE_RECORDING
         pullRecordingBuffersFromDevice();
         writeTextSpikeRecording("test_input_spikes.csv", recordSpkInput,
@@ -93,7 +112,7 @@ int main()
 #endif
 
         // Display performance
-        std::cout << "\t\t" << numCorrect << "/" << numTestingImages << "  correct" << std::endl;
+        std::cout << numCorrect << "/" << numTestingImages << "  correct = " << ((double)numCorrect / (double)numTestingImages) * 100.0 << "% accuracy" << std::endl;
     }
     catch(std::exception &ex) {
         std::cerr << ex.what() << std::endl;
