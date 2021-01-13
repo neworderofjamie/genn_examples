@@ -1,6 +1,7 @@
 // Standard C++ includes
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <numeric>
@@ -15,7 +16,6 @@
 // GeNN userproject includes
 #include "analogueRecorder.h"
 #include "spikeRecorder.h"
-#include "timer.h"
 
 // Auto-generated model code
 #include "s_mnist_CODE/definitions.h"
@@ -75,7 +75,6 @@ int main(int argc, char *argv[])
 #ifdef ENABLE_RECORDING
         allocateRecordingBuffers(rankBatchSize * Parameters::trialTimesteps);
 #endif
-        allocateRecordingBuffers(rankBatchSize * Parameters::trialTimesteps);
 
         // Create NCCL communicator
         CHECK_NCCL_ERRORS(ncclCommInitRank(&ncclCommunicator, numRanks, ncclID, rank));
@@ -132,9 +131,11 @@ int main(int argc, char *argv[])
         float learningRate = 0.001f;
 
         // Loop through epochs
-        for(unsigned int epoch = startEpoch; epoch < 1; epoch++) {
-            std::cout << "(" << rank << ") Epoch " << epoch << std::endl;
-
+        for(unsigned int epoch = startEpoch; epoch < 10; epoch++) {
+            if(rank == 0) {
+	        std::cout << "Epoch " << epoch << std::endl;
+            }
+	    
             // Reset GeNN timestep
             t = 0.0f;
             iT = 0;
@@ -149,9 +150,10 @@ int main(int argc, char *argv[])
             // Loop through batches in epoch
             unsigned int i = 0;
             for(unsigned int batch = 0; batch < numBatches; batch++) {
-                Timer batchTimer("\t\tTime: ");
-                std::cout << "\t(" << rank << ") Batch " << batch << "/" << numBatches << std::endl;
-
+                const auto batchStartTime = std::chrono::high_resolution_clock::now();
+		if(rank == 0) {
+                    std::cout << "\tBatch " << batch << "/" << numBatches << std::endl;
+                }
 #ifdef ENABLE_RECORDING
                 const std::string filenameSuffix = std::to_string(rank) + "_" + std::to_string(epoch) + "_" + std::to_string(batch);
                 AnalogueRecorder<scalar> outputRecorder("output_" + filenameSuffix + ".csv", {PiOutput, EOutput}, Parameters::numOutputNeurons, ",");
@@ -229,10 +231,12 @@ int main(int argc, char *argv[])
                 const unsigned int totalNumTrialsInBatch = (batch == (numBatches - 1)) ? ((totalNumTrainingImages - 1) % Parameters::batchSize) + 1 : Parameters::batchSize;
 
                 // Display performance in this epoch
-                std::cout << "\t\t(" << rank << ") " << numCorrect << "/" << totalNumTrialsInBatch << "  correct" << std::endl;
+		if(rank == 0) {
+		    const std::chrono::duration<double> duration = std::chrono::high_resolution_clock::now() -	batchStartTime;
+                    std::cout << "\t\t" << numCorrect << "/" << totalNumTrialsInBatch << "  correct" << std::endl;
+		    std::cout << "\t\t " << duration.count() << " seconds" << std::endl;
             
-                // Write performance to file
-                if(rank == 0) {
+                    // Write performance to file
                     performance << epoch << ", " << batch << ", " << totalNumTrialsInBatch << ", " << numCorrect << std::endl;
                 }
             }
