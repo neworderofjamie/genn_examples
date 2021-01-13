@@ -142,19 +142,20 @@ int main()
                                         ",", true);
 #endif
                 // Update weights
-                #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, epoch, learningRate)
+                const unsigned int adamStep = (epoch * numBatches) + batch;
+                #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, adamStep, learningRate)
 
                 ADAM_OPTIMIZER_CUDA(InputRecurrentALIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
                 ADAM_OPTIMIZER_CUDA(ALIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
 
                 BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
                                                           Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
-                                                          epoch, learningRate);
+                                                          adamStep, learningRate);
 
                 // Update biases
                 BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
                                                  Parameters::numOutputNeurons, 1,
-                                                 epoch, learningRate);
+                                                 adamStep, learningRate);
 
                 // Display performance in this epoch
                 std::cout << "\t\t" << numCorrect << "/" << numTrialsInBatch << "  correct" << std::endl;
