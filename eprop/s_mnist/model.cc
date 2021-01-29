@@ -175,8 +175,8 @@ void modelDefinition(ModelSpec &model)
     auto *recurrentALIF = model.addNeuronPopulation<RecurrentALIF>("RecurrentALIF", Parameters::numRecurrentNeurons,
                                                                    recurrentALIFParamVals, recurrentALIFInitVals);
 
-    model.addNeuronPopulation<OutputClassification>("Output", Parameters::numOutputNeurons,
-                                                    outputParamVals, outputInitVals);
+    auto *output = model.addNeuronPopulation<OutputClassification>("Output", Parameters::numOutputNeurons,
+                                                                   outputParamVals, outputInitVals);
 
 #ifdef ENABLE_RECORDING
     input->setSpikeRecordingEnabled(true);
@@ -213,4 +213,16 @@ void modelDefinition(ModelSpec &model)
         "RecurrentALIF", "Output",
         recurrentOutputParamVals, recurrentOutputInitVals, recurrentOutputPreInitVals, {},
         {}, {});
+    
+    //---------------------------------------------------------------------------
+    // Custom updates
+    //---------------------------------------------------------------------------
+    CustomUpdateModels::AdamOptimizer::ParamValues adamParams(0.001, 0.9, 0.999, 1E-8);
+    CustomUpdateModels::AdamOptimizer::VarValues adamVarValues(0.0, 0.0);
+    CustomUpdateModels::AdamOptimizer::VarReferences<NeuronVarReference> adamBiasVarReferences(NeuronVarReference(output, "DeltaB"),    // Gradient 
+                                                                                               NeuronVarReference(output, "B"));        // Variable
+    
+    model.addCustomUpdate<CustomUpdateModels::AdamOptimizer>("OutputBiasOptimiser", "GradientLearn",
+                                                             adamParams, adamVarValues, adamBiasVarReferences);
+                                      
 }
