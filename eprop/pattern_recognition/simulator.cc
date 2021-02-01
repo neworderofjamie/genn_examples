@@ -40,7 +40,6 @@ int main()
 #endif
         AnalogueRecorder<float> outputRecorder("output.csv", {YOutput, YStarOutput}, Parameters::numOutputNeurons, ",");
 
-        CUDATimer inputRecurrentTimer;
 #ifndef USE_DEEP_R
         CUDATimer recurrentRecurrentTimer;
 #endif
@@ -81,28 +80,19 @@ int main()
                     writeTextSpikeRecording("recurrent_spikes_" + std::to_string(trial) + ".csv", recordSpkRecurrent,
                                             Parameters::numRecurrentNeurons, 1000, 1.0, ",", true);
                 }
+                
                 // Apply learning
-                if(Parameters::timingEnabled) {
-                    inputRecurrentTimer.start();
-                }
-                BatchLearning::adamOptimizerCUDA(d_DeltaGInputRecurrent, d_MInputRecurrent, d_VInputRecurrent, d_gInputRecurrent, 
-                                                 Parameters::numInputNeurons, Parameters::numRecurrentNeurons, 
-                                                 trial, learningRate);
-                if(Parameters::timingEnabled) {
-                    inputRecurrentTimer.stop();
-                }
+                const scalar firstMomentScale = 1.0f / (1.0f - std::pow(Parameters::beta1, trial + 1));
+                const scalar secondMomentScale = 1.0f / (1.0f - std::pow(Parameters::beta2, trial + 1));
+                alphaInputRecurrentWeightOptimiser = learningRate;
+                alphaRecurrentRecurrentWeightOptimiser = learningRate;
+                firstMomentScaleInputRecurrentWeightOptimiser = firstMomentScale;
+                firstMomentScaleRecurrentRecurrentWeightOptimiser = firstMomentScale;
+                secondMomentScaleInputRecurrentWeightOptimiser = secondMomentScale;
+                secondMomentScaleRecurrentRecurrentWeightOptimiser = secondMomentScale;
+                updateGradientLearn();
 #ifdef USE_DEEP_R
                 recurrentRecurrentdeepR.update(trial, learningRate);
-#else
-                if(Parameters::timingEnabled) {
-                    recurrentRecurrentTimer.start();
-                }
-                BatchLearning::adamOptimizerCUDA(d_DeltaGRecurrentRecurrent, d_MRecurrentRecurrent, d_VRecurrentRecurrent, d_gRecurrentRecurrent, 
-                                                 Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons, 
-                                                 trial, learningRate);
-                if(Parameters::timingEnabled) {
-                    recurrentRecurrentTimer.stop();
-                }
 #endif
                 if(Parameters::timingEnabled) {
                     recurrentOutputTimer.start();
@@ -117,11 +107,8 @@ int main()
                     recurrentOutputTimer.synchronize();
 
                     // Update counters
-                    inputRecurrentTimer.update();
 #ifdef USE_DEEP_R
                     recurrentRecurrentdeepR.updateTimers();
-#else
-                    recurrentRecurrentTimer.update();
 #endif
                     recurrentOutputTimer.update();
                 }
@@ -137,14 +124,11 @@ int main()
             std::cout << "\tSynapse dynamics:" << synapseDynamicsTime << std::endl;
 
             std::cout << "Batch learning:" << std::endl;
-            std::cout << "\tInput->recurrent learning:" << inputRecurrentTimer.getTotalTime() << std::endl;
 #ifdef USE_DEEP_R
             std::cout << "\tRecurrent->recurrent Deep-R learning:" << std::endl;
             std::cout << "\t\tTotal:" << recurrentRecurrentdeepR.getHostUpdateTime() << std::endl;
             std::cout << "\t\tFirst pass kernel:" << recurrentRecurrentdeepR.getFirstPassKernelTime() << std::endl;
             std::cout << "\t\tSecond pass kernel:" << recurrentRecurrentdeepR.getSecondPassKernelTime() << std::endl;
-#else
-            std::cout << "\tRecurrent->recurrent learning:" << recurrentRecurrentTimer.getTotalTime() << std::endl;
 #endif
             std::cout << "\tRecurrent->output learning:" << recurrentOutputTimer.getTotalTime() << std::endl;
         }

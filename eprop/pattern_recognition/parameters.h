@@ -11,4 +11,7 @@ namespace Parameters
     constexpr unsigned int numOutputNeurons = 3;
     
     constexpr double deepRRecurrentConnectivity = 0.1;
+    
+    constexpr double beta1 = 0.9;
+    constexpr double beta2 = 0.999;
 }
