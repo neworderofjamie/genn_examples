@@ -10,9 +10,6 @@
 #include "timer.h"
 #include "spikeRecorder.h"
 
-// Batch learning includes
-#include "batch_learning.h"
-
 // Model parameters
 #include "parameters.h"
 
@@ -140,12 +137,11 @@ int main()
         // Generate frozen Poisson input
         generateFrozenPoissonInput(gen);
 
-        // Use CUDA to calculate initial transpose of feedforward hidden->output weights
-        BatchLearning::transposeCUDA(d_wHidden_Output, d_wOutput_Hidden,
-                                     Parameters::numHidden, Parameters::numOutput);
-
+        
         initializeSparse();
 
+        // Calculate initial transpose
+        updateCalculateTranspose();
         {
             Timer a("Simulation wall clock:");
 

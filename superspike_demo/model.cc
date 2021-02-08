@@ -388,6 +388,12 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Custom updates
     //---------------------------------------------------------------------------
+    CustomUpdateModels::Transpose::WUVarReferences transposeHiddenOutputVarReferences(
+        createWUVarRef(hiddenOutput, "w", outputHidden, "w"));    // variable);
+    model.addCustomUpdate<CustomUpdateModels::Transpose>("InputHiddenWeightTranspose", "CalculateTranspose",
+                                                         {}, {}, transposeHiddenOutputVarReferences);
+    
+    
     RMaxProp::ParamValues rMaxPropParams(Parameters::updateTimeMs, Parameters::tauRMS, 
                                          Parameters::epsilon, Parameters::wMin, Parameters::wMax);
     RMaxProp::VarValues rMaxPropVarValues(0.0);
@@ -399,7 +405,7 @@ void modelDefinition(NNmodel &model)
     
     RMaxProp::WUVarReferences rMaxPropHiddenOutputVarReferences(
         createWUVarRef(hiddenOutput, "m"),                      // m 
-        createWUVarRef(hiddenOutput, "w", outputHidden, "w"));    // variable
+        createWUVarRef(hiddenOutput, "w", outputHidden, "w"));  // variable
     model.addCustomUpdate<RMaxProp>("HiddenOutputWeightOptimiser", "GradientLearn",
                                     rMaxPropParams, rMaxPropVarValues, rMaxPropHiddenOutputVarReferences);
 }

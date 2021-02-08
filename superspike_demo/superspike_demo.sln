@@ -1,16 +1,13 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.30413.136
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30501.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "superspike_demo", "superspike_demo.vcxproj", "{72F7DF8A-54EE-46EF-906C-41A41A8ADBF5}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "superspike_demo", "superspike_demo.vcxproj", "{6DFE7CE2-5365-4A7B-A9FC-FDED2FD46FCD}"
 	ProjectSection(ProjectDependencies) = postProject
-		{5BD30E96-A544-404C-9CED-E5858BF8FD00} = {5BD30E96-A544-404C-9CED-E5858BF8FD00}
-		{F29630D3-7094-4F69-949E-F98046FB408E} = {F29630D3-7094-4F69-949E-F98046FB408E}
+		{5BD30E96-A544-404C-9CED-E5858BF8FD} = {5BD30E96-A544-404C-9CED-E5858BF8FD}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "runner", "superspike_demo_CODE\runner.vcxproj", "{5BD30E96-A544-404C-9CED-E5858BF8FD00}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "batch_learning", "..\batch_learning\batch_learning.vcxproj", "{F29630D3-7094-4F69-949E-F98046FB408E}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "runner", "superspike_demo_CODE\runner.vcxproj", "{5BD30E96-A544-404C-9CED-E5858BF8FD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,23 +15,16 @@ Global
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{72F7DF8A-54EE-46EF-906C-41A41A8ADBF5}.Debug|x64.ActiveCfg = Debug|x64
-		{72F7DF8A-54EE-46EF-906C-41A41A8ADBF5}.Debug|x64.Build.0 = Debug|x64
-		{72F7DF8A-54EE-46EF-906C-41A41A8ADBF5}.Release|x64.ActiveCfg = Release|x64
-		{72F7DF8A-54EE-46EF-906C-41A41A8ADBF5}.Release|x64.Build.0 = Release|x64
-		{5BD30E96-A544-404C-9CED-E5858BF8FD00}.Debug|x64.ActiveCfg = Debug|x64
-		{5BD30E96-A544-404C-9CED-E5858BF8FD00}.Debug|x64.Build.0 = Debug|x64
-		{5BD30E96-A544-404C-9CED-E5858BF8FD00}.Release|x64.ActiveCfg = Release|x64
-		{5BD30E96-A544-404C-9CED-E5858BF8FD00}.Release|x64.Build.0 = Release|x64
-		{F29630D3-7094-4F69-949E-F98046FB408E}.Debug|x64.ActiveCfg = Debug|x64
-		{F29630D3-7094-4F69-949E-F98046FB408E}.Debug|x64.Build.0 = Debug|x64
-		{F29630D3-7094-4F69-949E-F98046FB408E}.Release|x64.ActiveCfg = Release|x64
-		{F29630D3-7094-4F69-949E-F98046FB408E}.Release|x64.Build.0 = Release|x64
+		{6DFE7CE2-5365-4A7B-A9FC-FDED2FD46FCD}.Debug|x64.ActiveCfg = Debug|x64
+		{6DFE7CE2-5365-4A7B-A9FC-FDED2FD46FCD}.Debug|x64.Build.0 = Debug|x64
+		{6DFE7CE2-5365-4A7B-A9FC-FDED2FD46FCD}.Release|x64.ActiveCfg = Release|x64
+		{6DFE7CE2-5365-4A7B-A9FC-FDED2FD46FCD}.Release|x64.Build.0 = Release|x64
+		{5BD30E96-A544-404C-9CED-E5858BF8FD}.Debug|x64.ActiveCfg = Debug|x64
+		{5BD30E96-A544-404C-9CED-E5858BF8FD}.Debug|x64.Build.0 = Debug|x64
+		{5BD30E96-A544-404C-9CED-E5858BF8FD}.Release|x64.ActiveCfg = Release|x64
+		{5BD30E96-A544-404C-9CED-E5858BF8FD}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {F69475D4-8578-4801-B378-410C4E146585}
 	EndGlobalSection
 EndGlobal
