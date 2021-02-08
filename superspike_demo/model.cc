@@ -3,6 +3,36 @@
 #include "parameters.h"
 
 //----------------------------------------------------------------------------
+// RMaxProp
+//----------------------------------------------------------------------------
+class RMaxProp : public CustomUpdateModels::Base
+{
+    DECLARE_CUSTOM_UPDATE_MODEL(RMaxProp, 5, 1, 2);
+
+    SET_UPDATE_CODE(
+        "// Get gradients\n"
+        "const scalar gradient = $(m) / $(updateTimesteps);\n"
+        "// Calculate learning rate r\n"
+        "$(upsilon) = fmax($(upsilon) * $(expRMS), gradient * gradient);\n"
+        "const scalar r = $(r0) / (sqrt($(upsilon)) + $(epsilon));\n"
+        "// Update synaptic parameter\n"
+        "$(variable) += r * gradient;\n"
+        "$(variable) = fmin($(wMax), fmax($(wMin), $(variable)));\n"
+        "$(m) = 0.0;\n");
+
+    SET_EXTRA_GLOBAL_PARAMS({{"r0", "scalar"}})
+    
+    SET_PARAM_NAMES({"updateTime", "tauRMS", "epsilon", "wMin", "wMax"});
+    SET_DERIVED_PARAMS({
+        {"updateTimesteps", [](const std::vector<double> &pars, double dt){ return pars[0] / dt; }},
+        {"expRMS", [](const std::vector<double> &pars, double){ return std::exp(-pars[0] / pars[1]); }}});
+    SET_VARS({{"upsilon", "scalar"}});
+    SET_VAR_REFS({{"m", "scalar", VarAccessMode::READ_WRITE}, 
+                  {"variable", "scalar", VarAccessMode::READ_WRITE}});
+};
+IMPLEMENT_MODEL(RMaxProp);
+
+//----------------------------------------------------------------------------
 // SuperSpikeBase
 //----------------------------------------------------------------------------
 class SuperSpikeBase : public WeightUpdateModels::Base
@@ -13,7 +43,7 @@ class SuperSpikeBase : public WeightUpdateModels::Base
         "beta"});       // 2 - Beta
 
     SET_VARS({{"w", "scalar"}, {"e", "scalar"}, {"lambda", "scalar"},
-              {"upsilon", "scalar"}, {"m", "scalar"}});
+              {"m", "scalar"}});
     SET_PRE_VARS({{"z", "scalar"}, {"zTilda", "scalar"}});
     SET_POST_VARS({{"sigmaPrime", "scalar"}});
 
@@ -43,7 +73,7 @@ class SuperSpikeBase : public WeightUpdateModels::Base
 class SuperSpike : public SuperSpikeBase
 {
 public:
-    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpike, 3, 5, 2, 1);
+    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpike, 3, 4, 2, 1);
     
     SET_SYNAPSE_DYNAMICS_CODE(
         "// Filtered eligibility trace\n"
@@ -62,7 +92,7 @@ IMPLEMENT_MODEL(SuperSpike);
 class SuperSpikeApprox : public SuperSpikeBase
 {
 public:
-    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpikeApprox, 3, 5, 2, 1);
+    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpikeApprox, 3, 4, 2, 1);
     
     SET_EVENT_THRESHOLD_CONDITION_CODE("$(zTilda) > 1.0E-4");
     SET_EVENT_CODE(
@@ -304,7 +334,6 @@ void modelDefinition(NNmodel &model)
         initVar<InitVarSnippet::NormalClipped>(inputHiddenWeightDist),  // w
         0.0,                                                            // e
         0.0,                                                            // lambda
-        0.0,                                                            // upsilon
         0.0);                                                           // m
 
     InitVarSnippet::NormalClipped::ParamValues hiddenOutputWeightDist(
@@ -316,7 +345,6 @@ void modelDefinition(NNmodel &model)
         initVar<InitVarSnippet::NormalClipped>(hiddenOutputWeightDist), // w
         0.0,                                                            // e
         0.0,                                                            // lambda
-        0.0,                                                            // upsilon
         0.0);                                                           // m
 
     // **HACK** this is actually a nasty corner case for the initialisation rules
@@ -339,21 +367,39 @@ void modelDefinition(NNmodel &model)
     //------------------------------------------------------------------------
     // Synapse groups
     //------------------------------------------------------------------------
-    model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
+    auto *inputHidden = model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
         "Input_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "Hidden",
         superSpikeParams, inputHiddenVars, superSpikePreVars, superSpikePostVars,
         expCurrParams, {});
 
-    model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
+    auto *hiddenOutput = model.addSynapsePopulation<SuperSpike, PostsynapticModels::ExpCurr>(
         "Hidden_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Hidden", "Output",
         superSpikeParams, hiddenOutputVars, superSpikePreVars, superSpikePostVars,
         expCurrParams, {});
 
-    model.addSynapsePopulation<Feedback, FeedbackPSM>(
+    auto *outputHidden = model.addSynapsePopulation<Feedback, FeedbackPSM>(
         "Output_Hidden", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Output", "Hidden",
         {}, feedbackVars,
         {}, {});
+        
+    //---------------------------------------------------------------------------
+    // Custom updates
+    //---------------------------------------------------------------------------
+    RMaxProp::ParamValues rMaxPropParams(Parameters::updateTimeMs, Parameters::tauRMS, 
+                                         Parameters::epsilon, Parameters::wMin, Parameters::wMax);
+    RMaxProp::VarValues rMaxPropVarValues(0.0);
+    RMaxProp::WUVarReferences rMaxPropInputHiddenVarReferences(
+        createWUVarRef(inputHidden, "m"),         // m 
+        createWUVarRef(inputHidden, "w"));        // variable
+    model.addCustomUpdate<RMaxProp>("InputHiddenWeightOptimiser", "GradientLearn",
+                                    rMaxPropParams, rMaxPropVarValues, rMaxPropInputHiddenVarReferences);
+    
+    RMaxProp::WUVarReferences rMaxPropHiddenOutputVarReferences(
+        createWUVarRef(hiddenOutput, "m"),                      // m 
+        createWUVarRef(hiddenOutput, "w", outputHidden, "w"));    // variable
+    model.addCustomUpdate<RMaxProp>("HiddenOutputWeightOptimiser", "GradientLearn",
+                                    rMaxPropParams, rMaxPropVarValues, rMaxPropHiddenOutputVarReferences);
 }

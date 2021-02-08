@@ -151,18 +151,20 @@ int main()
 
             // Loop through trials
             unsigned int timestep = 0;
-            double r0 = Parameters::r0;
+            r0HiddenOutputWeightOptimiser = Parameters::r0;
+            r0InputHiddenWeightOptimiser = Parameters::r0;
             for(unsigned int trial = 0; trial < Parameters::numTrials; trial++) {
                 // Reduce learning rate every 400 trials
                 if(trial != 0 && (trial % 400) == 0) {
-                    r0 *= 0.1;
+                    r0HiddenOutputWeightOptimiser *= 0.1;
+                    r0InputHiddenWeightOptimiser *= 0.1;
                 }
 
                 // Display trial number peridically
-                if((trial % 10) == 0) {
+                if(trial != 0 && (trial % 10) == 0) {
                     // Get average square error
                     pullavgSqrErrOutputFromDevice();
-                    std::cout << "Trial " << trial << " (r0 = " << r0 << ", error = " << calculateError(timestep) << ")" << std::endl;
+                    std::cout << "Trial " << trial << " (r0 = " << r0HiddenOutputWeightOptimiser << ", error = " << calculateError(timestep) << ")" << std::endl;
                 }
 
                 // Reset model timestep
@@ -176,12 +178,7 @@ int main()
 
                     // If it's time to update weights
                     if(timestep != 0 && (timestep % Parameters::updateTimesteps) == 0) {
-                        BatchLearning::rMaxPropCUDA(d_mInput_Hidden, d_upsilonInput_Hidden, d_wInput_Hidden,
-                                                    Parameters::numInput, Parameters::numHidden,
-                                                    Parameters::updateTimeMs, Parameters::timestepMs, Parameters::tauRMS, r0, Parameters::epsilon, Parameters::wMin, Parameters::wMax);
-                        BatchLearning::rMaxPropTransposeCUDA(d_mHidden_Output, d_upsilonHidden_Output, d_wHidden_Output,
-                                                             d_wOutput_Hidden, Parameters::numHidden, Parameters::numOutput,
-                                                             Parameters::updateTimeMs, Parameters::timestepMs, Parameters::tauRMS, r0, Parameters::epsilon, Parameters::wMin, Parameters::wMax);
+                        updateGradientLearn();
                     }
 
                     timestep++;
@@ -215,7 +212,7 @@ int main()
         std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
         std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
         std::cout << "Synapse dynamics:" << synapseDynamicsTime << std::endl;
-
+        std::cout << "Gradient learning custom update:" << updateGradientLearnTime << std::endl;
         return EXIT_SUCCESS;
     }
     catch(std::exception &ex) {
