@@ -9,6 +9,10 @@ from pygenn.genn_wrapper import NO_DELAY
 def calc_t_peak(tau_rise, tau_decay):
     return ((tau_decay * tau_rise) / (tau_decay - tau_rise)) * np.log(tau_decay / tau_rise)
 
+def write_spike_file(filename, data):
+    np.savetxt(filename, np.column_stack(data), fmt=["%f","%d"], 
+               delimiter=",", header="Time [ms], Neuron ID")
+
 # ----------------------------------------------------------------------------
 # Custom models
 # ----------------------------------------------------------------------------
@@ -418,6 +422,6 @@ for trial in range(NUM_TRIALS):
     if (trial % 100) == 0:
         model.pull_recording_buffers_from_device();
 
-        np.savetxt("input_spikes_%u.csv" % trial, input.spike_recording_data)
-        np.savetxt("hidden_spikes_%u.csv" % trial, hidden.spike_recording_data)
-        np.savetxt("output_spikes_%u.csv" % trial, output.spike_recording_data)
+        write_spike_file("input_spikes_%u.csv" % trial, input.spike_recording_data)
+        write_spike_file("hidden_spikes_%u.csv" % trial, hidden.spike_recording_data)
+        write_spike_file("output_spikes_%u.csv" % trial, output.spike_recording_data)
