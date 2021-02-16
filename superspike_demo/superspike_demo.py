@@ -175,6 +175,7 @@ output_neuron_model = genn_model.create_custom_neuron_class(
 # Parameters
 # ----------------------------------------------------------------------------
 TIMESTEP_MS = 0.1
+BUILD = True
 
 # Network structure
 NUM_INPUT = 200
@@ -209,21 +210,21 @@ TRIAL_TIMESTEPS = int(TRIAL_MS / TIMESTEP_MS)
 # Load target data
 # ----------------------------------------------------------------------------
 # Load target data
-target_data = np.loadtxt("oxford-target.ras",
-                         dtype={"names": ("time", "neuron_id"),
-                                "formats": (np.float, np.int)})
+target_spikes = np.loadtxt("oxford-target.ras",
+                           dtype={"names": ("time", "neuron_id"),
+                                  "formats": (np.float, np.int)})
 
 # Make neuron IDs zero-based
-target_data["neuron_id"] -= 1
+target_spikes["neuron_id"] -= 1
 
 # Convert times to milliseconds
-target_data["time"] *= 1000.0
+target_spikes["time"] *= 1000.0
 
 # Sort first by neuron id and then by time
-target_data = np.sort(target_data, order=["neuron_id", "time"])
+target_spikes = np.sort(target_spikes, order=["neuron_id", "time"])
 
 # Count number of spikes
-target_neuron_end_times = np.cumsum(np.bincount(target_data["neuron_id"], minlength=NUM_OUTPUT))
+target_neuron_end_times = np.cumsum(np.bincount(target_spikes["neuron_id"], minlength=NUM_OUTPUT))
 target_neuron_start_times = np.concatenate(([0], target_neuron_end_times[:-1]))
 
 # ----------------------------------------------------------------------------
@@ -302,7 +303,7 @@ r_max_prop_params = {"updateTime": UPDATE_TIME_MS, "tauRMS": TAU_RMS_MS,
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-model = genn_model.GeNNModel("float", "superspike_demo")
+model = genn_model.GeNNModel("float", "superspike_demo", generateLineInfo=True)
 model.dT = TIMESTEP_MS
 
 # Add neuron populations
@@ -312,6 +313,9 @@ hidden = model.add_neuron_population("Hidden", NUM_HIDDEN, hidden_neuron_model,
                                      hidden_params, hidden_init_vars)
 output = model.add_neuron_population("Output", NUM_OUTPUT, output_neuron_model, 
                                      output_params, output_init_vars)
+
+input.set_extra_global_param("spikeTimes", input_spikes)
+output.set_extra_global_param("spikeTimes", target_spikes["time"])
 
 # Turn on recording
 input.spike_recording_enabled = True
@@ -340,7 +344,7 @@ output_hidden = model.add_synapse_population(
 # Add custom update for calculating initial tranpose weights
 model.add_custom_update("input_hidden_transpose", "CalculateTranspose", "Transpose",
                         {}, {}, {"variable": genn_model.create_wu_var_ref(hidden_output, "w", output_hidden, "w")})
-       
+
 # Add custom updates for gradient update
 input_hidden_optimiser_var_refs = {"m": genn_model.create_wu_var_ref(input_hidden, "m"), 
                                    "variable": genn_model.create_wu_var_ref(input_hidden, "w")}
@@ -357,7 +361,8 @@ input_hidden_optimiser.set_extra_global_param("r0", R0)
 hidden_output_optimiser.set_extra_global_param("r0", R0)
 
 # Build and load model
-#model.build()
+if BUILD:
+    model.build()
 model.load(num_recording_timesteps=TRIAL_TIMESTEPS)
 
 # Calculate initial transpose feedback weights
