@@ -31,7 +31,7 @@ r_max_prop_model = genn_model.create_custom_custom_update_class(
     $(variable) = fmin($(wMax), fmax($(wMin), $(variable)));
     $(m) = 0.0;
     """)
-    
+
 superspike_model = genn_model.create_custom_weight_update_class(
     "superspike",
     param_names=["tauRise", "tauDecay", "beta"],
@@ -39,11 +39,11 @@ superspike_model = genn_model.create_custom_weight_update_class(
                     ("lambda", "scalar"), ("m", "scalar")],
     pre_var_name_types=[("z", "scalar"), ("zTilda", "scalar")],
     post_var_name_types=[("sigmaPrime", "scalar")],
-    
+
     sim_code="""
     $(addToInSyn, $(w));
     """,
-    
+
     pre_spike_code="""
     $(z) += 1.0;
     """,
@@ -52,7 +52,7 @@ superspike_model = genn_model.create_custom_weight_update_class(
     $(z) += (-$(z) / $(tauRise)) * DT;
     $(zTilda) += ((-$(zTilda) + $(z)) / $(tauDecay)) * DT;
     """,
-    
+
     post_dynamics_code="""
     // filtered partial derivative
     if($(V_post) < -80.0) {
@@ -63,7 +63,7 @@ superspike_model = genn_model.create_custom_weight_update_class(
        $(sigmaPrime) = $(beta) / (onePlusHi * onePlusHi);
     }
     """,
-    
+
     synapse_dynamics_code="""
     // Filtered eligibility trace
     $(e) += ($(zTilda) * $(sigmaPrime) - $(e) / $(tauRise))*DT;
@@ -79,7 +79,7 @@ feedback_model = genn_model.create_custom_weight_update_class(
     synapse_dynamics_code="""
     $(addToInSyn, $(w) * $(errTilda_pre));
     """)
-    
+
 feedback_psm_model = genn_model.create_custom_postsynaptic_class(
     "feedback_psm",
     apply_input_code="""
@@ -117,8 +117,7 @@ hidden_neuron_model = genn_model.create_custom_neuron_class(
     $(refracTime) <= 0.0 && $(V) >= $(Vthresh)
     """,
     is_auto_refractory_required=False)
-    
-    
+
 output_neuron_model = genn_model.create_custom_neuron_class(
     "output",
     param_names=["C", "tauMem", "Vrest", "Vthresh", "tauRefrac",
@@ -134,7 +133,7 @@ output_neuron_model = genn_model.create_custom_neuron_class(
                     ("tDecayMult", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[6]))()),
                     ("tPeak", genn_model.create_dpf_class(lambda pars, dt: calc_t_peak(pars[5], pars[6]))()),
                     ("mulAvgErr", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[7]))())],
-   
+
     sim_code="""
     // membrane potential dynamics
     if ($(refracTime) == $(tauRefrac)) {
@@ -189,6 +188,10 @@ TAU_RMS_MS = 30000.0
 TAU_AVG_ERR_MS = 10000.0
 R0 = 0.001 * 1000.0
 EPSILON = 1E-32
+TAU_DECAY_S = TAU_DECAY_MS / 1000.0
+TAU_RISE_S = TAU_RISE_MS / 1000.0
+TAU_AVG_ERR_S = TAU_AVG_ERR_MS / 1000.0
+SCALE_TR_ERR_FLT = 1.0 / (pow((TAU_DECAY_S * TAU_RISE_S)/(TAU_DECAY_S - TAU_RISE_S),2) * (TAU_DECAY_S/2+TAU_RISE_S/2-2*(TAU_DECAY_S*TAU_RISE_S)/(TAU_DECAY_S+TAU_RISE_S))) / TAU_AVG_ERR_S
 
 # Weights
 # **NOTE** Auryn units are volts, seconds etc so essentially 1000x GeNN parameters
@@ -239,15 +242,15 @@ input_spike_times = np.reshape(input_spike_times, (1, NUM_INPUT))
 while True:
     # Generate vector of spike times
     s = input_isi_ms * np.random.exponential(size=NUM_INPUT)
-    
+
     # Add previous times
     s += input_spike_times[-1,:]
-    
+
     # If all neurons have reached end of trial
     if np.all(s >= TRIAL_MS):
         break
     # Otherwise stack
-    else:        
+    else:
         input_spike_times = np.vstack((input_spike_times, s))
 
 # Count spikes per input neuron
@@ -299,7 +302,7 @@ hidden_output_init_vars = {"w": genn_model.init_var("NormalClipped", hidden_outp
 # ----------------------------------------------------------------------------
 r_max_prop_params = {"updateTime": UPDATE_TIME_MS, "tauRMS": TAU_RMS_MS, 
                      "epsilon": EPSILON, "wMin": W_MIN, "wMax": W_MAX}
-       
+
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
@@ -370,6 +373,7 @@ model.custom_update("CalculateTranspose")
 
 input_hidden_r0_view = input_hidden_optimiser.extra_global_params["r0"].view
 hidden_output_r0_view = hidden_output_optimiser.extra_global_params["r0"].view
+output_avg_sqr_err_view = output.vars["avgSqrErr"].view
 
 # Loop through trials
 timestep = 0
@@ -378,14 +382,18 @@ for trial in range(NUM_TRIALS):
     if trial != 0 and (trial % 400) == 0:
         input_hidden_r0_view[:] *= 0.1
         hidden_output_r0_view[:] *= 0.1
-    
+
     # Display trial number peridically
     if trial != 0 and (trial % 10) == 0:
         # Get average square error
         output.pull_var_from_device("avgSqrErr")
-        
-        print("Trial %u (r0 = %f)" % (trial, input_hidden_r0_view[0]))
-        #std::cout << "Trial " << trial << " (r0 = " << r0HiddenOutputWeightOptimiser << ", error = " << calculateError(timestep) << ")" << std::endl;
+
+        # Calculate mean error
+        time_s = timestep * TIMESTEP_MS / 1000.0;
+        mean_error = np.sum(output_avg_sqr_err_view) / float(NUM_OUTPUT);
+        mean_error *= SCALE_TR_ERR_FLT / (1.0 - np.exp(-time_s / TAU_AVG_ERR_S) + 1.0E-9);
+
+        print("Trial %u (r0 = %f, error = %f)" % (trial, input_hidden_r0_view[0], mean_error))
 
     # Reset model timestep
     # **NOTE** this a bit gross but means we can simplify a lot of logic
@@ -406,10 +414,10 @@ for trial in range(NUM_TRIALS):
     # **TODO** build repeating spike source array
     input.push_var_to_device("startSpike")
     output.push_var_to_device("startSpike")
-    
+
     if (trial % 100) == 0:
         model.pull_recording_buffers_from_device();
-        
+
         np.savetxt("input_spikes_%u.csv" % trial, input.spike_recording_data)
         np.savetxt("hidden_spikes_%u.csv" % trial, hidden.spike_recording_data)
         np.savetxt("output_spikes_%u.csv" % trial, output.spike_recording_data)
