@@ -4,6 +4,45 @@ from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 
 # ----------------------------------------------------------------------------
+# Parameters
+# ----------------------------------------------------------------------------
+TIMESTEP_MS = 0.1
+BUILD = True
+
+# Network structure
+NUM_INPUT = 200
+NUM_OUTPUT = 200
+NUM_HIDDEN = 256
+
+# Model parameters
+TAU_RISE_MS = 5.0
+TAU_DECAY_MS = 10.0
+TAU_RMS_MS = 30000.0
+TAU_AVG_ERR_MS = 10000.0
+R0 = 0.001 * 1000.0
+EPSILON = 1E-32
+TAU_DECAY_S = TAU_DECAY_MS / 1000.0
+TAU_RISE_S = TAU_RISE_MS / 1000.0
+TAU_AVG_ERR_S = TAU_AVG_ERR_MS / 1000.0
+SCALE_TR_ERR_FLT = 1.0 / (pow((TAU_DECAY_S * TAU_RISE_S)/(TAU_DECAY_S - TAU_RISE_S),2) * (TAU_DECAY_S/2+TAU_RISE_S/2-2*(TAU_DECAY_S*TAU_RISE_S)/(TAU_DECAY_S+TAU_RISE_S))) / TAU_AVG_ERR_S
+
+# Weights
+# **NOTE** Auryn units are volts, seconds etc so essentially 1000x GeNN parameters
+W_MIN = -0.1 * 1000.0
+W_MAX = 0.1 * 1000.0
+W0 = 0.05 * 1000.0
+
+# Experiment parameters
+INPUT_FREQ_HZ = 5.0
+NUM_TRIALS = 600
+UPDATE_TIME_MS = 500.0
+TRIAL_MS = 1890.0
+
+# Convert parameters to timesteps
+UPDATE_TIMESTEPS = int(UPDATE_TIME_MS / TIMESTEP_MS)
+TRIAL_TIMESTEPS = int(TRIAL_MS / TIMESTEP_MS)
+
+# ----------------------------------------------------------------------------
 # Helper functions
 # ----------------------------------------------------------------------------
 def calc_t_peak(tau_rise, tau_decay):
@@ -173,45 +212,6 @@ output_neuron_model = genn_model.create_custom_neuron_class(
     $(refracTime) <= 0.0 && $(V) >= $(Vthresh)
     """,
     is_auto_refractory_required=False)
-
-# ----------------------------------------------------------------------------
-# Parameters
-# ----------------------------------------------------------------------------
-TIMESTEP_MS = 0.1
-BUILD = True
-
-# Network structure
-NUM_INPUT = 200
-NUM_OUTPUT = 200
-NUM_HIDDEN = 256
-
-# Model parameters
-TAU_RISE_MS = 5.0
-TAU_DECAY_MS = 10.0
-TAU_RMS_MS = 30000.0
-TAU_AVG_ERR_MS = 10000.0
-R0 = 0.001 * 1000.0
-EPSILON = 1E-32
-TAU_DECAY_S = TAU_DECAY_MS / 1000.0
-TAU_RISE_S = TAU_RISE_MS / 1000.0
-TAU_AVG_ERR_S = TAU_AVG_ERR_MS / 1000.0
-SCALE_TR_ERR_FLT = 1.0 / (pow((TAU_DECAY_S * TAU_RISE_S)/(TAU_DECAY_S - TAU_RISE_S),2) * (TAU_DECAY_S/2+TAU_RISE_S/2-2*(TAU_DECAY_S*TAU_RISE_S)/(TAU_DECAY_S+TAU_RISE_S))) / TAU_AVG_ERR_S
-
-# Weights
-# **NOTE** Auryn units are volts, seconds etc so essentially 1000x GeNN parameters
-W_MIN = -0.1 * 1000.0
-W_MAX = 0.1 * 1000.0
-W0 = 0.05 * 1000.0
-
-# Experiment parameters
-INPUT_FREQ_HZ = 5.0
-NUM_TRIALS = 600
-UPDATE_TIME_MS = 500.0
-TRIAL_MS = 1890.0
-
-# Convert parameters to timesteps
-UPDATE_TIMESTEPS = int(UPDATE_TIME_MS / TIMESTEP_MS)
-TRIAL_TIMESTEPS = int(TRIAL_MS / TIMESTEP_MS)
 
 # ----------------------------------------------------------------------------
 # Load target data
