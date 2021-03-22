@@ -208,7 +208,8 @@ int main()
         std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
         std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
         std::cout << "Synapse dynamics:" << synapseDynamicsTime << std::endl;
-        std::cout << "Gradient learning custom update:" << updateGradientLearnTime << std::endl;
+        std::cout << "Gradient learning custom update:" << customUpdateGradientLearnTime << std::endl;
+        std::cout << "Gradient learning custom update transpose:" << customUpdateGradientLearnTransposeTime << std::endl;
         return EXIT_SUCCESS;
     }
     catch(std::exception &ex) {
