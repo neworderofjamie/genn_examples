@@ -8,6 +8,7 @@ from pygenn.genn_wrapper import NO_DELAY
 # ----------------------------------------------------------------------------
 TIMESTEP_MS = 0.1
 BUILD = True
+TIMING = True
 
 # Network structure
 NUM_INPUT = 200
@@ -312,6 +313,7 @@ r_max_prop_params = {"updateTime": UPDATE_TIME_MS, "tauRMS": TAU_RMS_MS,
 # ----------------------------------------------------------------------------
 model = genn_model.GeNNModel("float", "superspike_demo", generateLineInfo=True)
 model.dT = TIMESTEP_MS
+model.timing_enabled = TIMING
 
 # Add neuron populations
 input = model.add_neuron_population("Input", NUM_INPUT, "SpikeSourceArray", 
@@ -425,3 +427,13 @@ for trial in range(NUM_TRIALS):
         write_spike_file("input_spikes_%u.csv" % trial, input.spike_recording_data)
         write_spike_file("hidden_spikes_%u.csv" % trial, hidden.spike_recording_data)
         write_spike_file("output_spikes_%u.csv" % trial, output.spike_recording_data)
+
+if TIMING:
+    print("Init: %f" % model.init_time)
+    print("Init sparse: %f" % model.init_sparse_time)
+    print("Neuron update: %f" % model.neuron_update_time)
+    print("Presynaptic update: %f" % model.presynaptic_update_time)
+    print("Synapse dynamics: %f" % model.synapse_dynamics_time)
+    print("Gradient learning custom update: %f" % model.get_custom_update_time("GradientLearn"))
+    print("Gradient learning custom update transpose: %f" % model.get_custom_update_transpose_time("GradientLearn"))
+   
