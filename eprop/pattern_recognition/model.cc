@@ -251,24 +251,24 @@ void modelDefinition(ModelSpec &model)
     //---------------------------------------------------------------------------
     // Custom updates
     //---------------------------------------------------------------------------
-    CustomUpdateModels::AdamOptimizer::ParamValues adamParams(Parameters::beta1, Parameters::beta2, 1E-8);
-    CustomUpdateModels::AdamOptimizer::VarValues adamVarValues(0.0, 0.0);
-    CustomUpdateModels::AdamOptimizer::WUVarReferences adamInputRecurrentVarReferences(
+    AdamOptimizer::ParamValues adamParams(Parameters::beta1, Parameters::beta2, 1E-8);
+    AdamOptimizer::VarValues adamVarValues(0.0, 0.0);
+    AdamOptimizer::WUVarReferences adamInputRecurrentVarReferences(
         createWUVarRef(inputRecurrent, "DeltaG"),    // Gradient 
         createWUVarRef(inputRecurrent, "g"));        // Variable
-    model.addCustomUpdate<CustomUpdateModels::AdamOptimizer>("InputRecurrentWeightOptimiser", "GradientLearn",
-                                                             adamParams, adamVarValues, adamInputRecurrentVarReferences);
+    model.addCustomUpdate<AdamOptimizer>("InputRecurrentWeightOptimiser", "GradientLearn",
+                                         adamParams, adamVarValues, adamInputRecurrentVarReferences);
     
-    CustomUpdateModels::AdamOptimizer::WUVarReferences adamRecurrentOutputVarReferences(
+    AdamOptimizer::WUVarReferences adamRecurrentOutputVarReferences(
         createWUVarRef(recurrentOutput, "DeltaG"),                      // Gradient 
         createWUVarRef(recurrentOutput, "g", outputRecurrent, "g"));    // Variable
-    model.addCustomUpdate<CustomUpdateModels::AdamOptimizer>("RecurrentOutputWeightOptimiser", "GradientLearn",
-                                                             adamParams, adamVarValues, adamRecurrentOutputVarReferences);
+    model.addCustomUpdate<AdamOptimizer>("RecurrentOutputWeightOptimiser", "GradientLearn",
+                                         adamParams, adamVarValues, adamRecurrentOutputVarReferences);
 #ifndef USE_DEEP_R
-    CustomUpdateModels::AdamOptimizer::WUVarReferences adamRecurrentRecurrentVarReferences(
+    AdamOptimizer::WUVarReferences adamRecurrentRecurrentVarReferences(
         createWUVarRef(recurrentRecurrent, "DeltaG"),    // Gradient 
         createWUVarRef(recurrentRecurrent, "g"));        // Variable
-    model.addCustomUpdate<CustomUpdateModels::AdamOptimizer>("RecurrentRecurrentWeightOptimiser", "GradientLearn",
-                                                             adamParams, adamVarValues, adamRecurrentRecurrentVarReferences);                                  
+    model.addCustomUpdate<AdamOptimizer>("RecurrentRecurrentWeightOptimiser", "GradientLearn",
+                                         adamParams, adamVarValues, adamRecurrentRecurrentVarReferences);                                  
 #endif                                             
 }

@@ -217,12 +217,13 @@ void modelDefinition(ModelSpec &model)
     //---------------------------------------------------------------------------
     // Custom updates
     //---------------------------------------------------------------------------
-    CustomUpdateModels::AdamOptimizer::ParamValues adamParams(0.001, 0.9, 0.999, 1E-8);
-    CustomUpdateModels::AdamOptimizer::VarValues adamVarValues(0.0, 0.0);
-    CustomUpdateModels::AdamOptimizer::VarReferences<NeuronVarReference> adamBiasVarReferences(NeuronVarReference(output, "DeltaB"),    // Gradient 
+    AdamOptimizer::ParamValues adamParams(0.001, 0.9, 0.999, 1E-8);
+    AdamOptimizer::VarValues adamVarValues(0.0, 0.0);
+    AdamOptimizer::VarReferences<NeuronVarReference> adamBiasVarReferences(NeuronVarReference(output, "DeltaB"),    // Gradient 
                                                                                                NeuronVarReference(output, "B"));        // Variable
     
-    model.addCustomUpdate<CustomUpdateModels::AdamOptimizer>("OutputBiasOptimiser", "GradientLearn",
-                                                             adamParams, adamVarValues, adamBiasVarReferences);
-                                      
+    model.addCustomUpdate<AdamOptimizer>("OutputBiasOptimiser", "GradientLearn",
+                                         adamParams, adamVarValues, adamBiasVarReferences);
+    model.addCustomUpdate<AdamOptimizer>("OutputBiasOptimiser2", "GradientLearnSlow",
+                                         adamParams, adamVarValues, adamBiasVarReferences);                                  
 }
