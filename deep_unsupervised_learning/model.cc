@@ -45,13 +45,16 @@ IMPLEMENT_SNIPPET(WTA);
 class InputNeuron : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(InputNeuron, 0, 1);
+    DECLARE_MODEL(InputNeuron, 1, 0);
     
-    SET_VARS({{"input", "scalar", VarAccess::READ_ONLY_DUPLICATE}});
+    SET_SIM_CODE(
+        "const int trial = (int)($(t) / $(presentMs));\n"
+        "const uint8_t *imgData = &$(dataset)[trial * 28 * 28];\n"
+        "const scalar u = $(gennrand_uniform);\n");
+    SET_THRESHOLD_CONDITION_CODE("imgData[$(id)] > 0 && u >= exp(-(float)imgData[$(id)] * DT)");
     
-    SET_SIM_CODE("const scalar u = $(gennrand_uniform);\n");
-    SET_THRESHOLD_CONDITION_CODE("$(input) > 0.0 && u >= exp(-$(input) * DT)");
-    
+    SET_PARAM_NAMES({"presentMs"});
+    SET_EXTRA_GLOBAL_PARAMS({{"dataset", "uint8_t*"}});
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
 IMPLEMENT_MODEL(InputNeuron);
@@ -170,6 +173,9 @@ void modelDefinition(ModelSpec &model)
     model.setDT(1.0);
     model.setName("deep_unsupervised_learning");
     model.setTiming(true);
+    
+    InputNeuron::ParamValues inputParams(
+        100.0); // presentMs
 
     DualAccumulator::ParamValues convOneParams(
         8.0,    // VthreshWTA
@@ -198,11 +204,14 @@ void modelDefinition(ModelSpec &model)
       0.0,          // 3 - Minimum weight
       1.0);         // 4 - Maximum weight
 
-    model.addNeuronPopulation<InputNeuron>("Input", 28 * 28 * 1,
-                                           {}, { uninitialisedVar() });
-    model.addNeuronPopulation<DualAccumulator>("Conv1", 24 * 24 * 16,
-                                               convOneParams, dualAccumulatorInitVals);
+    auto *input = model.addNeuronPopulation<InputNeuron>("Input", 28 * 28 * 1,
+                                                         inputParams, {});
+    auto *conv1 = model.addNeuronPopulation<DualAccumulator>("Conv1", 24 * 24 * 16,
+                                                             convOneParams, dualAccumulatorInitVals);
 
+    input->setSpikeRecordingEnabled(true);
+    conv1->setSpikeRecordingEnabled(true);
+    
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "Conv1_Conv1", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Conv1", "Conv1",
