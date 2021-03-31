@@ -6,9 +6,6 @@
 // Standard C includes
 #include <cassert>
 
-// Model parameters
-#include "parameters.h"
-
 inline uint32_t readBigEndian(std::ifstream &data)
 {
     union
@@ -41,8 +38,8 @@ inline unsigned int loadImageData(const std::string &imageDatafilename, uint8_t 
 
     // Validate header words
     assert(magic == 0x803);
-    assert(numRows == Parameters::inputHeight);
-    assert(numCols == Parameters::inputWidth);
+    assert(numRows == 28);
+    assert(numCols == 28);
 
     // Allocate EGP for data
     allocateEGPFn(numRows * numCols * numImages);
