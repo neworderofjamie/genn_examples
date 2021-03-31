@@ -40,19 +40,21 @@ int main()
             stepTime();
         }
         
-        // Save spikes
-        pullRecordingBuffersFromDevice();
-        writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,
-                                28 * 28, 100, 1.0,
-                                ",", true);
-        writeTextSpikeRecording("conv1_spikes_" + std::to_string(n) + ".csv", recordSpkConv1,
-                                24 * 24 * 16, 100, 1.0,
-                                ",", true);
-                                
-        // Save weights
-        pullgInput_Conv1FromDevice();
-        std::ofstream conv1("conv1_kernel_" + std::to_string(n) + ".bin", std::ios_base::binary);
-        conv1.write(reinterpret_cast<const char*>(gInput_Conv1), 5 * 5 * 16 * sizeof(float));
+        if((n % 1000) == 0) {
+            // Save spikes
+            pullRecordingBuffersFromDevice();
+            writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,
+                                    28 * 28, 100, 1.0,
+                                    ",", true);
+            writeTextSpikeRecording("conv1_spikes_" + std::to_string(n) + ".csv", recordSpkConv1,
+                                    24 * 24 * 16, 100, 1.0,
+                                    ",", true);
+                                    
+            // Save weights
+            pullgInput_Conv1FromDevice();
+            std::ofstream conv1("conv1_kernel_" + std::to_string(n) + ".bin", std::ios_base::binary);
+            conv1.write(reinterpret_cast<const char*>(gInput_Conv1), 5 * 5 * 16 * sizeof(float));
+        }
     }
     return EXIT_SUCCESS;
     
