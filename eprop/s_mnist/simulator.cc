@@ -18,7 +18,7 @@
 #include "batch_learning.h"
 
 // Model parameters
-#include "mnist_helpers.h"
+#include "../../common/mnist_helpers.h"
 #include "parameters.h"
 
 int main()
