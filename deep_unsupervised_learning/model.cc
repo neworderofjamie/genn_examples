@@ -123,21 +123,20 @@ public:
     
     
     SET_LEARN_POST_CODE(
+        "int *intAddr = (int*)&$(g);\n"
+        "int old = *intAddr;\n"
+        "int assumed;\n"
         "if($(sT_pre) > $(prev_sT_post)) {\n"
-        "   scalar old = $(g);\n"
-        "   scalar assumed;\n"
         "   do {\n"
         "       assumed = old;\n"
-        "       old = atomicCAS(&$(g), assumed, fmin($(Wmax), assumed + ($(alphaPlus) * exp(-$(betaPlus) * assumed))));\n"
-        "   } while(assumed != old)\n"
+        "       old = atomicCAS(intAddr, assumed, __float_as_int(fmin($(Wmax), __int_as_float(assumed) + ($(alphaPlus) * exp(-$(betaPlus) * __int_as_float(assumed))))));\n"
+        "   } while(assumed != old);\n"
         "}\n"
         "else {\n"
-        "   scalar old = $(g);\n"
-        "   scalar assumed;\n"
         "   do {\n"
         "       assumed = old;\n"
-        "       old = atomicCAS(&$(g), assumed, fmax($(Wmin), assumed + $(alphaMinus)));\n"
-        "   } while(assumed != old)\n"
+        "       old = atomicCAS(intAddr, assumed, __float_as_int(fmax($(Wmin), __int_as_float(assumed) + $(alphaMinus))));\n"
+        "   } while(assumed != old);\n"
         "}\n");
 
     SET_NEEDS_PRE_SPIKE_TIME(true);
