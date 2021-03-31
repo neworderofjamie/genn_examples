@@ -45,15 +45,15 @@ IMPLEMENT_SNIPPET(WTA);
 class InputNeuron : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(InputNeuron, 1, 0);
+    DECLARE_MODEL(InputNeuron, 2, 0);
     
     SET_SIM_CODE(
         "const int trial = (int)($(t) / $(presentMs));\n"
         "const uint8_t *imgData = &$(dataset)[trial * 28 * 28];\n"
         "const scalar u = $(gennrand_uniform);\n");
-    SET_THRESHOLD_CONDITION_CODE("imgData[$(id)] > 0 && u >= exp(-(float)imgData[$(id)] * DT)");
+    SET_THRESHOLD_CONDITION_CODE("imgData[$(id)] > 0 && u >= exp(-(float)imgData[$(id)] * $(scale) * DT)");
     
-    SET_PARAM_NAMES({"presentMs"});
+    SET_PARAM_NAMES({"presentMs", "scale"});
     SET_EXTRA_GLOBAL_PARAMS({{"dataset", "uint8_t*"}});
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
@@ -175,7 +175,8 @@ void modelDefinition(ModelSpec &model)
     model.setTiming(true);
     
     InputNeuron::ParamValues inputParams(
-        100.0); // presentMs
+        100.0,  // presentMs
+        0.00125); // scale
 
     DualAccumulator::ParamValues convOneParams(
         8.0,    // VthreshWTA
