@@ -17,11 +17,11 @@ int main()
     std::normal_distribution<float> conv2WeightDist(0.8f, 0.1f);
     
     allocateMem();
-    allocateRecordingBuffers(100);
+    allocateRecordingBuffers(1000);
     initialize();
     
     // Initialise kernels
-    // **YUCK**
+    // **YUCK** this should be done automatically
     std::generate_n(gInput_Conv1, 5 * 5 * 16, 
                     [&rng, &conv2WeightDist](){ return conv2WeightDist(rng); });
     
@@ -36,11 +36,11 @@ int main()
         std::cout << n << std::endl;
         
         // Simulate
-        for(unsigned int i = 0; i < 100; i++) {
+        for(unsigned int i = 0; i < 1000; i++) {
             stepTime();
         }
         
-        if((n % 1000) == 0) {
+        if((n % 100) == 0) {
             // Save spikes
             pullRecordingBuffersFromDevice();
             writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,

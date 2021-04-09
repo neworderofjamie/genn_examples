@@ -25,9 +25,7 @@ public:
         "else {\n"
         "   const int rowDist = abs(inRow - outRow);\n"
         "   const int colDist = abs(inCol - outCol);\n"
-        "   if(rowDist <= (int)$(radius) && colDist <= (int)$(radius)"
-        "      && rowDist != 0 && colDist != 0)\n"
-        "   {\n"
+        "   if(rowDist <= (int)$(radius) && colDist <= (int)$(radius)) {"
         "       $(value) = $(constant);\n"
         "   }\n"
         "   else {\n"
@@ -170,7 +168,7 @@ public:
 
 void modelDefinition(ModelSpec &model)
 {
-    model.setDT(1.0);
+    model.setDT(0.1);
     model.setName("deep_unsupervised_learning");
     model.setTiming(true);
     
@@ -194,16 +192,16 @@ void modelDefinition(ModelSpec &model)
         24, 24, 16);    // conv_oh, conv_ow, conv_oc
     
     WTA::ParamValues conv1WTAParams(
-        5, 5, 16,   // conv_h, conv_w, conv_c
+        24, 24, 16, // conv_h, conv_w, conv_c
         2,          // radius
-        1.0);       // constant
+        -1.0);       // constant
     
     STDPInput::ParamValues inputConv1Params(
-      0.1,          // 0 - Potentiation rate
-      0.1 / -8.0,   // 1 - Depression rate
-      3.0,          // 2 - Damping factor
-      0.0,          // 3 - Minimum weight
-      1.0);         // 4 - Maximum weight
+        0.0001,           // 0 - Potentiation rate
+        0.0001 / -8.0,    // 1 - Depression rate
+        3.0,            // 2 - Damping factor
+        0.0,            // 3 - Minimum weight
+        1.0);           // 4 - Maximum weight
 
     auto *input = model.addNeuronPopulation<InputNeuron>("Input", 28 * 28 * 1,
                                                          inputParams, {});
