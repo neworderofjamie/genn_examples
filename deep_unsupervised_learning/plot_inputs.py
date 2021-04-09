@@ -19,7 +19,10 @@ for i, c in enumerate(input_spikes):
     spike_counts = np.bincount(spikes[:,1].astype(int), minlength=28 * 28)
     spike_counts = np.reshape(spike_counts, (28, 28))
     
-    axes[i // num_cols,i % num_cols].imshow(spike_counts, cmap="jet")
-
+    axis = axes[i // num_cols,i % num_cols]
+    axis.imshow(spike_counts, cmap="jet")
+    axis.get_xaxis().set_visible(False)
+    axis.get_yaxis().set_visible(False)
+    
 plt.show()
     
