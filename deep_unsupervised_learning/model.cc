@@ -172,12 +172,12 @@ public:
 
     SET_VARS({{"g", "scalar"}});
     
-    
     SET_LEARN_POST_CODE(
+        "const scalar tPostLast = fmax($(prev_sT_post), $(TlastReset_post));\n"
         "int *intAddr = (int*)&$(g);\n"
         "int old = *intAddr;\n"
         "int assumed;\n"
-        "if($(sT_pre) > $(prev_sT_post)) {\n"
+        "if($(sT_pre) > tPostLast) {\n"
         "   do {\n"
         "       assumed = old;\n"
         "       old = atomicCAS(intAddr, assumed, __float_as_int(fmin($(Wmax), __int_as_float(assumed) + ($(alphaPlus) * exp(-$(betaPlus) * __int_as_float(assumed))))));\n"
@@ -273,15 +273,15 @@ void modelDefinition(ModelSpec &model)
 
     auto *input = model.addNeuronPopulation<InputNeuron>("Input", 28 * 28 * 1,
                                                          inputParams, {});
-    //auto *conv1 = model.addNeuronPopulation<DualAccumulator>("Conv1", 24 * 24 * 16,
-    //                                                         convOneParams, dualAccumulatorInitVals);
-    auto *output = model.addNeuronPopulation<DualAccumulator>("Output", 1000,
-                                                              outputParams, dualAccumulatorInitVals);
+    auto *conv1 = model.addNeuronPopulation<DualAccumulator>("Conv1", 24 * 24 * 16,
+                                                             convOneParams, dualAccumulatorInitVals);
+    //auto *output = model.addNeuronPopulation<DualAccumulator>("Output", 1000,
+    //                                                          outputParams, dualAccumulatorInitVals);
     input->setSpikeRecordingEnabled(true);
-    //conv1->setSpikeRecordingEnabled(true);
-    output->setSpikeRecordingEnabled(true);
+    conv1->setSpikeRecordingEnabled(true);
+    //output->setSpikeRecordingEnabled(true);
     
-    /*model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "Conv1_Conv1", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Conv1", "Conv1",
         {}, initVar<WTA>(conv1WTAParams),
@@ -292,9 +292,9 @@ void modelDefinition(ModelSpec &model)
         "Input", "Conv1",
         inputConv1Params, { uninitialisedVar() },
         {}, {},
-        initConnectivity<InitSparseConnectivitySnippet::Conv2D>(conv1Params));*/
+        initConnectivity<InitSparseConnectivitySnippet::Conv2D>(conv1Params));
     
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+    /*model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "Output_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Output", "Output",
         {}, initVar<WTAOutput>(outputWTAParams),
@@ -304,5 +304,5 @@ void modelDefinition(ModelSpec &model)
         "Input_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "Output",
         inputOutputParams, inputOutputVals,
-        {}, {});
+        {}, {});*/
 }
