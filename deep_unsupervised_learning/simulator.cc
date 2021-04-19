@@ -14,7 +14,7 @@
 int main()
 {
     std::mt19937 rng;
-    std::normal_distribution<float> conv2WeightDist(0.8f, 0.1f);
+    std::normal_distribution<float> convWeightDist(0.8f, 0.1f);
     
     allocateMem();
     allocateRecordingBuffers(1000);
@@ -22,9 +22,11 @@ int main()
     
     // Initialise kernels
     // **YUCK** this should be done automatically
-    std::generate_n(gInput_Conv1, 5 * 5 * 16, 
-                    [&rng, &conv2WeightDist](){ return conv2WeightDist(rng); });
-    
+    std::generate_n(gInput_Conv1, 5 * 5 * 1 * 16, 
+                    [&rng, &convWeightDist](){ return convWeightDist(rng); });
+    std::generate_n(gConv1_Conv2, 5 * 5 * 16 * 32, 
+                    [&rng, &convWeightDist](){ return convWeightDist(rng); });
+
     initializeSparse();
     
     // Load training data and labels
@@ -40,25 +42,28 @@ int main()
             stepTime();
         }
         
-        if((n % 100) == 0) {
+        if((n % 1000) == 0) {
             // Save spikes
-            pullRecordingBuffersFromDevice();
+            /*pullRecordingBuffersFromDevice();
             writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,
                                     28 * 28, 100, 0.1,
                                     ",", true);
             writeTextSpikeRecording("conv1_spikes_" + std::to_string(n) + ".csv", recordSpkConv1,
                                     24 * 24 * 16, 100, 0.1,
                                     ",", true);
-            /*writeTextSpikeRecording("output_spikes_" + std::to_string(n) + ".csv", recordSpkOutput,
+            writeTextSpikeRecording("output_spikes_" + std::to_string(n) + ".csv", recordSpkOutput,
                                     1000, 100, 0.1,
                                     ",", true);*/
                                     
             // Save weights
             pullgInput_Conv1FromDevice();
+            pullgConv1_Conv2FromDevice();
             //pullgInput_OutputFromDevice();
             std::ofstream conv1("conv1_kernel_" + std::to_string(n) + ".bin", std::ios_base::binary);
+            std::ofstream conv2("conv2_kernel_" + std::to_string(n) + ".bin", std::ios_base::binary);
             //std::ofstream inputOutput("input_output_" + std::to_string(n) + ".bin", std::ios_base::binary);
-            conv1.write(reinterpret_cast<const char*>(gInput_Conv1), 5 * 5 * 16 * sizeof(float));
+            conv1.write(reinterpret_cast<const char*>(gInput_Conv1), 5 * 5 * 1 * 16 * sizeof(float));
+            conv2.write(reinterpret_cast<const char*>(gConv1_Conv2), 5 * 5 * 16 * 32 * sizeof(float));
             //inputOutput.write(reinterpret_cast<const char*>(gInput_Output), 1000 * 784 * sizeof(float));
         }
     }
