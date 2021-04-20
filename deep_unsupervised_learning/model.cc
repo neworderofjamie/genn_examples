@@ -138,19 +138,19 @@ public:
       "Wmin",       // 3 - Minimum weight
       "Wmax"});     // 4 - Maximum weight
   
-  SET_VARS({{"g", "scalar"}});
+    SET_VARS({{"g", "scalar"}});
   
-  // **TODO** output layer will eventually pass spike-like-events instead
-  SET_SIM_CODE("$(addToInSyn, $(g));\n");
+    // **TODO** output layer will eventually pass spike-like-events instead
+    SET_SIM_CODE("$(addToInSyn, $(g));\n");
   
-  SET_LEARN_POST_CODE(
-    "const scalar tPostLast = fmax($(prev_sT_post), $(TlastReset_post));\n"
-    "if($(sT_pre) > tPostLast) {\n"
-    "   $(g) = fmin($(Wmax), $(g) + ($(alphaPlus) * exp(-$(betaPlus) * $(g))));\n"
-    "}\n"
-    "else {\n"
-    "   $(g) = fmax($(Wmin), $(g) + $(alphaMinus));\n"
-    "}\n");
+    SET_LEARN_POST_CODE(
+        "const scalar tPostLast = fmax($(prev_sT_post), $(TlastReset_post));\n"
+        "if($(sT_pre) > tPostLast) {\n"
+        "   $(g) = fmin($(Wmax), $(g) + ($(alphaPlus) * exp(-$(betaPlus) * $(g))));\n"
+        "}\n"
+        "else {\n"
+        "   $(g) = fmax($(Wmin), $(g) + $(alphaMinus));\n"
+        "}\n");
     
     SET_NEEDS_PRE_SPIKE_TIME(true);
     SET_NEEDS_PREV_POST_SPIKE_TIME(true);
@@ -158,11 +158,13 @@ public:
 IMPLEMENT_MODEL(STDPOutput);
 
 //----------------------------------------------------------------------------
-// STDPBase
+// STDPInput
 //----------------------------------------------------------------------------
-class STDPBase : public WeightUpdateModels::Base
+class STDPInput : public WeightUpdateModels::Base
 {
 public:
+    DECLARE_MODEL(STDPInput, 5, 1);
+    
     SET_PARAM_NAMES({
       "alphaPlus",  // 0 - Potentiation rate
       "alphaMinus", // 1 - Depression rate
@@ -171,6 +173,8 @@ public:
       "Wmax"});     // 4 - Maximum weight
 
     SET_VARS({{"g", "scalar"}});
+    
+    SET_SIM_CODE("$(addToInSyn, $(g));\n");
     
     SET_LEARN_POST_CODE(
         "const scalar tPostLast = fmax($(prev_sT_post), $(TlastReset_post));\n"
@@ -193,29 +197,48 @@ public:
     SET_NEEDS_PRE_SPIKE_TIME(true);
     SET_NEEDS_PREV_POST_SPIKE_TIME(true);
 };
-
-//----------------------------------------------------------------------------
-// STDPInput
-//----------------------------------------------------------------------------
-class STDPInput : public STDPBase
-{
-public:
-    DECLARE_MODEL(STDPInput, 5, 1);
-    
-    SET_SIM_CODE("$(addToInSyn, $(g));\n");
-};
 IMPLEMENT_MODEL(STDPInput);
 
 //----------------------------------------------------------------------------
-// STDP
+// STDPHidden
 //----------------------------------------------------------------------------
-class STDPHidden : public STDPBase
+class STDPHidden : public WeightUpdateModels::Base
 {
 public:
     DECLARE_MODEL(STDPHidden, 5, 1);
     
+    SET_PARAM_NAMES({
+      "alphaPlus",  // 0 - Potentiation rate
+      "alphaMinus", // 1 - Depression rate
+      "betaPlus",   // 2 - Damping factor
+      "Wmin",       // 3 - Minimum weight
+      "Wmax"});     // 4 - Maximum weight
+
+    SET_VARS({{"g", "scalar"}});
+
     SET_EVENT_CODE("$(addToInSyn, $(g));\n");
     SET_EVENT_THRESHOLD_CONDITION_CODE("$(Vinf_pre) > $(VthreshInf_pre)");
+
+    SET_LEARN_POST_CODE(
+        "const scalar tPostLast = fmax($(prev_sT_post), $(TlastReset_post));\n"
+        "int *intAddr = (int*)&$(g);\n"
+        "int old = *intAddr;\n"
+        "int assumed;\n"
+        "if($(seT_pre) > tPostLast) {\n"
+        "   do {\n"
+        "       assumed = old;\n"
+        "       old = atomicCAS(intAddr, assumed, __float_as_int(fmin($(Wmax), __int_as_float(assumed) + ($(alphaPlus) * exp(-$(betaPlus) * __int_as_float(assumed))))));\n"
+        "   } while(assumed != old);\n"
+        "}\n"
+        "else {\n"
+        "   do {\n"
+        "       assumed = old;\n"
+        "       old = atomicCAS(intAddr, assumed, __float_as_int(fmax($(Wmin), __int_as_float(assumed) + $(alphaMinus))));\n"
+        "   } while(assumed != old);\n"
+        "}\n");
+
+    SET_NEEDS_PRE_SPIKE_EVENT_TIME(true);
+    SET_NEEDS_PREV_POST_SPIKE_TIME(true);
 };
 IMPLEMENT_MODEL(STDPHidden);
 
