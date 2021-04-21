@@ -9,7 +9,7 @@
 #include "deep_unsupervised_learning_CODE/definitions.h"
 
 // Model parameters
-#include "../../common/mnist_helpers.h"
+#include "../common/mnist_helpers.h"
 
 int main()
 {
