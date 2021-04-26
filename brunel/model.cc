@@ -62,8 +62,9 @@ IMPLEMENT_MODEL(STDPExponential);
 
 void modelDefinition(NNmodel &model)
 {
-    // **NOTE** in the absence of a better system, manually "caching" these in code after running genn-buildmodel once speeds up build time hugely
-    /*GENN_PREFERENCES.blockSizeSelectMethod = BlockSizeSelect::MANUAL;
+    // **NOTE** in the absence of a better system, manually "caching" these in code after running genn-buildmodel once on a particular GPU speeds up build time hugely
+    /*GENN_PREFERENCES.deviceSelectMethod = DeviceSelect::MOST_MEMORY;
+    GENN_PREFERENCES.blockSizeSelectMethod = BlockSizeSelect::MANUAL;
     GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelNeuronUpdate] = 64;
     GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelPresynapticUpdate] = 32;
     GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelPostsynapticUpdate] = 32;
@@ -71,12 +72,16 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelInitializeSparse] = 64;
     GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelNeuronSpikeQueueUpdate] = 32;*/
     
+    // Use approximate exponentials etc to speed up plasticity
+    GENN_PREFERENCES.optimizeCode = true;
+    
     model.setDT(Parameters::timestep);
     model.setName("brunel");
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
     model.setTiming(true);
     model.setMergePostsynapticModels(true);
+    model.setSeed(1234);
     
     //---------------------------------------------------------------------------
     // Build model
