@@ -27,7 +27,7 @@ namespace Parameters
     const unsigned int numExcitatory = (unsigned int)std::round(((double)numNeurons * excitatoryInhibitoryRatio) / (1.0 + excitatoryInhibitoryRatio));
     const unsigned int numInhibitory = numNeurons - numExcitatory;
 
-    const double scale = (10000.0 / (double)numNeurons) * (0.02 / probabilityConnection);
+    const double scale = (10000.0 / (double)numNeurons) * (0.1 / probabilityConnection);
 
     const double excitatoryWeight = 0.1 * scale;
     const double inhibitoryWeight = -0.5 * scale;
