@@ -3,13 +3,19 @@ import numpy as np
 
 from glob import glob
 from mpl_toolkits.mplot3d import Axes3D
-
+"""
+WIDTH = 28
+HEIGHT = 28
+NUM_CHANNELS = 1
+"""
 WIDTH = 24
 HEIGHT = 24
 NUM_CHANNELS = 16
 
 # Load spikes
-conv_spikes = np.loadtxt("conv1_spikes_500.csv", skiprows=1, delimiter=",")
+conv_spikes = np.loadtxt("conv1_spike_events_0.csv", skiprows=1, delimiter=",")
+#conv_spikes = np.loadtxt("input_spikes_0.csv", skiprows=1, delimiter=",")
+
 print("%u spikes" % conv_spikes.shape[0])
 
 # Convert neuron IDs to row, col and channel
