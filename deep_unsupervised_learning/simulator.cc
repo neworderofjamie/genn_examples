@@ -45,17 +45,17 @@ int main()
         if((n % 100) == 0) {
             // Save spikes
             pullRecordingBuffersFromDevice();
-            /*writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,
-                                    28 * 28, 100, 0.1,
-                                    ",", true);*/
-            writeTextSpikeRecording("conv1_spikes_" + std::to_string(n) + ".csv", recordSpkConv1,
-                                    24 * 24 * 16, 100, 0.1,
+            writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,
+                                    28 * 28, 1000, 0.1,
                                     ",", true);
-            /*writeTextSpikeRecording("output_spikes_" + std::to_string(n) + ".csv", recordSpkOutput,
-                                    1000, 100, 0.1,
+            /*writeTextSpikeRecording("conv1_spikes_" + std::to_string(n) + ".csv", recordSpkConv1,
+                                    24 * 24 * 16, 1000, 0.1,
+                                    ",", true);
+            writeTextSpikeRecording("output_spikes_" + std::to_string(n) + ".csv", recordSpkOutput,
+                                    1000, 1000, 0.1,
                                     ",", true);*/
             writeTextSpikeRecording("conv1_spike_events_" + std::to_string(n) + ".csv", recordSpkEventConv1,
-                                    24 * 24 * 16, 100, 0.1,
+                                    24 * 24 * 16, 1000, 0.1,
                                     ",", true);
                                     
             // Save weights
