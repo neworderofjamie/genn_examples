@@ -250,11 +250,11 @@ void modelDefinition(ModelSpec &model)
     
     InputNeuron::ParamValues inputParams(
         100.0,  // presentMs
-        0.00125); // scale
+        0.0005); // scale
 
     DualAccumulator::ParamValues conv1Params(
         8.0,    // VthreshWTA
-        8.0);   // VthreshInf
+        40.0);   // VthreshInf
     
     DualAccumulator::ParamValues conv2Params(
         30.0,   // VthreshWTA
@@ -286,6 +286,13 @@ void modelDefinition(ModelSpec &model)
         0, 0,       // conv_padh, conv_padw
         12, 12,     // conv_ih, conv_iw
         8, 8, 32);  // conv_oh, conv_ow, conv_oc
+    
+    /*InitSparseConnectivitySnippet::Conv2D::ParamValues conv1Conv2ConnectParams(
+        5, 5,           // conv_kh, conv_kw
+        1, 1,           // conv_sh, conv_sw
+        0, 0,           // conv_padh, conv_padw
+        24, 24, 16,      // conv_ih, conv_iw, conv_ic
+        20, 20, 32);    // conv_oh, conv_ow, conv_oc*/
 
     WTA::ParamValues conv1WTAParams(
         24, 24, 16, // conv_h, conv_w, conv_c
@@ -301,15 +308,15 @@ void modelDefinition(ModelSpec &model)
         -1.0);  // constant
     
     STDPInput::ParamValues inputConv1Params(
-        0.0001,           // 0 - Potentiation rate
-        0.0001 / -8.0,    // 1 - Depression rate
+        0.001,           // 0 - Potentiation rate
+        0.001 / -8.0,    // 1 - Depression rate
         3.0,            // 2 - Damping factor
         0.0,            // 3 - Minimum weight
         1.0);           // 4 - Maximum weight
     
     STDPHidden::ParamValues conv1Conv2Params(
-        0.0001,         // 0 - Potentiation rate
-        0.0001 / -8.0,  // 1 - Depression rate
+        0.001,         // 0 - Potentiation rate
+        0.001 / -8.0,  // 1 - Depression rate
         3.0,            // 2 - Damping factor
         0.0,            // 3 - Minimum weight
         1.0);           // 4 - Maximum weight
@@ -335,6 +342,7 @@ void modelDefinition(ModelSpec &model)
     //                                                          outputParams, dualAccumulatorInitVals);
     input->setSpikeRecordingEnabled(true);
     conv1->setSpikeRecordingEnabled(true);
+    conv1->setSpikeEventRecordingEnabled(true);
     conv2->setSpikeRecordingEnabled(true);
     //output->setSpikeRecordingEnabled(true);
     
