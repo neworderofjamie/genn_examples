@@ -42,6 +42,7 @@ int main()
         std::cout << "Init sparse:" << initSparseTime << std::endl;
         std::cout << "Neuron update:" << neuronUpdateTime << std::endl;
         std::cout << "Presynaptic update:" << presynapticUpdateTime << std::endl;
+        std::cout << "Postsynaptic update:" << postsynapticUpdateTime << std::endl;
     }
     catch(const std::exception &ex) {
         std::cerr << "Error:" << ex.what() << std::endl;

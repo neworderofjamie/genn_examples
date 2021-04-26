@@ -25,8 +25,52 @@ class PoissonDelta : public CurrentSourceModels::Base
 };
 IMPLEMENT_MODEL(PoissonDelta);
 
+class STDPExponential : public WeightUpdateModels::Base
+{
+public:
+    DECLARE_WEIGHT_UPDATE_MODEL(STDPExponential, 5, 1, 1, 1);
+    SET_PARAM_NAMES({"tauSTDP", "alpha", "lambda",
+                     "Wmin", "Wmax"});
+    SET_DERIVED_PARAMS({
+        {"tauSTDPDecay", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }}});
+    SET_VARS({{"g", "scalar"}});
+    SET_PRE_VARS({{"preTrace", "scalar"}});
+    SET_POST_VARS({{"postTrace", "scalar"}});
+    
+    SET_SIM_CODE(
+        "$(addToInSyn, $(g));\n"
+        "const scalar dt = $(t) - $(sT_post); \n"
+        "if (dt > 0) {\n"
+        "    const scalar newWeight = $(g) - ($(alpha) * $(lambda) * $(g) * exp(-$(postTrace)));\n"
+        "    $(g) = fmax($(Wmin), newWeight);\n"
+        "}\n");
+    SET_LEARN_POST_CODE(
+        "const scalar dt = $(t) - $(sT_pre);\n"
+        "if (dt > 0) {\n"
+        "    const scalar newWeight = $(g) + ($(lambda) * (1.0 - $(g)) * exp(-$(preTrace)));\n"
+        "    $(g) = fmin($(Wmax), newWeight);\n"
+        "}\n");
+    SET_PRE_SPIKE_CODE("$(preTrace) += DT;\n");
+    SET_POST_SPIKE_CODE("$(postTrace) += DT;\n");
+    SET_PRE_DYNAMICS_CODE("$(preTrace) *= $(tauSTDPDecay);\n");
+    SET_POST_DYNAMICS_CODE("$(postTrace) *= $(tauSTDPDecay);\n");
+    
+    SET_NEEDS_PRE_SPIKE_TIME(true);
+    SET_NEEDS_POST_SPIKE_TIME(true);
+};
+IMPLEMENT_MODEL(STDPExponential);
+
 void modelDefinition(NNmodel &model)
 {
+    // **NOTE** in the absence of a better system, manually "caching" these in code after running genn-buildmodel once speeds up build time hugely
+    /*GENN_PREFERENCES.blockSizeSelectMethod = BlockSizeSelect::MANUAL;
+    GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelNeuronUpdate] = 64;
+    GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelPresynapticUpdate] = 32;
+    GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelPostsynapticUpdate] = 32;
+    GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelInitialize] = 32;
+    GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelInitializeSparse] = 64;
+    GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelNeuronSpikeQueueUpdate] = 32;*/
+    
     model.setDT(Parameters::timestep);
     model.setName("brunel");
     model.setDefaultVarLocation(VarLocation::DEVICE);
@@ -68,6 +112,17 @@ void modelDefinition(NNmodel &model)
     WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
         Parameters::inhibitoryWeight);    // 0 - Wij (mV)
     
+    // STDP parameters
+    STDPExponential::ParamValues stdpParams(
+        20.0,   // tauSTDP (ms)
+        2.02,   // alpha
+        0.01,   // lambda
+        0.0,    // Wmin (mV)
+        0.3);   // Wmax (mV)
+    STDPExponential::VarValues stdpInit(
+        Parameters::excitatoryWeight);  // 0 - Wij (mV)
+        
+    // Poisson input parameters
     PoissonDelta::ParamValues poissonParams(
         Parameters::excitatoryWeight,   // 0 - Weight (mV)
         20.0);                          // 1 - rate (Hz)
@@ -84,12 +139,22 @@ void modelDefinition(NNmodel &model)
     e->setSpikeRecordingEnabled(true);
     i->setSpikeRecordingEnabled(true);
 
+#ifdef STDP
+    model.addSynapsePopulation<STDPExponential, PostsynapticModels::DeltaCurr>(
+        "EE", SynapseMatrixType::SPARSE_INDIVIDUALG, Parameters::delayTimesteps,
+        "E", "E",
+        stdpParams, stdpInit, {0.0}, {0.0},
+        {}, {},
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
+#else
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "EE", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
         "E", "E",
         {}, excitatoryStaticSynapseInit,
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
+#endif
+
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "EI", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
         "E", "I",
