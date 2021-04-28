@@ -14,8 +14,9 @@
 int main()
 {
     std::mt19937 rng;
-    std::normal_distribution<float> convWeightDist(0.8f, 0.1f);
-    std::normal_distribution<float> outputWeightDist(0.67f, 0.1f);
+    std::normal_distribution<float> conv1WeightDist(0.8f, 0.1f);
+    std::normal_distribution<float> conv2WeightDist(0.8f * 0.25, 0.1f * 0.25f);
+    std::normal_distribution<float> outputWeightDist(0.67f * 0.25f, 0.1f * 0.25f);
 
     allocateMem();
     allocateRecordingBuffers(1000);
@@ -24,9 +25,9 @@ int main()
     // Initialise kernels
     // **YUCK** this should be done automatically
     std::generate_n(gInput_Conv1, 5 * 5 * 1 * 16, 
-                    [&rng, &convWeightDist](){ return convWeightDist(rng); });
+                    [&rng, &conv1WeightDist](){ return conv1WeightDist(rng); });
     std::generate_n(gConv1_Conv2, 5 * 5 * 16 * 32, 
-                    [&rng, &convWeightDist](){ return convWeightDist(rng); });
+                    [&rng, &conv2WeightDist](){ return conv2WeightDist(rng); });
     std::generate_n(gConv2_Output, 32 * 4 * 4 * 1000,
                     [&rng, &outputWeightDist](){ return outputWeightDist(rng); });
     initializeSparse();

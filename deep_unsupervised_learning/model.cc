@@ -294,15 +294,15 @@ void modelDefinition(ModelSpec &model)
 
     DualAccumulator::ParamValues conv1Params(
         8.0,    // VthreshWTA
-        20.0);   // VthreshInf
+        40.0);   // VthreshInf
 
     DualAccumulator::ParamValues conv2Params(
         30.0,   // VthreshWTA
-        100.0);  // VthreshInf
+        30.0);  // VthreshInf
 
     DualAccumulator::ParamValues outputParams(
         30.0,    // VthreshWTA
-        30.0);   // VthreshInf
+        100.0);   // VthreshInf
 
     DualAccumulator::VarValues dualAccumulatorInitVals(
         0.0,                                    // Vwta
@@ -360,14 +360,14 @@ void modelDefinition(ModelSpec &model)
         0.001 / -8.0,  // 1 - Depression rate
         3.0,            // 2 - Damping factor
         0.0,            // 3 - Minimum weight
-        1.0);           // 4 - Maximum weight
+        0.25);           // 4 - Maximum weight
 
     STDPHidden::ParamValues conv2OutputParams(
         0.001,         // 0 - Potentiation rate
         0.001 / -8.0,  // 1 - Depression rate
         3.0,            // 2 - Damping factor
         0.0,            // 3 - Minimum weight
-        1.0);           // 4 - Maximum weight
+        0.25);           // 4 - Maximum weight
 
     auto *input = model.addNeuronPopulation<InputNeuron>("Input", 28 * 28 * 1,
                                                          inputParams, {});
