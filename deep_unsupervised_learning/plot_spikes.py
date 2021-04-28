@@ -50,7 +50,11 @@ try:
 except TypeError:
     num_neurons = hyper_params[layer]
     hist, _ = np.histogram(spikes[:,0], bins=1000)
+
+    classification = np.argmax(np.bincount(spikes[:,1].astype(int), minlength=num_neurons))
+
     print("Mean:%f, Std:%f, Max:%f" % (np.average(hist), np.std(hist), np.amax(hist)))
+    print("Most active neuron:%u" % classification)
 
     # Create 3D plot
     fig, axis = plt.subplots()
@@ -58,4 +62,9 @@ except TypeError:
     axis.scatter(spikes[:,0], spikes[:,1], s=1)
     axis.set_xlabel("time")
     axis.set_ylabel("spike")
+
+    axis.annotate("", xy=(100.0, classification), xycoords="data", color="red",
+                 xytext=(5.0, 0.0), textcoords="offset points", annotation_clip=True,
+                 arrowprops=dict(facecolor="red", edgecolor="red", headlength=4.0))
+
 plt.show()
