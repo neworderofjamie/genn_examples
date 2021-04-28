@@ -14,14 +14,15 @@ def plot(conv1_kernel, conv2_kernel, conv1_axes, conv2_axes):
     
     # Find which input feature is strongest for each conv2 neuron and feature
     max_conv2_features = np.argmax(conv2_kernel, axis=2)
-    
+
     # Plot seperate conv1 features
     for f in range(16):
-        conv1_axes[f].imshow(conv1_kernel[:,:,f], cmap="jet")
+        conv1_axes[f].imshow(conv1_kernel[:,:,f], cmap="gray")
         conv1_axes[f].get_xaxis().set_visible(False)
         conv1_axes[f].get_yaxis().set_visible(False)
     
     # Loop through conv2 features
+    difference = 0.0
     for f in range(32):
         # Loop through x and y dimension of feature
         visualise_feature = np.empty((25, 25), dtype=np.float32)
@@ -36,10 +37,18 @@ def plot(conv1_kernel, conv2_kernel, conv1_axes, conv2_axes):
                                   j * 5: (j * 5) + 5] = best * strength
 
         # Plot visualisation image
-        conv2_axes[f].imshow(visualise_feature, cmap="jet")
+        conv2_axes[f].imshow(visualise_feature, cmap="gray")
+        #conv2_axes[f].imshow(max_conv2_features[:,:,f], cmap="jet")
         conv2_axes[f].get_xaxis().set_visible(False)
         conv2_axes[f].get_yaxis().set_visible(False)
-
+        
+        for g in range(32):
+            if g == f:
+                continue
+            
+            kernel_difference = conv2_kernel[:, :, :, f] - conv2_kernel[:, :, :, g] 
+            difference += np.sqrt(np.sum(kernel_difference ** 2.0))
+    print(difference)
 
 
 # Get list of kernels

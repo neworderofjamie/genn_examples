@@ -1,5 +1,77 @@
 #include "modelSpec.h"
 
+class AvgPoolDense : public InitSparseConnectivitySnippet::Base
+{
+public:
+    DECLARE_SNIPPET(AvgPoolDense, 12);
+
+    SET_PARAM_NAMES({"pool_kh", "pool_kw",
+                     "pool_sh", "pool_sw",
+                     "pool_padh", "pool_padw",
+                     "pool_ih", "pool_iw", "pool_ic",
+                     "dense_ih", "dense_iw",
+                     "dense_units"});
+    
+     SET_ROW_BUILD_STATE_VARS({{"poolInRow", "int", "($(id_pre) / (int)$(pool_ic)) / (int)$(pool_iw)"},
+                               {"poolInCol", "int", "($(id_pre) / (int)$(pool_ic)) % (int)$(pool_iw)"},
+                               {"poolInChan", "int", "$(id_pre) % (int)$(pool_ic)"},
+                               {"poolOutRow", "int", "(poolInRow + (int)$(pool_padh)) / (int)$(pool_sh)"},
+                               {"poolStrideRow", "int", "(poolOutRow * (int)$(pool_sh)) - (int)$(pool_padh)"},
+                               {"poolOutCol", "int", "(poolInCol + (int)$(pool_padw)) / (int)$(pool_sw)"},
+                               {"poolStrideCol", "int", "(poolOutCol * (int)$(pool_sw)) - (int)$(pool_padw)"},
+                               {"denseInIdx", "int", "(poolOutRow * (int)$(dense_iw) * (int)$(pool_ic)) + (poolOutCol * (int)$(pool_ic)) + poolInChan"},
+                               {"synIdx", "int", "(int)$(dense_units) * denseInIdx"},
+                               {"denseOutIdx", "int", 0}});
+
+    SET_COL_BUILD_STATE_VARS({{"numDenseIn", "int", "(int)$(dense_iw) * (int)$(dense_ih) * (int)$(pool_ic)"},
+                              {"denseInIdx", "int", 0},
+                              {"synIdx", "int", "$(id_post)"}});
+
+    SET_ROW_BUILD_CODE(
+        "if(($(poolInRow) >= ($(poolStrideRow) + (int)$(pool_kh))) || ($(poolInCol) >= ($(poolStrideCol) + (int)$(pool_kw)))) {\n"
+        "   $(endRow);\n"
+        "}\n"
+        "if($(denseOutIdx) == (int)$(dense_units)) {\n"
+        "   $(endRow);\n"
+        "}\n"
+        "$(addSynapse, $(denseOutIdx), $(synIdx));\n"
+        "$(synIdx)++;\n"
+        "$(denseOutIdx)++;\n");
+        
+    SET_COL_BUILD_CODE(
+        "if($(denseInIdx) == $(numDenseIn)) {\n"
+        "   $(endCol);\n"
+        "}\n"
+        "const int denseInRow = (denseInIdx / (int)$(pool_ic)) / (int)$(dense_iw);\n"
+        "const int denseInCol = (denseInIdx / (int)$(pool_ic)) % (int)$(dense_iw);\n"
+        "const int poolInChan = denseInIdx % (int)$(pool_ic);\n"
+        "const int poolInRow = (denseInRow * (int)$(pool_sh)) - (int)$(pool_padh);"
+        "const int poolInCol = (denseInCol * (int)$(pool_sw)) - (int)$(pool_padw);\n"
+        "const int idPre = ((poolInRow * (int)$(pool_iw) * (int)$(pool_ic)) +\n"
+        "                   (poolInCol * (int)$(pool_ic)) +\n"
+        "                   poolInChan);\n"
+        "$(addSynapse, idPre, $(synIdx));\n"
+        "$(denseInIdx)++;\n"
+        "$(synIdx) += (int)$(dense_units);\n");
+    
+    SET_CALC_MAX_ROW_LENGTH_FUNC(
+        [](unsigned int, unsigned int, const std::vector<double> &pars)
+        {
+            return (unsigned int)pars[11];
+        });
+
+    SET_CALC_KERNEL_SIZE_FUNC(
+        [](const std::vector<double> &pars)->std::vector<unsigned int>
+        {
+            const unsigned int poolIC = (unsigned int)pars[8];
+            const unsigned int denseIH = (unsigned int)pars[9];
+            const unsigned int denseIW = (unsigned int)pars[10];
+            const unsigned int denseUnits = (unsigned int)pars[11];
+            return {poolIC * denseIH * denseIW * denseUnits};
+        });
+};
+IMPLEMENT_SNIPPET(AvgPoolDense);
+
 //----------------------------------------------------------------------------
 // WTA
 //----------------------------------------------------------------------------
@@ -124,42 +196,9 @@ public:
 IMPLEMENT_MODEL(Inf);
 
 //----------------------------------------------------------------------------
-// STDPOutput
-//----------------------------------------------------------------------------
-class STDPOutput : public WeightUpdateModels::Base
-{
-public:
-    DECLARE_MODEL(STDPOutput, 5, 1);
-    
-    SET_PARAM_NAMES({
-      "alphaPlus",  // 0 - Potentiation rate
-      "alphaMinus", // 1 - Depression rate
-      "betaPlus",   // 2 - Damping factor
-      "Wmin",       // 3 - Minimum weight
-      "Wmax"});     // 4 - Maximum weight
-  
-    SET_VARS({{"g", "scalar"}});
-  
-    // **TODO** output layer will eventually pass spike-like-events instead
-    SET_SIM_CODE("$(addToInSyn, $(g));\n");
-  
-    SET_LEARN_POST_CODE(
-        "const scalar tPostLast = fmax($(prev_sT_post), $(TlastReset_post));\n"
-        "if($(sT_pre) > tPostLast) {\n"
-        "   $(g) = fmin($(Wmax), $(g) + ($(alphaPlus) * exp(-$(betaPlus) * $(g))));\n"
-        "}\n"
-        "else {\n"
-        "   $(g) = fmax($(Wmin), $(g) + $(alphaMinus));\n"
-        "}\n");
-    
-    SET_NEEDS_PRE_SPIKE_TIME(true);
-    SET_NEEDS_PREV_POST_SPIKE_TIME(true);
-};
-IMPLEMENT_MODEL(STDPOutput);
-
-//----------------------------------------------------------------------------
 // STDPInput
 //----------------------------------------------------------------------------
+//! STDP model for connections from input layer - passes spikes
 class STDPInput : public WeightUpdateModels::Base
 {
 public:
@@ -202,6 +241,7 @@ IMPLEMENT_MODEL(STDPInput);
 //----------------------------------------------------------------------------
 // STDPHidden
 //----------------------------------------------------------------------------
+//! STDP model for connections from hidden layers - passes spike-like events
 class STDPHidden : public WeightUpdateModels::Base
 {
 public:
@@ -257,7 +297,7 @@ void modelDefinition(ModelSpec &model)
         40.0);   // VthreshInf
     
     DualAccumulator::ParamValues conv2Params(
-        30.0,   // VthreshWTA
+        80.0,   // VthreshWTA
         30.0);  // VthreshInf
         
     DualAccumulator::ParamValues outputParams(
@@ -268,7 +308,7 @@ void modelDefinition(ModelSpec &model)
         0.0,                                    // Vwta
         0.0,                                    // Vinf
         -std::numeric_limits<float>::max());    // TlastReset
-
+    
     InitSparseConnectivitySnippet::Conv2D::ParamValues inputConv1ConnectParams(
         5, 5,           // conv_kh, conv_kw
         1, 1,           // conv_sh, conv_sw
@@ -287,12 +327,13 @@ void modelDefinition(ModelSpec &model)
         12, 12,     // conv_ih, conv_iw
         8, 8, 32);  // conv_oh, conv_ow, conv_oc
     
-    /*InitSparseConnectivitySnippet::Conv2D::ParamValues conv1Conv2ConnectParams(
-        5, 5,           // conv_kh, conv_kw
-        1, 1,           // conv_sh, conv_sw
-        0, 0,           // conv_padh, conv_padw
-        24, 24, 16,      // conv_ih, conv_iw, conv_ic
-        20, 20, 32);    // conv_oh, conv_ow, conv_oc*/
+    AvgPoolDense::ParamValues conv2OutputConnectParams(
+        2, 2,       // pool_kh, pool_kw
+        2, 2,       // pool_sh, pool_sw
+        0, 0,       // pool_padh, pool_padw
+        8, 8, 32,   // pool_ih, pool_iw, pool_ic
+        4, 4,       // dense_ih, dense_iw
+        1000);      // dense_units
 
     WTA::ParamValues conv1WTAParams(
         24, 24, 16, // conv_h, conv_w, conv_c
@@ -321,15 +362,12 @@ void modelDefinition(ModelSpec &model)
         0.0,            // 3 - Minimum weight
         1.0);           // 4 - Maximum weight
 
-    /*STDPOutput::ParamValues inputOutputParams(
-        0.0001,           // 0 - Potentiation rate
-        0.0001 / -8.0,    // 1 - Depression rate
+    STDPHidden::ParamValues conv2OutputParams(
+        0.001,         // 0 - Potentiation rate
+        0.001 / -8.0,  // 1 - Depression rate
         3.0,            // 2 - Damping factor
         0.0,            // 3 - Minimum weight
-        1.0);           // 4 - Maximum weight*/
-    
-    STDPOutput::VarValues inputOutputVals(
-        initVar<InitVarSnippet::Normal>({0.67, 0.1}));  // g
+        1.0);           // 4 - Maximum weight
 
     auto *input = model.addNeuronPopulation<InputNeuron>("Input", 28 * 28 * 1,
                                                          inputParams, {});
@@ -337,14 +375,14 @@ void modelDefinition(ModelSpec &model)
                                                              conv1Params, dualAccumulatorInitVals);
     auto *conv2 = model.addNeuronPopulation<DualAccumulator>("Conv2", 8 * 8 * 32,
                                                              conv2Params, dualAccumulatorInitVals);
-                         
-    //auto *output = model.addNeuronPopulation<DualAccumulator>("Output", 1000,
-    //                                                          outputParams, dualAccumulatorInitVals);
+    auto *output = model.addNeuronPopulation<DualAccumulator>("Output", 1000,
+                                                              outputParams, dualAccumulatorInitVals);
     input->setSpikeRecordingEnabled(true);
     conv1->setSpikeRecordingEnabled(true);
     conv1->setSpikeEventRecordingEnabled(true);
     conv2->setSpikeRecordingEnabled(true);
-    //output->setSpikeRecordingEnabled(true);
+    conv2->setSpikeEventRecordingEnabled(true);
+    output->setSpikeRecordingEnabled(true);
     
     // Add WTA connectivity
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
@@ -359,6 +397,12 @@ void modelDefinition(ModelSpec &model)
         {}, initVar<WTA>(conv2WTAParams),
         {}, {});
     
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "Output_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+        "Output", "Output",
+        {}, initVar<WTAOutput>(outputWTAParams),
+        {}, {});
+
     // Add plastic, feedforward connecivity
     model.addSynapsePopulation<STDPInput, Inf>(
         "Input_Conv1", SynapseMatrixType::PROCEDURAL_KERNELG, NO_DELAY,
@@ -374,15 +418,10 @@ void modelDefinition(ModelSpec &model)
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::AvgPoolConv2D>(conv1Conv2ConnectParams));
     
-    /*model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "Output_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "Output", "Output",
-        {}, initVar<WTAOutput>(outputWTAParams),
-        {}, {});
-    
-    model.addSynapsePopulation<STDPOutput, Inf>(
-        "Input_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "Input", "Output",
-        inputOutputParams, inputOutputVals,
-        {}, {});*/
+    model.addSynapsePopulation<STDPHidden, Inf>(
+        "Conv2_Output", SynapseMatrixType::PROCEDURAL_KERNELG, NO_DELAY,
+        "Conv2", "Output",
+        conv2OutputParams, { uninitialisedVar() },
+        {}, {},
+        initConnectivity<AvgPoolDense>(conv2OutputConnectParams));
 }

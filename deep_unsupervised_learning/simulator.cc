@@ -26,7 +26,8 @@ int main()
                     [&rng, &convWeightDist](){ return convWeightDist(rng); });
     std::generate_n(gConv1_Conv2, 5 * 5 * 16 * 32, 
                     [&rng, &convWeightDist](){ return convWeightDist(rng); });
-
+    std::generate_n(gConv2_Output, 5 * 5 * 16 * 32, 
+                    [&rng, &convWeightDist](){ return convWeightDist(rng); });
     initializeSparse();
     
     // Load training data and labels
@@ -42,21 +43,21 @@ int main()
             stepTime();
         }
         
-        if((n % 100) == 0) {
+        if((n % 1000) == 0) {
             // Save spikes
-            pullRecordingBuffersFromDevice();
+            /*pullRecordingBuffersFromDevice();
             writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,
                                     28 * 28, 1000, 0.1,
                                     ",", true);
-            /*writeTextSpikeRecording("conv1_spikes_" + std::to_string(n) + ".csv", recordSpkConv1,
+            writeTextSpikeRecording("conv1_spikes_" + std::to_string(n) + ".csv", recordSpkConv1,
                                     24 * 24 * 16, 1000, 0.1,
                                     ",", true);
             writeTextSpikeRecording("output_spikes_" + std::to_string(n) + ".csv", recordSpkOutput,
                                     1000, 1000, 0.1,
-                                    ",", true);*/
+                                    ",", true);
             writeTextSpikeRecording("conv1_spike_events_" + std::to_string(n) + ".csv", recordSpkEventConv1,
                                     24 * 24 * 16, 1000, 0.1,
-                                    ",", true);
+                                    ",", true);*/
                                     
             // Save weights
             pullgInput_Conv1FromDevice();
