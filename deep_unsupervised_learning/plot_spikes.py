@@ -43,18 +43,19 @@ try:
     fig = plt.figure()
     axis = fig.add_subplot(111, projection="3d")
 
-    axis.scatter(spike_col, spikes[:,0], spike_row, c=spike_chan)
+    axis.scatter(spike_col, spikes[:,0], spike_row, c=spike_chan, s=1)
     axis.set_xlabel("X")
     axis.set_ylabel("time")
     axis.set_zlabel("Y")
 except TypeError:
-    hist = np.bincount(spikes[:,1].astype(int), minlength=hyper_params[layer])
+    num_neurons = hyper_params[layer]
+    hist, _ = np.histogram(spikes[:,0], bins=1000)
     print("Mean:%f, Std:%f, Max:%f" % (np.average(hist), np.std(hist), np.amax(hist)))
 
     # Create 3D plot
     fig, axis = plt.subplots()
 
-    axis.scatter(spikes[:,0], spikes[:,1])
+    axis.scatter(spikes[:,0], spikes[:,1], s=1)
     axis.set_xlabel("time")
     axis.set_ylabel("spike")
 plt.show()
