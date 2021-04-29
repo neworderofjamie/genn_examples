@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30501.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "deep_unsupervised_learning_inference", "deep_unsupervised_learning_inference.vcxproj", "{5DDCA16B-A7F0-42C1-824F-C31A1DAF1D86}"
+	ProjectSection(ProjectDependencies) = postProject
+		{73B3FB88-A0F1-4A14-B42D-8F57CC674D1} = {73B3FB88-A0F1-4A14-B42D-8F57CC674D1}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "runner", "deep_unsupervised_learning_inference_CODE\runner.vcxproj", "{73B3FB88-A0F1-4A14-B42D-8F57CC674D1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5DDCA16B-A7F0-42C1-824F-C31A1DAF1D86}.Debug|x64.ActiveCfg = Debug|x64
+		{5DDCA16B-A7F0-42C1-824F-C31A1DAF1D86}.Debug|x64.Build.0 = Debug|x64
+		{5DDCA16B-A7F0-42C1-824F-C31A1DAF1D86}.Release|x64.ActiveCfg = Release|x64
+		{5DDCA16B-A7F0-42C1-824F-C31A1DAF1D86}.Release|x64.Build.0 = Release|x64
+		{73B3FB88-A0F1-4A14-B42D-8F57CC674D1}.Debug|x64.ActiveCfg = Debug|x64
+		{73B3FB88-A0F1-4A14-B42D-8F57CC674D1}.Debug|x64.Build.0 = Debug|x64
+		{73B3FB88-A0F1-4A14-B42D-8F57CC674D1}.Release|x64.ActiveCfg = Release|x64
+		{73B3FB88-A0F1-4A14-B42D-8F57CC674D1}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
