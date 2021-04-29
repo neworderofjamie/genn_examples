@@ -1,5 +1,7 @@
 #include "modelSpec.h"
 
+#include "parameters.h"
+
 class AvgPoolDense : public InitSparseConnectivitySnippet::Base
 {
 public:
@@ -284,98 +286,100 @@ IMPLEMENT_MODEL(STDPHidden);
 
 void modelDefinition(ModelSpec &model)
 {
-    model.setDT(0.1);
+    using namespace Parameters;
+    
+    model.setDT(timestepMs);
     model.setName("deep_unsupervised_learning");
     model.setTiming(true);
 
     InputNeuron::ParamValues inputParams(
-        100.0,  // presentMs
-        0.0005); // scale
+        Input::presentMs,   // present time (ms)
+        Input::scale);      // scale
 
     DualAccumulator::ParamValues conv1Params(
-        8.0,    // VthreshWTA
-        40.0);   // VthreshInf
-
+        Conv1::threshWTA,   // VthreshWTA
+        Conv1::threshInf);  // VthreshInf
+    
     DualAccumulator::ParamValues conv2Params(
-        30.0,   // VthreshWTA
-        30.0);  // VthreshInf
+        Conv2::threshWTA,   // VthreshWTA
+        Conv2::threshInf);  // VthreshInf
 
     DualAccumulator::ParamValues outputParams(
-        30.0,    // VthreshWTA
-        100.0);   // VthreshInf
+        Output::threshWTA,   // VthreshWTA
+        Output::threshInf);  // VthreshInf
 
     DualAccumulator::VarValues dualAccumulatorInitVals(
         0.0,                                    // Vwta
         0.0,                                    // Vinf
         -std::numeric_limits<float>::max());    // TlastReset
-
+    
     InitSparseConnectivitySnippet::Conv2D::ParamValues inputConv1ConnectParams(
-        5, 5,           // conv_kh, conv_kw
-        1, 1,           // conv_sh, conv_sw
-        0, 0,           // conv_padh, conv_padw
-        28, 28, 1,      // conv_ih, conv_iw, conv_ic
-        24, 24, 16);    // conv_oh, conv_ow, conv_oc
+        InputConv1::convKernelHeight, InputConv1::convKernelWidth,  // conv_kh, conv_kw
+        InputConv1::convStrideHeight, InputConv1::convStrideWidth,  // conv_sh, conv_sw
+        0, 0,                                                       // conv_padh, conv_padw
+        Input::height, Input::width, Input::channels,               // conv_ih, conv_iw, conv_ic
+        Conv1::height, Conv1::width, InputConv1::numFilters);       // conv_oh, conv_ow, conv_oc
 
     InitSparseConnectivitySnippet::AvgPoolConv2D::ParamValues conv1Conv2ConnectParams(
-        2, 2,       // pool_kh, pool_kw
-        2, 2,       // pool_sh, pool_sw
-        0, 0,       // pool_padh, pool_padw
-        24, 24, 16, // pool_ih, pool_iw, pool_ic,
-        5, 5,       // conv_kh, conv_kw
-        1, 1,       // conv_sh, conv_sw
-        0, 0,       // conv_padh, conv_padw
-        12, 12,     // conv_ih, conv_iw
-        8, 8, 32);  // conv_oh, conv_ow, conv_oc
+        Conv1Conv2::poolKernelHeight, Conv1Conv2::poolKernelWidth,  // pool_kh, pool_kw
+        Conv1Conv2::poolStrideHeight, Conv1Conv2::poolStrideWidth,  // pool_sh, pool_sw
+        0, 0,                                                       // pool_padh, pool_padw
+        Conv1::height, Conv1::width, Conv1::channels,               // pool_ih, pool_iw, pool_ic,
+        Conv1Conv2::convKernelHeight, Conv1Conv2::convKernelWidth,  // conv_kh, conv_kw
+        Conv1Conv2::convStrideHeight, Conv1Conv2::convStrideWidth,  // conv_sh, conv_sw
+        0, 0,                                                       // conv_padh, conv_padw
+        Conv1Conv2::convInHeight, Conv1Conv2::convInWidth,          // conv_ih, conv_iw
+        Conv2::height, Conv2::width, Conv1Conv2::numFilters);       // conv_oh, conv_ow, conv_oc
 
     AvgPoolDense::ParamValues conv2OutputConnectParams(
-        2, 2,       // pool_kh, pool_kw
-        2, 2,       // pool_sh, pool_sw
-        0, 0,       // pool_padh, pool_padw
-        8, 8, 32,   // pool_ih, pool_iw, pool_ic
-        4, 4,       // dense_ih, dense_iw
-        1000);      // dense_units
+        Conv2Output::poolKernelHeight, Conv2Output::poolKernelWidth,    // pool_kh, pool_kw
+        Conv2Output::poolStrideHeight, Conv2Output::poolStrideWidth,    // pool_sh, pool_sw
+        0, 0,                                                           // pool_padh, pool_padw
+        Conv2::height, Conv2::width, Conv2::channels,                   // pool_ih, pool_iw, pool_ic
+        Conv2Output::denseInHeight, Conv2Output::denseInWidth,          // dense_ih, dense_iw
+        Output::numNeurons);                                            // dense_units
 
     WTA::ParamValues conv1WTAParams(
-        24, 24, 16, // conv_h, conv_w, conv_c
-        2,          // radius
+        Conv1::height, Conv1::width, Conv1::channels, // conv_h, conv_w, conv_c
+        Conv1::WTARadius,                             // radius
         -1.0);      // constant
 
      WTA::ParamValues conv2WTAParams(
-        8, 8, 32,   // conv_h, conv_w, conv_c
-        2,          // radius
+        Conv2::height, Conv2::width, Conv2::channels,   // conv_h, conv_w, conv_c
+        Conv2::WTARadius,                               // radius
         -1.0);      // constant
 
     WTAOutput::ParamValues outputWTAParams(
         -1.0);  // constant
 
     STDPInput::ParamValues inputConv1Params(
-        0.001,           // 0 - Potentiation rate
-        0.001 / -8.0,    // 1 - Depression rate
+        0.001,          // 0 - Potentiation rate
+        0.001 / -8.0,   // 1 - Depression rate
         3.0,            // 2 - Damping factor
         0.0,            // 3 - Minimum weight
         1.0);           // 4 - Maximum weight
 
     STDPHidden::ParamValues conv1Conv2Params(
-        0.001,         // 0 - Potentiation rate
-        0.001 / -8.0,  // 1 - Depression rate
-        3.0,            // 2 - Damping factor
-        0.0,            // 3 - Minimum weight
-        0.25);           // 4 - Maximum weight
+        0.001,                  // 0 - Potentiation rate
+        0.001 / -8.0,           // 1 - Depression rate
+        3.0,                    // 2 - Damping factor
+        0.0,                    // 3 - Minimum weight
+        Conv1Conv2::poolScale); // 4 - Maximum weight
 
     STDPHidden::ParamValues conv2OutputParams(
-        0.001,         // 0 - Potentiation rate
-        0.001 / -8.0,  // 1 - Depression rate
-        3.0,            // 2 - Damping factor
-        0.0,            // 3 - Minimum weight
-        0.25);           // 4 - Maximum weight
+        0.001,                      // 0 - Potentiation rate
+        0.001 / -8.0,               // 1 - Depression rate
+        3.0,                        // 2 - Damping factor
+        0.0,                        // 3 - Minimum weight
+        Conv2Output::poolScale);    // 4 - Maximum weight
 
-    auto *input = model.addNeuronPopulation<InputNeuron>("Input", 28 * 28 * 1,
+    auto *input = model.addNeuronPopulation<InputNeuron>("Input", Input::numNeurons,
                                                          inputParams, {});
-    auto *conv1 = model.addNeuronPopulation<DualAccumulator>("Conv1", 24 * 24 * 16,
+    auto *conv1 = model.addNeuronPopulation<DualAccumulator>("Conv1", Conv1::numNeurons,
                                                              conv1Params, dualAccumulatorInitVals);
-    auto *conv2 = model.addNeuronPopulation<DualAccumulator>("Conv2", 8 * 8 * 32,
+    auto *conv2 = model.addNeuronPopulation<DualAccumulator>("Conv2", Conv2::numNeurons,
                                                              conv2Params, dualAccumulatorInitVals);
-    auto *output = model.addNeuronPopulation<DualAccumulator>("Output", 1000,
+    auto *output = model.addNeuronPopulation<DualAccumulator>("Output", Output::numNeurons,
                                                               outputParams, dualAccumulatorInitVals);
     input->setSpikeRecordingEnabled(true);
     conv1->setSpikeRecordingEnabled(true);
