@@ -1,5 +1,7 @@
 // Standard C++ includes
+#include <algorithm>
 #include <iostream>
+#include <vector>
 
 // GeNN userproject includes
 #include "spikeRecorder.h"
@@ -36,6 +38,12 @@ int main()
     // Load training data and labels
     const unsigned int numTrainingImages = loadImageData("train-images-idx3-ubyte", datasetInput, 
                                                          &allocatedatasetInput, &pushdatasetInputToDevice);
+    
+    // Load labels
+    std::vector<uint8_t> labels(numTrainingImages);
+    loadLabelData("train-labels-idx1-ubyte", numTrainingImages, labels.data());
+    
+    std::vector<unsigned int> labelMapping(Output::numNeurons * 10, 0);
 
     // Loop through training images
     for(unsigned int n = 0; n < numTrainingImages; n++) {
@@ -47,10 +55,11 @@ int main()
 
         }
         pullSpikeCountOutputFromDevice();
-        for(unsigned int i = 0; i < Output::numNeurons; i++) {
-            std::cout << SpikeCountOutput[i] << ", ";
-        }
-        std::cout << std::endl;
+        
+        // Find most active neuron and increment label mapping
+        const size_t mostActive = std::distance(SpikeCountOutput, 
+                                                std::max_element(&SpikeCountOutput[0], &SpikeCountOutput[Output::numNeurons]));
+        labelMapping[(labels[n] * Output::numNeurons) + mostActive]++;
 
         if((n % 1000) == 0) {
             // Save spikes
@@ -74,6 +83,10 @@ int main()
 
         }
     }
+    
+    std::ofstream labelMappingFile("label_mapping.bin", std::ios_base::binary);
+    labelMappingFile.write(reinterpret_cast<const char*>(labelMapping.data()), Output::numNeurons * 10 * sizeof(unsigned int));
+
     return EXIT_SUCCESS;
     
     

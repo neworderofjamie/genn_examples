@@ -94,3 +94,33 @@ public:
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
 IMPLEMENT_MODEL(InputNeuron);
+
+//----------------------------------------------------------------------------
+// WTAOutput
+//----------------------------------------------------------------------------
+class WTAOutput : public InitVarSnippet::Base
+{
+public:
+    DECLARE_SNIPPET(WTAOutput, 1);
+
+    SET_CODE(
+        "$(value) = ($(id_pre) == $(id_post)) ? 0.0 : $(constant);\n");
+
+    SET_PARAM_NAMES({"constant"});
+};
+IMPLEMENT_SNIPPET(WTAOutput);
+
+
+//----------------------------------------------------------------------------
+// Inf
+//----------------------------------------------------------------------------
+class Inf : public PostsynapticModels::Base
+{
+public:
+    DECLARE_MODEL(Inf, 0, 0);
+
+    SET_APPLY_INPUT_CODE(
+        "$(Iinf) += $(inSyn);\n"
+        "$(inSyn) = 0;\n");
+};
+IMPLEMENT_MODEL(Inf);

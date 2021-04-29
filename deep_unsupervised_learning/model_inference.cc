@@ -28,33 +28,38 @@ public:
 IMPLEMENT_MODEL(InferenceAccumulator);
 
 //----------------------------------------------------------------------------
-// InferenceAccumulatorSpikeCount
+// WTAAccumulatorSpikeCount
 //----------------------------------------------------------------------------
-class InferenceAccumulatorSpikeCount : public NeuronModels::Base
+class WTAAccumulatorSpikeCount : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(InferenceAccumulatorSpikeCount, 1, 2);
+    DECLARE_MODEL(WTAAccumulatorSpikeCount, 1, 2);
 
     SET_SIM_CODE(
         "if(fmod($(t), 100.0) < DT) {\n"
         "   $(SpikeCount) = 0;\n"
         "}\n"
-        "// Apply input current to inference accumulators\n"
-        "$(Vinf) += $(Isyn);\n");
+        "// Apply input current to WTA accumulators\n"
+        "$(Vwta) += $(Iinf);\n"
+        "// If there's WTA input, reset WTA accumulator and time\n"
+        "if($(Isyn) < 0.0) {\n"
+        "   $(Vwta) = 0.0;\n"
+        "}\n");
 
-    SET_THRESHOLD_CONDITION_CODE("$(Vinf) > $(VthreshInf)");
+    SET_THRESHOLD_CONDITION_CODE("$(Vwta) > $(VthreshWTA)");
 
     SET_RESET_CODE(
-        "$(Vinf) = 0.0;\n"
+        "$(Vwta) = 0.0;\n"
         "$(SpikeCount)++;\n");
 
-    SET_PARAM_NAMES({"VthreshInf"}); // Inference threshold
+    SET_PARAM_NAMES({"VthreshWTA"}); // WTA threshold
 
-    SET_VARS({{"Vinf", "scalar"}, {"SpikeCount", "unsigned int"}});
+    SET_VARS({{"Vwta", "scalar"}, {"SpikeCount", "unsigned int"}});
+    SET_ADDITIONAL_INPUT_VARS({{"Iinf", "scalar", "0.0"}});
 
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
-IMPLEMENT_MODEL(InferenceAccumulatorSpikeCount);
+IMPLEMENT_MODEL(WTAAccumulatorSpikeCount);
 
 void modelDefinition(ModelSpec &model)
 {
@@ -74,14 +79,14 @@ void modelDefinition(ModelSpec &model)
     InferenceAccumulator::ParamValues conv2Params(
         Conv2::threshInf);  // VthreshInf
 
-    InferenceAccumulator::ParamValues outputParams(
-        Output::threshInf);  // VthreshInf
+    WTAAccumulatorSpikeCount::ParamValues outputParams(
+        Output::threshWTA);  // VthreshWTA
 
     InferenceAccumulator::VarValues inferenceAccumulatorInitVals(
         0.0);   // Vinf
     
-    InferenceAccumulatorSpikeCount::VarValues outputInitVals(
-        0.0,    // Vinf
+    WTAAccumulatorSpikeCount::VarValues outputInitVals(
+        0.0,    // Vwta
         0);     // SpikeCount
     
     InitSparseConnectivitySnippet::Conv2D::ParamValues inputConv1ConnectParams(
@@ -110,19 +115,29 @@ void modelDefinition(ModelSpec &model)
         Conv2Output::denseInHeight, Conv2Output::denseInWidth,          // dense_ih, dense_iw
         Output::numNeurons);                                            // dense_units
     
+    WTAOutput::ParamValues outputWTAParams(
+        -1.0);  // constant
+
     auto *input = model.addNeuronPopulation<InputNeuron>("Input", Input::numNeurons,
                                                          inputParams, {});
     auto *conv1 = model.addNeuronPopulation<InferenceAccumulator>("Conv1", Conv1::numNeurons,
                                                                   conv1Params, inferenceAccumulatorInitVals);
     auto *conv2 = model.addNeuronPopulation<InferenceAccumulator>("Conv2", Conv2::numNeurons,
                                                                   conv2Params, inferenceAccumulatorInitVals);
-    auto *output = model.addNeuronPopulation<InferenceAccumulatorSpikeCount>("Output", Output::numNeurons,
-                                                                             outputParams, outputInitVals);
+    auto *output = model.addNeuronPopulation<WTAAccumulatorSpikeCount>("Output", Output::numNeurons,
+                                                                       outputParams, outputInitVals);
     input->setSpikeRecordingEnabled(true);
     conv1->setSpikeRecordingEnabled(true);
     conv2->setSpikeRecordingEnabled(true);
     output->setSpikeRecordingEnabled(true);
     
+    // Add WTA connectivity
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "Output_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+        "Output", "Output",
+        {}, initVar<WTAOutput>(outputWTAParams),
+        {}, {});
+        
     // Add feedforward connecivity
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "Input_Conv1", SynapseMatrixType::PROCEDURAL_KERNELG, NO_DELAY,
@@ -138,7 +153,7 @@ void modelDefinition(ModelSpec &model)
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::AvgPoolConv2D>(conv1Conv2ConnectParams));
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, Inf>(
         "Conv2_Output", SynapseMatrixType::PROCEDURAL_KERNELG, NO_DELAY,
         "Conv2", "Output",
         {}, { uninitialisedVar() },
