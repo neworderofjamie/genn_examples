@@ -143,42 +143,24 @@ namespace Conv2
 }
 
 //------------------------------------------------------------------------
-// Parameters::Conv2Output
+// Parameters::Conv1KC
 //------------------------------------------------------------------------
-/*namespace Conv2Output
+namespace Conv1KC
 {
-    // Pool size
-    constexpr int poolKernelWidth = 2;
-    constexpr int poolKernelHeight = 2;
-    constexpr double poolScale = 1.0 / (double)(poolKernelWidth * poolKernelWidth);
+    // How many Conv1 neurons are connected to each KC
+    // **NOTE** this is after pooling - each of these synapses essentially connects to two presynaptic neurons
+    constexpr unsigned int numSynapsesPerKC = 10;
 
-    // Pool stride
-    constexpr int poolStrideWidth = 2;
-    constexpr int poolStrideHeight = 2;
-
-    // Convolution input size
-    constexpr int denseInWidth = ceilDivide(Conv2::width - poolKernelWidth + 1, poolStrideWidth);
-    constexpr int denseInHeight = ceilDivide(Conv2::height - poolKernelHeight + 1, poolStrideHeight);
-
-    // Number of neurons
-    constexpr int numOutputs = 1000;
-
-    // Total size of kernel
-    constexpr int kernelSize = Conv2::channels * denseInWidth * denseInHeight * numOutputs;
-    
+    // Weight of each synapse
+    constexpr double weight = 0.25;
 }
+
 //------------------------------------------------------------------------
-// Parameters::Output
+// Parameters::KC
 //------------------------------------------------------------------------
-namespace Output
+namespace KC
 {
-    // WTA threshold
-    constexpr double threshWTA = 30.0;
-
-    // Inference threshold
-    constexpr double threshInf = 100.0;
-
     // Number of neurons
-    constexpr int numNeurons = Conv2Output::numOutputs;
-}*/
+    constexpr int numNeurons = 20000;
+}
 }
