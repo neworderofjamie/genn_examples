@@ -15,31 +15,25 @@
 // Model parameters
 #include "parameters.h"
 
-int main()
+bool test()
 {
-    using namespace Parameters;
-    
-    allocateMem();
-    allocateRecordingBuffers(1000);
-    initialize();
-    
-    // Read kernels from disk
-    {
-        std::ifstream conv1("kernels/conv1_kernel.bin", std::ios_base::binary);
-        std::ifstream conv2("kernels/conv2_kernel.bin", std::ios_base::binary);
-        std::ifstream output("kernels/output_kernel.bin", std::ios_base::binary);
-
-        conv1.read(reinterpret_cast<char*>(gInput_Conv1), InputConv1::kernelSize * sizeof(scalar));
-        conv2.read(reinterpret_cast<char*>(gConv1_Conv2), Conv1Conv2::kernelSize * sizeof(scalar));
-        output.read(reinterpret_cast<char*>(gConv2_Output), Conv2Output::kernelSize * sizeof(scalar));
+    std::ifstream labelMappingFile("label_mapping.bin", std::ios_base::binary);
+    if(!labelMappingFile.good()) {
+        return false;
     }
-    initializeSparse();
+    
+    std::cout << "Testing..." << std::endl;
+}
 
+void label()
+{
+    std::cout << "Labelling..." << std::endl;
+    
     // Load training data and labels
     const unsigned int numTrainingImages = loadImageData("train-images-idx3-ubyte", datasetInput, 
                                                          &allocatedatasetInput, &pushdatasetInputToDevice);
     
-    // Load labels
+    // Load training labels
     std::vector<uint8_t> labels(numTrainingImages);
     loadLabelData("train-labels-idx1-ubyte", numTrainingImages, labels.data());
     
@@ -87,6 +81,32 @@ int main()
     std::ofstream labelMappingFile("label_mapping.bin", std::ios_base::binary);
     labelMappingFile.write(reinterpret_cast<const char*>(labelMapping.data()), Output::numNeurons * 10 * sizeof(unsigned int));
 
+}
+int main()
+{
+    using namespace Parameters;
+    
+    allocateMem();
+    allocateRecordingBuffers(1000);
+    initialize();
+    
+    // Read kernels from disk
+    {
+        std::ifstream conv1("kernels/conv1_kernel.bin", std::ios_base::binary);
+        std::ifstream conv2("kernels/conv2_kernel.bin", std::ios_base::binary);
+        std::ifstream output("kernels/output_kernel.bin", std::ios_base::binary);
+
+        conv1.read(reinterpret_cast<char*>(gInput_Conv1), InputConv1::kernelSize * sizeof(scalar));
+        conv2.read(reinterpret_cast<char*>(gConv1_Conv2), Conv1Conv2::kernelSize * sizeof(scalar));
+        output.read(reinterpret_cast<char*>(gConv2_Output), Conv2Output::kernelSize * sizeof(scalar));
+    }
+    initializeSparse();
+
+    // If no labelling data exists for testing, label
+    if(!test()) {
+        label();
+    }
+    
     return EXIT_SUCCESS;
     
     
