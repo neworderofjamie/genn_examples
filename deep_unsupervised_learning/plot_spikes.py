@@ -6,9 +6,9 @@ from glob import glob
 from mpl_toolkits.mplot3d import Axes3D
 
 
-hyper_params = {"input": (28, 28, 1),
-                "conv1": (24, 24, 16),
-                "conv2": (8, 8, 32),
+hyper_params = {"input": (44, 16, 2),
+                "conv1": (20, 6, 8),
+                "conv2": (8, 1, 16),
                 "output": 1000}
 
 # Get layer name

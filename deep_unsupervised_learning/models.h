@@ -85,7 +85,7 @@ public:
 
     SET_SIM_CODE(
         "const int trial = (int)($(t) / $(presentMs));\n"
-        "const uint8_t *imgData = &$(dataset)[trial * 28 * 28];\n"
+        "const uint8_t *imgData = &$(dataset)[trial * 44 * 16 * 2];\n"
         "const scalar u = $(gennrand_uniform);\n");
     SET_THRESHOLD_CONDITION_CODE("imgData[$(id)] > 0 && u >= exp(-(float)imgData[$(id)] * $(scale) * DT)");
 

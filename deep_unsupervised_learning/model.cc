@@ -184,9 +184,9 @@ void modelDefinition(ModelSpec &model)
         Conv2::threshWTA,   // VthreshWTA
         Conv2::threshInf);  // VthreshInf
 
-    DualAccumulator::ParamValues outputParams(
-        Output::threshWTA,   // VthreshWTA
-        Output::threshInf);  // VthreshInf
+    //DualAccumulator::ParamValues outputParams(
+    //    Output::threshWTA,   // VthreshWTA
+    //    Output::threshInf);  // VthreshInf
 
     DualAccumulator::VarValues dualAccumulatorInitVals(
         0.0,                                    // Vwta
@@ -200,24 +200,20 @@ void modelDefinition(ModelSpec &model)
         Input::height, Input::width, Input::channels,               // conv_ih, conv_iw, conv_ic
         Conv1::height, Conv1::width, InputConv1::numFilters);       // conv_oh, conv_ow, conv_oc
 
-    InitSparseConnectivitySnippet::AvgPoolConv2D::ParamValues conv1Conv2ConnectParams(
-        Conv1Conv2::poolKernelHeight, Conv1Conv2::poolKernelWidth,  // pool_kh, pool_kw
-        Conv1Conv2::poolStrideHeight, Conv1Conv2::poolStrideWidth,  // pool_sh, pool_sw
-        0, 0,                                                       // pool_padh, pool_padw
-        Conv1::height, Conv1::width, Conv1::channels,               // pool_ih, pool_iw, pool_ic,
+    InitSparseConnectivitySnippet::Conv2D::ParamValues conv1Conv2ConnectParams(
         Conv1Conv2::convKernelHeight, Conv1Conv2::convKernelWidth,  // conv_kh, conv_kw
         Conv1Conv2::convStrideHeight, Conv1Conv2::convStrideWidth,  // conv_sh, conv_sw
         0, 0,                                                       // conv_padh, conv_padw
-        Conv1Conv2::convInHeight, Conv1Conv2::convInWidth,          // conv_ih, conv_iw
+        Conv1::height, Conv1::width, Conv1::channels,               // conv_ih, conv_iw, conv_ic
         Conv2::height, Conv2::width, Conv1Conv2::numFilters);       // conv_oh, conv_ow, conv_oc
 
-    AvgPoolDense::ParamValues conv2OutputConnectParams(
+    /*AvgPoolDense::ParamValues conv2OutputConnectParams(
         Conv2Output::poolKernelHeight, Conv2Output::poolKernelWidth,    // pool_kh, pool_kw
         Conv2Output::poolStrideHeight, Conv2Output::poolStrideWidth,    // pool_sh, pool_sw
         0, 0,                                                           // pool_padh, pool_padw
         Conv2::height, Conv2::width, Conv2::channels,                   // pool_ih, pool_iw, pool_ic
         Conv2Output::denseInHeight, Conv2Output::denseInWidth,          // dense_ih, dense_iw
-        Output::numNeurons);                                            // dense_units
+        Output::numNeurons);                                            // dense_units*/
 
     WTA::ParamValues conv1WTAParams(
         Conv1::height, Conv1::width, Conv1::channels, // conv_h, conv_w, conv_c
@@ -229,8 +225,8 @@ void modelDefinition(ModelSpec &model)
         Conv2::WTARadius,                               // radius
         -1.0);      // constant
 
-    WTAOutput::ParamValues outputWTAParams(
-        -1.0);  // constant
+    //WTAOutput::ParamValues outputWTAParams(
+    //    -1.0);  // constant
 
     STDPInput::ParamValues inputConv1Params(
         0.001,          // 0 - Potentiation rate
@@ -240,18 +236,18 @@ void modelDefinition(ModelSpec &model)
         1.0);           // 4 - Maximum weight
 
     STDPHidden::ParamValues conv1Conv2Params(
-        0.001,                  // 0 - Potentiation rate
-        0.001 / -8.0,           // 1 - Depression rate
-        3.0,                    // 2 - Damping factor
-        0.0,                    // 3 - Minimum weight
-        Conv1Conv2::poolScale); // 4 - Maximum weight
+        0.001,          // 0 - Potentiation rate
+        0.001 / -8.0,   // 1 - Depression rate
+        3.0,            // 2 - Damping factor
+        0.0,            // 3 - Minimum weight
+        1.0);           // 4 - Maximum weight
 
     STDPHidden::ParamValues conv2OutputParams(
-        0.001,                      // 0 - Potentiation rate
-        0.001 / -8.0,               // 1 - Depression rate
-        3.0,                        // 2 - Damping factor
-        0.0,                        // 3 - Minimum weight
-        Conv2Output::poolScale);    // 4 - Maximum weight
+        0.001,          // 0 - Potentiation rate
+        0.001 / -8.0,   // 1 - Depression rate
+        3.0,            // 2 - Damping factor
+        0.0,            // 3 - Minimum weight
+        1.0);           // 4 - Maximum weight
 
     auto *input = model.addNeuronPopulation<InputNeuron>("Input", Input::numNeurons,
                                                          inputParams, {});
@@ -259,14 +255,14 @@ void modelDefinition(ModelSpec &model)
                                                              conv1Params, dualAccumulatorInitVals);
     auto *conv2 = model.addNeuronPopulation<DualAccumulator>("Conv2", Conv2::numNeurons,
                                                              conv2Params, dualAccumulatorInitVals);
-    auto *output = model.addNeuronPopulation<DualAccumulator>("Output", Output::numNeurons,
-                                                              outputParams, dualAccumulatorInitVals);
+    //auto *output = model.addNeuronPopulation<DualAccumulator>("Output", Output::numNeurons,
+    //                                                          outputParams, dualAccumulatorInitVals);
     input->setSpikeRecordingEnabled(true);
     conv1->setSpikeRecordingEnabled(true);
     conv1->setSpikeEventRecordingEnabled(true);
     conv2->setSpikeRecordingEnabled(true);
-    conv2->setSpikeEventRecordingEnabled(true);
-    output->setSpikeRecordingEnabled(true);
+    //conv2->setSpikeEventRecordingEnabled(true);
+    //output->setSpikeRecordingEnabled(true);
     //output->setSpikeEventRecordingEnabled(true);
 
     // Add WTA connectivity
@@ -282,11 +278,11 @@ void modelDefinition(ModelSpec &model)
         {}, initVar<WTA>(conv2WTAParams),
         {}, {});
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "Output_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "Output", "Output",
-        {}, initVar<WTAOutput>(outputWTAParams),
-        {}, {});
+    //model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+    //    "Output_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+    //    "Output", "Output",
+    //    {}, initVar<WTAOutput>(outputWTAParams),
+    //    {}, {});
 
     // Add plastic, feedforward connecivity
     model.addSynapsePopulation<STDPInput, Inf>(
@@ -301,12 +297,12 @@ void modelDefinition(ModelSpec &model)
         "Conv1", "Conv2",
         conv1Conv2Params, { uninitialisedVar() },
         {}, {},
-        initConnectivity<InitSparseConnectivitySnippet::AvgPoolConv2D>(conv1Conv2ConnectParams));
+        initConnectivity<InitSparseConnectivitySnippet::Conv2D>(conv1Conv2ConnectParams));
 
-    model.addSynapsePopulation<STDPHidden, Inf>(
+    /*model.addSynapsePopulation<STDPHidden, Inf>(
         "Conv2_Output", SynapseMatrixType::PROCEDURAL_KERNELG, NO_DELAY,
         "Conv2", "Output",
         conv2OutputParams, { uninitialisedVar() },
         {}, {},
-        initConnectivity<AvgPoolDense>(conv2OutputConnectParams));
+        initConnectivity<AvgPoolDense>(conv2OutputConnectParams));*/
 }
