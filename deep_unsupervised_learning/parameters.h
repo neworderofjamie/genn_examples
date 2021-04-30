@@ -29,7 +29,7 @@ namespace Input
     constexpr int height = 16;
 
     // Layer channels
-    constexpr int channels = 2;
+    constexpr int channels = 1;
 
     // Number of neurons
     constexpr int numNeurons = width * height * channels;

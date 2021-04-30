@@ -27,18 +27,18 @@ int loadImageData(const std::string &imageDatafilename, uint8_t *&egp,
     imageData.seekg(0, std::ios_base::beg);
 
     // Determine how many images this equates to
-    const auto numImages = std::div(fileBytes, long{Input::width * Input::height * Input::channels});
+    const auto numImages = std::div(fileBytes, long{Input::numNeurons});
     assert(numImages.rem == 0);
 
 
     // Allocate EGP for data
-    allocateEGPFn(Input::width * Input::height * Input::channels * numImages.quot);
+    allocateEGPFn(Input::numNeurons * numImages.quot);
 
     // Read data into EGP
-    imageData.read(reinterpret_cast<char*>(egp), Input::width * Input::height * Input::channels * numImages.quot);
+    imageData.read(reinterpret_cast<char*>(egp), Input::numNeurons * numImages.quot);
 
     // Push EGP
-    pushEGPFn(Input::width * Input::height * Input::channels * numImages.quot);
+    pushEGPFn(Input::numNeurons * numImages.quot);
 
     return numImages.quot;
 }
@@ -68,7 +68,7 @@ int main()
     initializeSparse();
 
     // Load training data and labels
-    const unsigned int numTrainingImages = loadImageData("uv_green_grid.bin", datasetInput,
+    const unsigned int numTrainingImages = loadImageData("green_grid.bin", datasetInput,
                                                          &allocatedatasetInput, &pushdatasetInputToDevice);
 
     // Loop through training images
