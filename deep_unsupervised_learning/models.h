@@ -1,79 +1,44 @@
 #pragma once
 
 //----------------------------------------------------------------------------
-// AvgPoolDense
+// AvgPoolFixedNumberPreWithReplacement
 //----------------------------------------------------------------------------
-class AvgPoolDense : public InitSparseConnectivitySnippet::Base
+class AvgPoolFixedNumberPreWithReplacement : public InitSparseConnectivitySnippet::Base
 {
 public:
-    DECLARE_SNIPPET(AvgPoolDense, 12);
-
-    SET_PARAM_NAMES({"pool_kh", "pool_kw",
-                     "pool_sh", "pool_sw",
-                     "pool_padh", "pool_padw",
-                     "pool_ih", "pool_iw", "pool_ic",
-                     "dense_ih", "dense_iw",
-                     "dense_units"});
-
-     SET_ROW_BUILD_STATE_VARS({{"poolInRow", "int", "($(id_pre) / (int)$(pool_ic)) / (int)$(pool_iw)"},
-                               {"poolInCol", "int", "($(id_pre) / (int)$(pool_ic)) % (int)$(pool_iw)"},
-                               {"poolInChan", "int", "$(id_pre) % (int)$(pool_ic)"},
-                               {"poolOutRow", "int", "(poolInRow + (int)$(pool_padh)) / (int)$(pool_sh)"},
-                               {"poolStrideRow", "int", "(poolOutRow * (int)$(pool_sh)) - (int)$(pool_padh)"},
-                               {"poolOutCol", "int", "(poolInCol + (int)$(pool_padw)) / (int)$(pool_sw)"},
-                               {"poolStrideCol", "int", "(poolOutCol * (int)$(pool_sw)) - (int)$(pool_padw)"},
-                               {"denseInIdx", "int", "(poolOutRow * (int)$(dense_iw) * (int)$(pool_ic)) + (poolOutCol * (int)$(pool_ic)) + poolInChan"},
-                               {"synIdx", "int", "(int)$(dense_units) * denseInIdx"},
-                               {"denseOutIdx", "int", 0}});
-
-    SET_COL_BUILD_STATE_VARS({{"numDenseIn", "int", "(int)$(dense_iw) * (int)$(dense_ih) * (int)$(pool_ic)"},
-                              {"denseInIdx", "int", 0},
-                              {"synIdx", "int", "$(id_post)"}});
-
-    SET_ROW_BUILD_CODE(
-        "if(($(poolInRow) >= ($(poolStrideRow) + (int)$(pool_kh))) || ($(poolInCol) >= ($(poolStrideCol) + (int)$(pool_kw)))) {\n"
-        "   $(endRow);\n"
-        "}\n"
-        "if($(denseOutIdx) == (int)$(dense_units)) {\n"
-        "   $(endRow);\n"
-        "}\n"
-        "$(addSynapse, $(denseOutIdx), $(synIdx));\n"
-        "$(synIdx)++;\n"
-        "$(denseOutIdx)++;\n");
+    DECLARE_SNIPPET(AvgPoolFixedNumberPreWithReplacement, 1);
 
     SET_COL_BUILD_CODE(
-        "if($(denseInIdx) == $(numDenseIn)) {\n"
+        "if(c == 0) {\n"
         "   $(endCol);\n"
         "}\n"
-        "const int denseInRow = (denseInIdx / (int)$(pool_ic)) / (int)$(dense_iw);\n"
-        "const int denseInCol = (denseInIdx / (int)$(pool_ic)) % (int)$(dense_iw);\n"
-        "const int poolInChan = denseInIdx % (int)$(pool_ic);\n"
-        "const int poolInRow = (denseInRow * (int)$(pool_sh)) - (int)$(pool_padh);\n"
-        "const int poolInCol = (denseInCol * (int)$(pool_sw)) - (int)$(pool_padw);\n"
-        "const int idPre = ((poolInRow * (int)$(pool_iw) * (int)$(pool_ic)) +\n"
-        "                   (poolInCol * (int)$(pool_ic)) +\n"
-        "                   poolInChan);\n"
-        "$(addSynapse, idPre, $(synIdx));\n"
-        "$(denseInIdx)++;\n"
-        "$(synIdx) += (int)$(dense_units);\n");
+        "const unsigned int idPre = (unsigned int)ceil($(gennrand_uniform) * ($(num_pre) / 2) - 1;\n"
+        "$(addSynapse, (idPre * 2) + $(id_pre_begin));\n"
+        "$(addSynapse, (idPre * 2) + 1 + $(id_pre_begin));\n"
+        "c--;\n");
+    SET_COL_BUILD_STATE_VARS({{"c", "unsigned int", "$(colLength)"}});
+
+    SET_PARAM_NAMES({"colLength"});
 
     SET_CALC_MAX_ROW_LENGTH_FUNC(
-        [](unsigned int, unsigned int, const std::vector<double> &pars)
+        [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
         {
-            return (unsigned int)pars[11];
+            // Calculate suitable quantile for 0.9999 change when drawing numPre times
+            const double quantile = pow(0.9999, 1.0 / (double)numPre);
+
+            // In each column the number of connections that end up in a row are distributed
+            // binomially with n=numConnections and p=1.0 / numPre. As there are numPost columns the total number
+            // of connections that end up in each row are distributed binomially with n=numConnections * numPost and p=1.0 / numPre
+            return binomialInverseCDF(quantile, (unsigned int)pars[0] * 2 * numPost, 1.0 / (double)numPre);
         });
 
-    SET_CALC_KERNEL_SIZE_FUNC(
-        [](const std::vector<double> &pars)->std::vector<unsigned int>
+    SET_CALC_MAX_COL_LENGTH_FUNC(
+        [](unsigned int, unsigned int, const std::vector<double> &pars)
         {
-            const unsigned int poolIC = (unsigned int)pars[8];
-            const unsigned int denseIH = (unsigned int)pars[9];
-            const unsigned int denseIW = (unsigned int)pars[10];
-            const unsigned int denseUnits = (unsigned int)pars[11];
-            return {poolIC * denseIH * denseIW * denseUnits};
+            return 2 * (unsigned int)pars[0];
         });
 };
-IMPLEMENT_SNIPPET(AvgPoolDense);
+IMPLEMENT_MODEL(AvgPoolFixedNumberPreWithReplacement)
 
 //----------------------------------------------------------------------------
 // InputNeuron
