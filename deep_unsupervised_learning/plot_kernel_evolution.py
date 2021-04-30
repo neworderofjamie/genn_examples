@@ -9,21 +9,21 @@ def get_time(name):
 
 def plot(conv1_kernel, conv2_kernel, conv1_axes, conv2_axes):
     # Reshape kernels
-    conv1_kernel = np.reshape(conv1_kernel, (5, 5, 16))
-    conv2_kernel = np.reshape(conv2_kernel, (5, 5, 16, 32))
+    conv1_kernel = np.reshape(conv1_kernel, (5, 5, 8))
+    conv2_kernel = np.reshape(conv2_kernel, (5, 5, 8, 16))
 
     # Find which input feature is strongest for each conv2 neuron and feature
     max_conv2_features = np.argmax(conv2_kernel, axis=2)
 
     # Plot seperate conv1 features
-    for f in range(16):
+    for f in range(8):
         conv1_axes[f].imshow(conv1_kernel[:,:,f], cmap="gray")
         conv1_axes[f].get_xaxis().set_visible(False)
         conv1_axes[f].get_yaxis().set_visible(False)
 
     # Loop through conv2 features
     difference = 0.0
-    for f in range(32):
+    for f in range(16):
         # Loop through x and y dimension of feature
         visualise_feature = np.empty((25, 25), dtype=np.float32)
         for i in range(5):
@@ -42,7 +42,7 @@ def plot(conv1_kernel, conv2_kernel, conv1_axes, conv2_axes):
         conv2_axes[f].get_xaxis().set_visible(False)
         conv2_axes[f].get_yaxis().set_visible(False)
 
-        for g in range(32):
+        for g in range(16):
             if g == f:
                 continue
 
@@ -56,7 +56,7 @@ conv1_kernels = list(sorted(glob("conv1_kernel_*.bin"), key=get_time))
 conv2_kernels = list(sorted(glob("conv2_kernel_*.bin"), key=get_time))
 
 if MAX_KERNELS == 1:
-    fig, axes = plt.subplots(3, 16)
+    fig, axes = plt.subplots(3, 8)
 
     # Load and reshape kernels
     print("Displaying %s and %s" % (conv1_kernels[-1], conv2_kernels[-1]))

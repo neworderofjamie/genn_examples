@@ -6,7 +6,7 @@ from glob import glob
 from mpl_toolkits.mplot3d import Axes3D
 
 
-hyper_params = {"input": (44, 16, 2),
+hyper_params = {"input": (44, 16, 1),
                 "conv1": (20, 6, 8),
                 "conv2": (8, 1, 16),
                 "output": 1000}
