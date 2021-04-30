@@ -11,6 +11,7 @@ image_data = [cv2.imread(f) for f in image_files]
 
 data = []
 for image in image_data:
+    image[12:,:,:] = 0
     green = image[:,:,1]
 
     uv = (image[:,:,0] == 191) & (image[:,:,1] == 191) & (image[:,:,2] == 191)
