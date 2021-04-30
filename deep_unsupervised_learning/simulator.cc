@@ -61,7 +61,7 @@ int main()
     // **YUCK** this should be done automatically
     std::generate_n(gInput_Conv1, InputConv1::kernelSize, 
                     [&rng, &conv1WeightDist](){ return conv1WeightDist(rng); });
-    std::generate_n(gConv1_Conv2, Conv1Conv2::kernelSize, 
+    std::generate_n(gConv1_Conv2, Conv1Conv2::kernelSize,
                     [&rng, &conv2WeightDist](){ return conv2WeightDist(rng); });
     //std::generate_n(gConv2_Output, Conv2Output::kernelSize,
     //                [&rng, &outputWeightDist](){ return outputWeightDist(rng); });
@@ -80,7 +80,7 @@ int main()
             stepTime();
         }
 
-        if((n % 1000) == 0) {
+        if((n % 100) == 0) {
             // Save spikes
             pullRecordingBuffersFromDevice();
             writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,
