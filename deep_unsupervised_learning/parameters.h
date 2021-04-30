@@ -20,7 +20,7 @@ namespace Input
     constexpr double presentMs = 100.0;
 
     // Scaling factor to multiply (0-255) input by to get rate
-    constexpr double scale = 0.0005;
+    constexpr double scale = 0.002;
 
     // Layer width
     constexpr int width = 44;
