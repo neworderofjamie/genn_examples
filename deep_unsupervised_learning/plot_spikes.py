@@ -44,6 +44,9 @@ try:
     axis = fig.add_subplot(111, projection="3d")
 
     axis.scatter(spike_col, spikes[:,0], spike_row, c=spike_chan, s=1)
+    axis.set_xlim((0, width))
+    axis.set_ylim((0, 100))
+    axis.set_zlim((0, height))
     axis.set_xlabel("X")
     axis.set_ylabel("time")
     axis.set_zlabel("Y")
@@ -60,6 +63,7 @@ except TypeError:
     fig, axis = plt.subplots()
 
     axis.scatter(spikes[:,0], spikes[:,1], s=1)
+    axis.set_xlim((0, 100))
     axis.set_xlabel("time")
     axis.set_ylabel("spike")
 
