@@ -200,11 +200,15 @@ void modelDefinition(ModelSpec &model)
         Input::height, Input::width, Input::channels,               // conv_ih, conv_iw, conv_ic
         Conv1::height, Conv1::width, InputConv1::numFilters);       // conv_oh, conv_ow, conv_oc
 
-    InitSparseConnectivitySnippet::Conv2D::ParamValues conv1Conv2ConnectParams(
+    InitSparseConnectivitySnippet::AvgPoolConv2D::ParamValues conv1Conv2ConnectParams(
+        Conv1Conv2::poolKernelHeight, Conv1Conv2::poolKernelWidth,  // pool_kh, pool_kw
+        Conv1Conv2::poolStrideHeight, Conv1Conv2::poolStrideWidth,  // pool_sh, pool_sw
+        0, 0,                                                       // pool_padh, pool_padw
+        Conv1::height, Conv1::width, Conv1::channels,               // pool_ih, pool_iw, pool_ic,
         Conv1Conv2::convKernelHeight, Conv1Conv2::convKernelWidth,  // conv_kh, conv_kw
         Conv1Conv2::convStrideHeight, Conv1Conv2::convStrideWidth,  // conv_sh, conv_sw
         0, 0,                                                       // conv_padh, conv_padw
-        Conv1::height, Conv1::width, Conv1::channels,               // conv_ih, conv_iw, conv_ic
+        Conv1Conv2::convInHeight, Conv1Conv2::convInWidth,          // conv_ih, conv_iw
         Conv2::height, Conv2::width, Conv1Conv2::numFilters);       // conv_oh, conv_ow, conv_oc
 
     /*AvgPoolDense::ParamValues conv2OutputConnectParams(
@@ -297,7 +301,7 @@ void modelDefinition(ModelSpec &model)
         "Conv1", "Conv2",
         conv1Conv2Params, { uninitialisedVar() },
         {}, {},
-        initConnectivity<InitSparseConnectivitySnippet::Conv2D>(conv1Conv2ConnectParams));
+        initConnectivity<InitSparseConnectivitySnippet::AvgPoolConv2D>(conv1Conv2ConnectParams));
 
     /*model.addSynapsePopulation<STDPHidden, Inf>(
         "Conv2_Output", SynapseMatrixType::PROCEDURAL_KERNELG, NO_DELAY,

@@ -2,28 +2,28 @@ import matplotlib.pyplot as plt
 import numpy as np
 from glob import glob
 
-MAX_KERNELS = 1
+MAX_KERNELS = 10
 
 def get_time(name):
     return int(name.split("_")[2].split(".")[0])
 
 def plot(conv1_kernel, conv2_kernel, conv1_axes, conv2_axes):
     # Reshape kernels
-    conv1_kernel = np.reshape(conv1_kernel, (5, 5, 8))
-    conv2_kernel = np.reshape(conv2_kernel, (5, 5, 8, 16))
+    conv1_kernel = np.reshape(conv1_kernel, (5, 5, 5))
+    conv2_kernel = np.reshape(conv2_kernel, (5, 5, 5, 10))
 
     # Find which input feature is strongest for each conv2 neuron and feature
     max_conv2_features = np.argmax(conv2_kernel, axis=2)
 
     # Plot seperate conv1 features
-    for f in range(8):
+    for f in range(5):
         conv1_axes[f].imshow(conv1_kernel[:,:,f], cmap="gray")
         conv1_axes[f].get_xaxis().set_visible(False)
         conv1_axes[f].get_yaxis().set_visible(False)
 
     # Loop through conv2 features
     difference = 0.0
-    for f in range(16):
+    for f in range(10):
         # Loop through x and y dimension of feature
         visualise_feature = np.empty((25, 25), dtype=np.float32)
         for i in range(5):
@@ -42,7 +42,7 @@ def plot(conv1_kernel, conv2_kernel, conv1_axes, conv2_axes):
         conv2_axes[f].get_xaxis().set_visible(False)
         conv2_axes[f].get_yaxis().set_visible(False)
 
-        for g in range(16):
+        for g in range(10):
             if g == f:
                 continue
 
@@ -50,13 +50,12 @@ def plot(conv1_kernel, conv2_kernel, conv1_axes, conv2_axes):
             difference += np.sqrt(np.sum(kernel_difference ** 2.0))
     print(difference)
 
-
 # Get list of kernels
 conv1_kernels = list(sorted(glob("conv1_kernel_*.bin"), key=get_time))
 conv2_kernels = list(sorted(glob("conv2_kernel_*.bin"), key=get_time))
 
 if MAX_KERNELS == 1:
-    fig, axes = plt.subplots(3, 8)
+    fig, axes = plt.subplots(3, 5)
 
     # Load and reshape kernels
     print("Displaying %s and %s" % (conv1_kernels[-1], conv2_kernels[-1]))
@@ -66,9 +65,9 @@ if MAX_KERNELS == 1:
     # Plot
     plot(conv1_kernel, conv2_kernel, axes[0,:], axes[1:3,:].flatten())
 else:
-    conv1_fig, conv1_axes = plt.subplots(16, len(conv1_kernels[-MAX_KERNELS:]), sharex="col", sharey="row",
+    conv1_fig, conv1_axes = plt.subplots(5, len(conv1_kernels[-MAX_KERNELS:]), sharex="col", sharey="row",
                                          gridspec_kw = {"wspace":0, "hspace":0})
-    conv2_fig, conv2_axes = plt.subplots(32, len(conv2_kernels[-MAX_KERNELS:]), sharex="col", sharey="row",
+    conv2_fig, conv2_axes = plt.subplots(10, len(conv2_kernels[-MAX_KERNELS:]), sharex="col", sharey="row",
                                          gridspec_kw = {"wspace":0, "hspace":0})
 
     for t, (conv1, conv2) in enumerate(zip(conv1_kernels[-MAX_KERNELS:], conv2_kernels[-MAX_KERNELS:])):
