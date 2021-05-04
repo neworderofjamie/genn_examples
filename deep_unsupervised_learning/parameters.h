@@ -17,7 +17,7 @@ constexpr double timestepMs = 0.1;
 namespace Input
 {
     // How long to present each stimuli for
-    constexpr double presentMs = 200.0;
+    constexpr double presentMs = 100.0;
     
     constexpr unsigned int presentTimesteps = (unsigned int)(presentMs/ timestepMs);
     
@@ -171,7 +171,8 @@ namespace KC
     constexpr int numNeurons = 20000;
     
     // WTA threshold
-    constexpr double threshWTA = 80.0;
+    // **NOTE** majority of inputs active (Gruntman and Turner)
+    constexpr double threshWTA = 10.0 * 0.6;
 }
 
 namespace GGN
