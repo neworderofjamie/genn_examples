@@ -151,8 +151,13 @@ namespace Conv1KC
     // **NOTE** this is after pooling - each of these synapses essentially connects to two presynaptic neurons
     constexpr unsigned int numSynapsesPerKC = 10;
 
+    // Pool size
+    constexpr int poolKernelWidth = 2;
+    constexpr int poolKernelHeight = 2;
+    constexpr double poolScale = 1.0 / (double)(poolKernelWidth * poolKernelWidth);
+    
     // Weight of each synapse
-    constexpr double weight = 0.25;
+    constexpr double weight = 1.0 / poolScale;
 }
 
 //------------------------------------------------------------------------
@@ -162,5 +167,8 @@ namespace KC
 {
     // Number of neurons
     constexpr int numNeurons = 20000;
+    
+    // WTA threshold
+    constexpr double threshWTA = 8.0;
 }
 }

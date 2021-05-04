@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d import Axes3D
 hyper_params = {"input": (44, 16, 1),
                 "conv1": (40, 12, 5),
                 "conv2": (16, 2, 10),
-                "output": 1000}
+                "kc": 20000}
 
 # Get layer name
 layer = sys.argv[1] if len(sys.argv) > 1 else "input"
@@ -54,10 +54,7 @@ except TypeError:
     num_neurons = hyper_params[layer]
     hist, _ = np.histogram(spikes[:,0], bins=1000)
 
-    classification = np.argmax(np.bincount(spikes[:,1].astype(int), minlength=num_neurons))
-
     print("Mean:%f, Std:%f, Max:%f" % (np.average(hist), np.std(hist), np.amax(hist)))
-    print("Most active neuron:%u" % classification)
 
     # Create 3D plot
     fig, axis = plt.subplots()
@@ -66,9 +63,5 @@ except TypeError:
     axis.set_xlim((0, 100))
     axis.set_xlabel("time")
     axis.set_ylabel("spike")
-
-    axis.annotate("", xy=(100.0, classification), xycoords="data", color="red",
-                 xytext=(5.0, 0.0), textcoords="offset points", annotation_clip=True,
-                 arrowprops=dict(facecolor="red", edgecolor="red", headlength=4.0))
 
 plt.show()

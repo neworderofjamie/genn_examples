@@ -6,20 +6,31 @@
 class AvgPoolFixedNumberPreWithReplacement : public InitSparseConnectivitySnippet::Base
 {
 public:
-    DECLARE_SNIPPET(AvgPoolFixedNumberPreWithReplacement, 1);
+    DECLARE_SNIPPET(AvgPoolFixedNumberPreWithReplacement, 6);
 
     SET_COL_BUILD_CODE(
         "if(c == 0) {\n"
         "   $(endCol);\n"
         "}\n"
-        "const unsigned int idPre = (unsigned int)ceil($(gennrand_uniform) * ($(num_pre) / 2) - 1;\n"
-        "$(addSynapse, (idPre * 2) + $(id_pre_begin));\n"
-        "$(addSynapse, (idPre * 2) + 1 + $(id_pre_begin));\n"
+        "// Pick which pool region to connect\n"
+        "const int poolInIdx = (unsigned int)ceil($(gennrand_uniform) * $(numPools) - 1);\n"
+        "// Convert to row, column and channel\n"
+        "const int poolInRow = (poolInIdx / (int)$(pool_ic)) / ((int)$(pool_iw) / (int)$(pool_kw));\n"
+        "const int poolInCol = (poolInIdx / (int)$(pool_ic)) % ((int)$(pool_iw) / (int)$(pool_kw));\n"
+        "const int poolInChan = poolInIdx % (int)$(pool_ic);\n"
+        "// Add synapses across all inputs to pool\n"
+        "$(addSynapse, ((poolInRow * 2) * (int)$(pool_iw) * (int)$(pool_ic)) + ((poolInCol * 2) * (int)$(pool_ic)) + poolInChan);\n"
+        "$(addSynapse, (((poolInRow * 2) + 1) * (int)$(pool_iw) * (int)$(pool_ic)) + ((poolInCol * 2) * (int)$(pool_ic)) + poolInChan);\n"
+        "$(addSynapse, (((poolInRow * 2) + 1) * (int)$(pool_iw) * (int)$(pool_ic)) + (((poolInCol * 2) + 1) * (int)$(pool_ic)) + poolInChan);\n"
+        "$(addSynapse, ((poolInRow * 2) * (int)$(pool_iw) * (int)$(pool_ic)) + (((poolInCol * 2) + 1) * (int)$(pool_ic)) + poolInChan);\n"
         "c--;\n");
     SET_COL_BUILD_STATE_VARS({{"c", "unsigned int", "$(colLength)"}});
 
-    SET_PARAM_NAMES({"colLength"});
-
+    SET_PARAM_NAMES({"colLength", 
+                     "pool_kh", "pool_kw",
+                     "pool_ih", "pool_iw", "pool_ic"});
+    SET_DERIVED_PARAMS({{"numPools", [](const std::vector<double> &pars, double){ return ((int)pars[3] / (int)pars[1]) * ((int)pars[4] / (int)pars[2]) * (int)pars[5]; }}});
+    
     SET_CALC_MAX_ROW_LENGTH_FUNC(
         [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
         {
@@ -29,13 +40,13 @@ public:
             // In each column the number of connections that end up in a row are distributed
             // binomially with n=numConnections and p=1.0 / numPre. As there are numPost columns the total number
             // of connections that end up in each row are distributed binomially with n=numConnections * numPost and p=1.0 / numPre
-            return binomialInverseCDF(quantile, (unsigned int)pars[0] * 2 * numPost, 1.0 / (double)numPre);
+            return binomialInverseCDF(quantile, (unsigned int)pars[0] * 4 * numPost, 1.0 / (double)numPre);
         });
 
     SET_CALC_MAX_COL_LENGTH_FUNC(
         [](unsigned int, unsigned int, const std::vector<double> &pars)
         {
-            return 2 * (unsigned int)pars[0];
+            return 4 * (unsigned int)pars[0];
         });
 };
 IMPLEMENT_MODEL(AvgPoolFixedNumberPreWithReplacement);

@@ -28,17 +28,14 @@ public:
 IMPLEMENT_MODEL(InferenceAccumulator);
 
 //----------------------------------------------------------------------------
-// WTAAccumulatorSpikeCount
+// WTAAccumulator
 //----------------------------------------------------------------------------
-class WTAAccumulatorSpikeCount : public NeuronModels::Base
+class WTAAccumulator : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(WTAAccumulatorSpikeCount, 1, 2);
+    DECLARE_MODEL(WTAAccumulator, 1, 1);
 
     SET_SIM_CODE(
-        "if(fmod($(t), 100.0) < DT) {\n"
-        "   $(SpikeCount) = 0;\n"
-        "}\n"
         "// Apply input current to WTA accumulators\n"
         "$(Vwta) += $(Iinf);\n"
         "// If there's WTA input, reset WTA accumulator and time\n"
@@ -49,17 +46,16 @@ public:
     SET_THRESHOLD_CONDITION_CODE("$(Vwta) > $(VthreshWTA)");
 
     SET_RESET_CODE(
-        "$(Vwta) = 0.0;\n"
-        "$(SpikeCount)++;\n");
+        "$(Vwta) = 0.0;\n");
 
     SET_PARAM_NAMES({"VthreshWTA"}); // WTA threshold
 
-    SET_VARS({{"Vwta", "scalar"}, {"SpikeCount", "unsigned int"}});
+    SET_VARS({{"Vwta", "scalar"}});
     SET_ADDITIONAL_INPUT_VARS({{"Iinf", "scalar", "0.0"}});
 
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
-IMPLEMENT_MODEL(WTAAccumulatorSpikeCount);
+IMPLEMENT_MODEL(WTAAccumulator);
 
 void modelDefinition(ModelSpec &model)
 {
@@ -79,15 +75,14 @@ void modelDefinition(ModelSpec &model)
     InferenceAccumulator::ParamValues conv2Params(
         Conv2::threshInf);  // VthreshInf
 
-    WTAAccumulatorSpikeCount::ParamValues outputParams(
-        Output::threshWTA);  // VthreshWTA
+    WTAAccumulator::ParamValues kcParams(
+        KC::threshWTA);  // VthreshWTA
 
     InferenceAccumulator::VarValues inferenceAccumulatorInitVals(
         0.0);   // Vinf
     
-    WTAAccumulatorSpikeCount::VarValues outputInitVals(
-        0.0,    // Vwta
-        0);     // SpikeCount
+    WTAAccumulator::VarValues wtaAccumulatorInitVals(
+        0.0);   // Vwta
     
     InitSparseConnectivitySnippet::Conv2D::ParamValues inputConv1ConnectParams(
         InputConv1::convKernelHeight, InputConv1::convKernelWidth,  // conv_kh, conv_kw
@@ -106,38 +101,26 @@ void modelDefinition(ModelSpec &model)
         0, 0,                                                       // conv_padh, conv_padw
         Conv1Conv2::convInHeight, Conv1Conv2::convInWidth,          // conv_ih, conv_iw
         Conv2::height, Conv2::width, Conv1Conv2::numFilters);       // conv_oh, conv_ow, conv_oc
-
-    AvgPoolDense::ParamValues conv2OutputConnectParams(
-        Conv2Output::poolKernelHeight, Conv2Output::poolKernelWidth,    // pool_kh, pool_kw
-        Conv2Output::poolStrideHeight, Conv2Output::poolStrideWidth,    // pool_sh, pool_sw
-        0, 0,                                                           // pool_padh, pool_padw
-        Conv2::height, Conv2::width, Conv2::channels,                   // pool_ih, pool_iw, pool_ic
-        Conv2Output::denseInHeight, Conv2Output::denseInWidth,          // dense_ih, dense_iw
-        Output::numNeurons);                                            // dense_units
     
-    WTAOutput::ParamValues outputWTAParams(
-        -1.0);  // constant
-
+    AvgPoolFixedNumberPreWithReplacement::ParamValues conv1KCConnectParams(
+        Conv1KC::numSynapsesPerKC,                              // colLength
+        Conv1KC::poolKernelHeight, Conv1KC::poolKernelWidth,    // pool_kh, pool_kw
+        Conv1::height, Conv1::width, Conv1::channels);          // pool_ih, pool_iw, pool_ic
+    
     auto *input = model.addNeuronPopulation<InputNeuron>("Input", Input::numNeurons,
                                                          inputParams, {});
     auto *conv1 = model.addNeuronPopulation<InferenceAccumulator>("Conv1", Conv1::numNeurons,
                                                                   conv1Params, inferenceAccumulatorInitVals);
     auto *conv2 = model.addNeuronPopulation<InferenceAccumulator>("Conv2", Conv2::numNeurons,
                                                                   conv2Params, inferenceAccumulatorInitVals);
-    auto *output = model.addNeuronPopulation<WTAAccumulatorSpikeCount>("Output", Output::numNeurons,
-                                                                       outputParams, outputInitVals);
+    auto *kc = model.addNeuronPopulation<WTAAccumulator>("KC", KC::numNeurons,
+                                                         kcParams, wtaAccumulatorInitVals);
+
     input->setSpikeRecordingEnabled(true);
     conv1->setSpikeRecordingEnabled(true);
     conv2->setSpikeRecordingEnabled(true);
-    output->setSpikeRecordingEnabled(true);
-    
-    // Add WTA connectivity
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "Output_Output", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "Output", "Output",
-        {}, initVar<WTAOutput>(outputWTAParams),
-        {}, {});
-        
+    kc->setSpikeRecordingEnabled(true);
+
     // Add feedforward connecivity
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "Input_Conv1", SynapseMatrixType::PROCEDURAL_KERNELG, NO_DELAY,
@@ -152,11 +135,13 @@ void modelDefinition(ModelSpec &model)
         {}, { uninitialisedVar() },
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::AvgPoolConv2D>(conv1Conv2ConnectParams));
-
+    
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, Inf>(
-        "Conv2_Output", SynapseMatrixType::PROCEDURAL_KERNELG, NO_DELAY,
-        "Conv2", "Output",
-        {}, { uninitialisedVar() },
+        "Conv1_KC", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
+        "Conv1", "KC",
+        {}, { Conv1KC::weight },
         {}, {},
-        initConnectivity<AvgPoolDense>(conv2OutputConnectParams));
+        initConnectivity<AvgPoolFixedNumberPreWithReplacement>(conv1KCConnectParams));
+
+  
 }

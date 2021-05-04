@@ -8,40 +8,9 @@
 // Auto-generated model code
 #include "deep_unsupervised_learning_CODE/definitions.h"
 
-
 // Model parameters
 #include "parameters.h"
-
-int loadImageData(const std::string &imageDatafilename, uint8_t *&egp,
-                  void (*allocateEGPFn)(unsigned int), void (*pushEGPFn)(unsigned int))
-{
-    using namespace Parameters;
-
-    // Open binary file
-    std::ifstream imageData(imageDatafilename, std::ifstream::binary);
-    assert(imageData.good());
-
-    // Get file length
-    imageData.seekg(0, std::ios_base::end);
-    const auto fileBytes = imageData.tellg();
-    imageData.seekg(0, std::ios_base::beg);
-
-    // Determine how many images this equates to
-    const auto numImages = std::div(long long{fileBytes}, long long{Input::numNeurons});
-    assert(numImages.rem == 0);
-
-
-    // Allocate EGP for data
-    allocateEGPFn(Input::numNeurons * numImages.quot);
-
-    // Read data into EGP
-    imageData.read(reinterpret_cast<char*>(egp), Input::numNeurons * numImages.quot);
-
-    // Push EGP
-    pushEGPFn(Input::numNeurons * numImages.quot);
-
-    return numImages.quot;
-}
+#include "sim_utils.h"
 
 int main()
 {
@@ -67,8 +36,8 @@ int main()
     //                [&rng, &outputWeightDist](){ return outputWeightDist(rng); });
     initializeSparse();
 
-    // Load training data and labels
-    const unsigned int numTrainingImages = loadImageData("green_grid.bin", datasetInput,
+    // Load grid data
+    const unsigned int numTrainingImages = loadImageData("green_grid.bin", datasetInput, Input::numNeurons,
                                                          &allocatedatasetInput, &pushdatasetInputToDevice);
 
     // Loop through training images
