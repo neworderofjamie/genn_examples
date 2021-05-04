@@ -3,6 +3,7 @@ import numpy as np
 import sys
 
 from glob import glob
+from itertools import combinations
 from mpl_toolkits.mplot3d import Axes3D
 
 
@@ -54,15 +55,21 @@ except TypeError:
     num_neurons = hyper_params[layer]
     hist, _ = np.histogram(spikes[:,0], bins=1000)
     
-    first_phase_mask = spikes[:,0] < 55.0
-    second_phase_mask = (spikes[:,0] >= 55.0) & (spikes[:,0] < 75.0)
-    third_phase_mask = (spikes[:,0] > 75.0)
+    
     print("Mean:%f, Std:%f, Max:%f" % (np.average(hist), np.std(hist), np.amax(hist)))
     print("%u unique KCs active" % len(np.unique(spikes[:,1])))
     
-    print("%u intersection 1-2" % len(np.intersect1d(spikes[first_phase_mask,1], spikes[second_phase_mask,1])))
-    print("%u intersection 1-3" % len(np.intersect1d(spikes[first_phase_mask,1], spikes[third_phase_mask,1])))
-    print("%u intersection 2-3" % len(np.intersect1d(spikes[second_phase_mask,1], spikes[third_phase_mask,1])))
+    # Split spikes into periods
+    period_times = [0.0, 200.0, 400.0, 600.0, 800.0, 1000.0]
+    period_spikes = [spikes[(spikes[:,0] >= start) & (spikes[:,0] < end), 1]
+                     for start, end in zip(period_times[:-1], period_times[1:])]
+    
+    # Calculate intersections between all combinations of periods
+    intersections = [len(np.intersect1d(a, b)) 
+                     for a, b in combinations(period_spikes, 2)]
+    
+    print(intersections)
+ 
     # Create 3D plot
     fig, axis = plt.subplots()
 
