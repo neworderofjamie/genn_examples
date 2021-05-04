@@ -169,6 +169,12 @@ namespace KC
     constexpr int numNeurons = 20000;
     
     // WTA threshold
-    constexpr double threshWTA = 8.0;
+    constexpr double threshWTA = 40.0;
+}
+
+namespace GGN
+{
+    // Inference threshold
+    constexpr double threshInf = 200.0;
 }
 }

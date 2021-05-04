@@ -77,6 +77,9 @@ void modelDefinition(ModelSpec &model)
 
     WTAAccumulator::ParamValues kcParams(
         KC::threshWTA);  // VthreshWTA
+        
+    InferenceAccumulator::ParamValues ggnParams(
+        GGN::threshInf);  // VthreshInf
 
     InferenceAccumulator::VarValues inferenceAccumulatorInitVals(
         0.0);   // Vinf
@@ -116,6 +119,9 @@ void modelDefinition(ModelSpec &model)
     auto *kc = model.addNeuronPopulation<WTAAccumulator>("KC", KC::numNeurons,
                                                          kcParams, wtaAccumulatorInitVals);
 
+    auto *ggn = model.addNeuronPopulation<InferenceAccumulator>("GGN", 1,
+                                                                ggnParams, inferenceAccumulatorInitVals);
+
     input->setSpikeRecordingEnabled(true);
     conv1->setSpikeRecordingEnabled(true);
     conv2->setSpikeRecordingEnabled(true);
@@ -142,6 +148,17 @@ void modelDefinition(ModelSpec &model)
         {}, { Conv1KC::weight },
         {}, {},
         initConnectivity<AvgPoolFixedNumberPreWithReplacement>(conv1KCConnectParams));
-
-  
+    
+    // Add GGN connecivity
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "KC_GGN", SynapseMatrixType::DENSE_GLOBALG, NO_DELAY,
+        "KC", "GGN",
+        {}, { 1.0 },
+        {}, {});
+    
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "GGN_KC", SynapseMatrixType::DENSE_GLOBALG, NO_DELAY,
+        "GGN", "KC",
+        {}, { -1.0 },
+        {}, {});
 }
