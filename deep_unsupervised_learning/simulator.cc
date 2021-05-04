@@ -23,7 +23,7 @@ int main()
     //                                                 0.1f * Conv2Output::poolScale);
 
     allocateMem();
-    allocateRecordingBuffers(1000);
+    allocateRecordingBuffers(Input::presentTimesteps);
     initialize();
 
     // Initialise kernels
@@ -45,7 +45,7 @@ int main()
         std::cout << n << std::endl;
 
         // Simulate
-        for(unsigned int i = 0; i < 1000; i++) {
+        for(unsigned int i = 0; i < Input::presentTimesteps; i++) {
             stepTime();
         }
 
@@ -53,28 +53,28 @@ int main()
             // Save spikes
             pullRecordingBuffersFromDevice();
             writeTextSpikeRecording("input_spikes_" + std::to_string(n) + ".csv", recordSpkInput,
-                                    Input::numNeurons, 1000, timestepMs,
+                                    Input::numNeurons, Input::presentTimesteps, timestepMs,
                                     ",", true);
 
             writeTextSpikeRecording("conv1_spikes_" + std::to_string(n) + ".csv", recordSpkConv1,
-                                    Conv1::numNeurons, 1000, timestepMs,
+                                    Conv1::numNeurons, Input::presentTimesteps, timestepMs,
                                     ",", true);
             writeTextSpikeRecording("conv1_spike_events_" + std::to_string(n) + ".csv", recordSpkEventConv1,
-                                    Conv1::numNeurons, 1000, timestepMs,
+                                    Conv1::numNeurons, Input::presentTimesteps, timestepMs,
                                     ",", true);
 
             writeTextSpikeRecording("conv2_spikes_" + std::to_string(n) + ".csv", recordSpkConv2,
-                                    Conv2::numNeurons, 1000, timestepMs,
+                                    Conv2::numNeurons, Input::presentTimesteps, timestepMs,
                                     ",", true);
             //writeTextSpikeRecording("conv2_spike_events_" + std::to_string(n) + ".csv", recordSpkEventConv2,
-            //                        Conv2::numNeurons, 1000, timestepMs,
+            //                        Conv2::numNeurons, Input::presentTimesteps, timestepMs,
             //                        ",", true);
 
            // writeTextSpikeRecording("output_spikes_" + std::to_string(n) + ".csv", recordSpkOutput,
-            //                        Output::numNeurons, 1000, timestepMs,
+            //                        Output::numNeurons, Input::presentTimesteps, timestepMs,
             //                        ",", true);
             /*writeTextSpikeRecording("output_spike_events_" + std::to_string(n) + ".csv", recordSpkEventOutput,
-                                    1000, 1000, 0.1,
+                                    Output::numNeurons, Input::presentTimesteps, 0.1,
                                     ",", true);*/
             // Save weights
             pullgInput_Conv1FromDevice();

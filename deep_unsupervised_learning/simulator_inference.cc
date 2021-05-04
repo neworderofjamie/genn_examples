@@ -18,7 +18,7 @@ int main()
     using namespace Parameters;
 
     allocateMem();
-    allocateRecordingBuffers(1000);
+    allocateRecordingBuffers(Input::presentTimesteps);
     initialize();
 
     // Read kernels from disk
@@ -31,31 +31,31 @@ int main()
     }
     initializeSparse();
     
-        // Load grid data
+    // Load grid data
     const unsigned int numTrainingImages = loadImageData("green_grid.bin", datasetInput, Input::numNeurons,
                                                          &allocatedatasetInput, &pushdatasetInputToDevice);                                                    
     
     // Simulate
-    for(unsigned int i = 0; i < 1000; i++) {
+    for(unsigned int i = 0; i < Input::presentTimesteps; i++) {
         stepTime();
     }
     
      // Save spikes
     pullRecordingBuffersFromDevice();
     writeTextSpikeRecording("input_inference_spikes_0.csv", recordSpkInput,
-                            Input::numNeurons, 1000, timestepMs,
+                            Input::numNeurons, Input::presentTimesteps, timestepMs,
                             ",", true);
 
     writeTextSpikeRecording("conv1_inference_spikes_0.csv", recordSpkConv1,
-                            Conv1::numNeurons, 1000, timestepMs,
+                            Conv1::numNeurons, Input::presentTimesteps, timestepMs,
                             ",", true);
 
     writeTextSpikeRecording("conv2_inference_spikes_0.csv", recordSpkConv2,
-                            Conv2::numNeurons, 1000, timestepMs,
+                            Conv2::numNeurons, Input::presentTimesteps, timestepMs,
                             ",", true);
 
     writeTextSpikeRecording("kc_inference_spikes_0.csv", recordSpkKC,
-                            KC::numNeurons, 1000, timestepMs,
+                            KC::numNeurons, Input::presentTimesteps, timestepMs,
                             ",", true);
 
     return EXIT_SUCCESS;
