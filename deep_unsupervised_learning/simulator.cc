@@ -27,7 +27,7 @@ int loadImageData(const std::string &imageDatafilename, uint8_t *&egp,
     imageData.seekg(0, std::ios_base::beg);
 
     // Determine how many images this equates to
-    const auto numImages = std::div(fileBytes, long{Input::numNeurons});
+    const auto numImages = std::div(long long{fileBytes}, long long{Input::numNeurons});
     assert(numImages.rem == 0);
 
 

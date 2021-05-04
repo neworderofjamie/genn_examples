@@ -38,7 +38,7 @@ public:
             return 2 * (unsigned int)pars[0];
         });
 };
-IMPLEMENT_MODEL(AvgPoolFixedNumberPreWithReplacement)
+IMPLEMENT_MODEL(AvgPoolFixedNumberPreWithReplacement);
 
 //----------------------------------------------------------------------------
 // InputNeuron
