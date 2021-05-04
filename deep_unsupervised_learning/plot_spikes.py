@@ -53,9 +53,16 @@ try:
 except TypeError:
     num_neurons = hyper_params[layer]
     hist, _ = np.histogram(spikes[:,0], bins=1000)
-
+    
+    first_phase_mask = spikes[:,0] < 55.0
+    second_phase_mask = (spikes[:,0] >= 55.0) & (spikes[:,0] < 75.0)
+    third_phase_mask = (spikes[:,0] > 75.0)
     print("Mean:%f, Std:%f, Max:%f" % (np.average(hist), np.std(hist), np.amax(hist)))
-
+    print("%u unique KCs active" % len(np.unique(spikes[:,1])))
+    
+    print("%u intersection 1-2" % len(np.intersect1d(spikes[first_phase_mask,1], spikes[second_phase_mask,1])))
+    print("%u intersection 1-3" % len(np.intersect1d(spikes[first_phase_mask,1], spikes[third_phase_mask,1])))
+    print("%u intersection 2-3" % len(np.intersect1d(spikes[second_phase_mask,1], spikes[third_phase_mask,1])))
     # Create 3D plot
     fig, axis = plt.subplots()
 
