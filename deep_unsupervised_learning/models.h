@@ -15,21 +15,25 @@ public:
         "// Pick which pool region to connect\n"
         "const int poolInIdx = (unsigned int)ceil($(gennrand_uniform) * $(numPools) - 1);\n"
         "// Convert to row, column and channel\n"
-        "const int poolInRow = (poolInIdx / (int)$(pool_ic)) / ((int)$(pool_iw) / (int)$(pool_kw));\n"
-        "const int poolInCol = (poolInIdx / (int)$(pool_ic)) % ((int)$(pool_iw) / (int)$(pool_kw));\n"
+        "const int poolInRow = (poolInIdx / (int)$(pool_ic)) / (int)$(numXPools);\n"
+        "const int poolInCol = (poolInIdx / (int)$(pool_ic)) % (int)$(numXPools);\n"
         "const int poolInChan = poolInIdx % (int)$(pool_ic);\n"
         "// Add synapses across all inputs to pool\n"
-        "$(addSynapse, ((poolInRow * 2) * (int)$(pool_iw) * (int)$(pool_ic)) + ((poolInCol * 2) * (int)$(pool_ic)) + poolInChan);\n"
-        "$(addSynapse, (((poolInRow * 2) + 1) * (int)$(pool_iw) * (int)$(pool_ic)) + ((poolInCol * 2) * (int)$(pool_ic)) + poolInChan);\n"
-        "$(addSynapse, (((poolInRow * 2) + 1) * (int)$(pool_iw) * (int)$(pool_ic)) + (((poolInCol * 2) + 1) * (int)$(pool_ic)) + poolInChan);\n"
-        "$(addSynapse, ((poolInRow * 2) * (int)$(pool_iw) * (int)$(pool_ic)) + (((poolInCol * 2) + 1) * (int)$(pool_ic)) + poolInChan);\n"
+        "for(int i = (poolInRow * 2); i < ((poolInRow * 2) + 1); i++) {\n"
+        "   for(int j = (poolInCol * 2); j < ((poolInCol * 2) + 1); j++) {\n"
+        "       const int preIdx  = (i * (int)$(pool_iw) * (int)$(pool_ic)) + (j * (int)$(pool_ic)) + poolInChan;\n"
+        "       $(addSynapse, preIdx);\n"
+        "   }\n"
+        "}\n"
+
         "c--;\n");
     SET_COL_BUILD_STATE_VARS({{"c", "unsigned int", "$(colLength)"}});
 
     SET_PARAM_NAMES({"colLength", 
                      "pool_kh", "pool_kw",
                      "pool_ih", "pool_iw", "pool_ic"});
-    SET_DERIVED_PARAMS({{"numPools", [](const std::vector<double> &pars, double){ return ((int)pars[3] / (int)pars[1]) * ((int)pars[4] / (int)pars[2]) * (int)pars[5]; }}});
+    SET_DERIVED_PARAMS({{"numPools", [](const std::vector<double> &pars, double){ return ((int)pars[3] / (int)pars[1]) * ((int)pars[4] / (int)pars[2]) * (int)pars[5]; }},
+                        {"numXPools", [](const std::vector<double> &pars, double){ return ((int)pars[4] / (int)pars[2]); }}});
     
     SET_CALC_MAX_ROW_LENGTH_FUNC(
         [](unsigned int numPre, unsigned int numPost, const std::vector<double> &pars)
