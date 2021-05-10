@@ -46,7 +46,7 @@ from collections import defaultdict
 # === Configure the simulator ================================================
 
 genn = True
-use_views = True
+use_views = False
 use_assembly = False
 benchmark = "CUBA"
 use_csa = False
@@ -61,7 +61,7 @@ if genn:
 
     setup_kwargs = {}
 
-    #rng = sim.NativeRNG(host_rng=rng)
+    rng = sim.NativeRNG(host_rng=rng)
 else:
     import pyNN.nest as sim
 
