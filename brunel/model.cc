@@ -36,7 +36,7 @@ public:
     SET_VARS({{"g", "scalar"}});
     SET_PRE_VARS({{"preTrace", "scalar"}});
     SET_POST_VARS({{"postTrace", "scalar"}});
-    
+
     SET_SIM_CODE(
         "$(addToInSyn, $(g));\n"
         "const scalar dt = $(t) - $(sT_post); \n"
@@ -54,7 +54,7 @@ public:
     SET_POST_SPIKE_CODE("$(postTrace) += DT;\n");
     SET_PRE_DYNAMICS_CODE("$(preTrace) *= $(tauSTDPDecay);\n");
     SET_POST_DYNAMICS_CODE("$(postTrace) *= $(tauSTDPDecay);\n");
-    
+
     SET_NEEDS_PRE_SPIKE_TIME(true);
     SET_NEEDS_POST_SPIKE_TIME(true);
 };
@@ -71,10 +71,10 @@ void modelDefinition(NNmodel &model)
     GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelInitialize] = 32;
     GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelInitializeSparse] = 64;
     GENN_PREFERENCES.manualBlockSizes[CodeGenerator::KernelNeuronSpikeQueueUpdate] = 32;*/
-    
+
     // Use approximate exponentials etc to speed up plasticity
     GENN_PREFERENCES.optimizeCode = true;
-    
+
     model.setDT(Parameters::timestep);
     model.setName("brunel");
     model.setDefaultVarLocation(VarLocation::DEVICE);
@@ -82,7 +82,7 @@ void modelDefinition(NNmodel &model)
     model.setTiming(true);
     model.setMergePostsynapticModels(true);
     model.setSeed(1234);
-    
+
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
@@ -104,9 +104,8 @@ void modelDefinition(NNmodel &model)
         2.0);                           // 6 - TauRefrac
 
     // LIF initial conditions
-    // **NOTE** not 100% sure how voltages should be initialised with this model
     NeuronModels::LIF::VarValues lifInit(
-        initVar<InitVarSnippet::Uniform>(vDist),     // 0 - V
+        0.0,    // 0 - V
         0.0);   // 1 - RefracTime
 
     // Static synapse parameters
@@ -115,7 +114,7 @@ void modelDefinition(NNmodel &model)
 
     WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
         Parameters::inhibitoryWeight);    // 0 - Wij (mV)
-    
+
     // STDP parameters
     STDPExponential::ParamValues stdpParams(
         20.0,   // tauSTDP (ms)
@@ -125,7 +124,7 @@ void modelDefinition(NNmodel &model)
         0.3);   // Wmax (mV)
     STDPExponential::VarValues stdpInit(
         Parameters::excitatoryWeight);  // 0 - Wij (mV)
-        
+
     // Poisson input parameters
     PoissonDelta::ParamValues poissonParams(
         Parameters::excitatoryWeight,   // 0 - Weight (mV)
@@ -134,11 +133,11 @@ void modelDefinition(NNmodel &model)
     // Create IF_curr neuron
     auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
-    
+
     // Add Poisson current injection
     model.addCurrentSource<PoissonDelta>("EExt", "E", poissonParams, {});
     model.addCurrentSource<PoissonDelta>("IExt", "I", poissonParams, {});
-    
+
     // Enable spike recording
     e->setSpikeRecordingEnabled(true);
     i->setSpikeRecordingEnabled(true);
