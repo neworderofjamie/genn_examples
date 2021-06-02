@@ -15,7 +15,7 @@ namespace Parameters
 
     const double resetVoltage = 0.0;
     const double thresholdVoltage = 20.0;
-    
+
     // Number of cells
     const unsigned int numNeurons = 10000;
 
@@ -34,10 +34,10 @@ namespace Parameters
 
     const double excitatoryWeight = 0.1 * scale;
     const double inhibitoryWeight = -0.5 * scale;
-    
+
     // Axonal delay
     const double delayMs = 1.5;
-    
+
     const unsigned int delayTimesteps = (unsigned int)std::round(delayMs / timestep);
 
 }
