@@ -94,9 +94,8 @@ void modelDefinition(NNmodel &model)
         Parameters::probabilityConnection); // 0 - prob
 
     // LIF model parameters
-    // **NOTE** copies capacitance from previous benchmark implementation but not 100% sure it's correct
     NeuronModels::LIF::ParamValues lifParams(
-        200.0E-9,                       // 0 - C
+        1.0E-3,                         // 0 - C
         20.0,                           // 1 - TauM
         Parameters::resetVoltage,       // 2 - Vrest
         Parameters::resetVoltage,       // 3 - Vreset
