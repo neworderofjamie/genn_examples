@@ -15,6 +15,9 @@ spikes_i = np.loadtxt("spikes_i.csv", delimiter=",", skiprows=1,
                       dtype={"names": ("time", "neuron_id"),
                              "formats": (np.float, np.int)})
 
+num_spikes = len(spikes_e) + len(spikes_i)
+print("%u spike (%f%%)" % (num_spikes, float(num_spikes) / float(DURATION * 10.0 * NUM_NEURONS)))
+
 # Create plot
 figure, axes = plt.subplots(2, sharex=True)
 
