@@ -134,9 +134,9 @@ void modelDefinition(NNmodel &model)
     auto *i = model.addNeuronPopulation<EulerLIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     auto *eStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("EStim", Parameters::numExcitatory,
-    															      poissonParams, poissonInit);
+                                                                      poissonParams, poissonInit);
     auto *iStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("IStim", Parameters::numInhibitory,
-    																  poissonParams, poissonInit);
+                                                                      poissonParams, poissonInit);
 
     // Enable spike recording
     e->setSpikeRecordingEnabled(true);
