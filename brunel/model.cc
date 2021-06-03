@@ -39,24 +39,15 @@ public:
 
     SET_SIM_CODE(
         "$(addToInSyn, $(g));\n"
-        "const scalar dt = $(t) - $(sT_post); \n"
-        "if (dt > 0) {\n"
-        "    const scalar newWeight = $(g) - ($(alpha) * $(lambda) * $(g) * exp(-$(postTrace)));\n"
-        "    $(g) = fmax($(Wmin), newWeight);\n"
-        "}\n");
+        "const scalar newWeight = $(g) - ($(alpha) * $(lambda) * $(g) * exp(-$(postTrace) / DT));\n"
+        "$(g) = fmax($(Wmin), newWeight);\n");
     SET_LEARN_POST_CODE(
-        "const scalar dt = $(t) - $(sT_pre);\n"
-        "if (dt > 0) {\n"
-        "    const scalar newWeight = $(g) + ($(lambda) * (1.0 - $(g)) * exp(-$(preTrace)));\n"
-        "    $(g) = fmin($(Wmax), newWeight);\n"
-        "}\n");
-    SET_PRE_SPIKE_CODE("$(preTrace) += DT;\n");
-    SET_POST_SPIKE_CODE("$(postTrace) += DT;\n");
+        "const scalar newWeight = $(g) + ($(lambda) * (1.0 - $(g)) * exp(-$(preTrace) / DT));\n"
+        "$(g) = fmin($(Wmax), newWeight);\n");
+    SET_PRE_SPIKE_CODE("$(preTrace) += 1.0;\n");
+    SET_POST_SPIKE_CODE("$(postTrace) += 1.0;\n");
     SET_PRE_DYNAMICS_CODE("$(preTrace) *= $(tauSTDPDecay);\n");
     SET_POST_DYNAMICS_CODE("$(postTrace) *= $(tauSTDPDecay);\n");
-
-    SET_NEEDS_PRE_SPIKE_TIME(true);
-    SET_NEEDS_POST_SPIKE_TIME(true);
 };
 IMPLEMENT_MODEL(STDPExponential);
 
