@@ -5,7 +5,6 @@
 
 // Toggle STDP
 //#define STDP
-//#define SLOW_POISSON
 
 //------------------------------------------------------------------------
 // Parameters

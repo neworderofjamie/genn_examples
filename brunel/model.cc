@@ -5,25 +5,36 @@
 
 #include "parameters.h"
 
-class PoissonDelta : public CurrentSourceModels::Base
+class EulerLIF : public NeuronModels::Base
 {
-    DECLARE_MODEL(PoissonDelta, 2, 0);
+public:
+    DECLARE_MODEL(EulerLIF, 6, 2);
 
-    SET_INJECTION_CODE(
-        "scalar p = 1.0f;\n"
-        "unsigned int numSpikes = 0;\n"
-        "do\n"
-        "{\n"
-        "    numSpikes++;\n"
-        "    p *= $(gennrand_uniform);\n"
-        "} while (p > $(ExpMinusLambda));\n"
-        "$(injectCurrent, $(weight) * (scalar)(numSpikes - 1));\n");
+    SET_SIM_CODE(
+        "if ($(RefracTime) <= 0.0) {\n"
+        "  $(V) += (DT / $(TauM))*(($(Vrest) - $(V)) + $(Ioffset)) + $(Isyn);\n"
+        "}\n"
+        "else {\n"
+        "  $(RefracTime) -= DT;\n"
+        "}\n");
 
-    SET_PARAM_NAMES({"weight", "rate"});
-    SET_DERIVED_PARAMS({
-        {"ExpMinusLambda", [](const std::vector<double> &pars, double dt){ return std::exp(-(pars[1] / 1000.0) * dt); }}});
+    SET_THRESHOLD_CONDITION_CODE("$(RefracTime) <= 0.0 && $(V) >= $(Vthresh)");
+
+    SET_RESET_CODE(
+        "$(V) = $(Vreset);\n"
+        "$(RefracTime) = $(TauRefrac);\n");
+
+    SET_PARAM_NAMES({
+        "TauM",       // Membrane time constant [ms]
+        "Vrest",      // Resting membrane potential [mV]
+        "Vreset",     // Reset voltage [mV]
+        "Vthresh",    // Spiking threshold [mV]
+        "Ioffset",    // Offset current
+        "TauRefrac"});
+
+    SET_VARS({{"V", "scalar"}, {"RefracTime", "scalar"}});
 };
-IMPLEMENT_MODEL(PoissonDelta);
+IMPLEMENT_MODEL(EulerLIF);
 
 class STDPExponential : public WeightUpdateModels::Base
 {
@@ -85,17 +96,16 @@ void modelDefinition(NNmodel &model)
         Parameters::probabilityConnection); // 0 - prob
 
     // LIF model parameters
-    NeuronModels::LIF::ParamValues lifParams(
-        1.0E-3,                         // 0 - C
-        20.0,                           // 1 - TauM
-        Parameters::resetVoltage,       // 2 - Vrest
-        Parameters::resetVoltage,       // 3 - Vreset
-        Parameters::thresholdVoltage,   // 4 - Vthresh
-        0.0,                            // 5 - Ioffset
-        2.0);                           // 6 - TauRefrac
+    EulerLIF::ParamValues lifParams(
+        20.0,                           // 0 - TauM
+        Parameters::resetVoltage,       // 1 - Vrest
+        Parameters::resetVoltage,       // 2 - Vreset
+        Parameters::thresholdVoltage,   // 3 - Vthresh
+        0.0,                            // 4 - Ioffset
+        2.0);                           // 5 - TauRefrac
 
     // LIF initial conditions
-    NeuronModels::LIF::VarValues lifInit(
+    EulerLIF::VarValues lifInit(
         0.0,    // 0 - V
         0.0);   // 1 - RefracTime
 
@@ -116,51 +126,35 @@ void modelDefinition(NNmodel &model)
     STDPExponential::VarValues stdpInit(
         Parameters::excitatoryWeight);  // 0 - Wij (mV)
 
-#ifdef SLOW_POISSON
     NeuronModels::PoissonNew::ParamValues poissonParams(Parameters::inputRate); // 0 - rate (Hz)
     NeuronModels::PoissonNew::VarValues poissonInit(0.0);                       // 0 - timeStepToSpike
-#else
-    // Poisson input parameters
-    PoissonDelta::ParamValues poissonParams(
-        Parameters::excitatoryWeight,   // 0 - Weight (mV)
-        Parameters::inputRate);         // 1 - rate (Hz)
-#endif
 
     // Create IF_curr neuron
-    auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
-    auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
+    auto *e = model.addNeuronPopulation<EulerLIF>("E", Parameters::numExcitatory, lifParams, lifInit);
+    auto *i = model.addNeuronPopulation<EulerLIF>("I", Parameters::numInhibitory, lifParams, lifInit);
+
+    auto *eStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("EStim", Parameters::numExcitatory,
+    															      poissonParams, poissonInit);
+    auto *iStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("IStim", Parameters::numInhibitory,
+    																  poissonParams, poissonInit);
 
     // Enable spike recording
     e->setSpikeRecordingEnabled(true);
     i->setSpikeRecordingEnabled(true);
-
-#ifdef SLOW_POISSON
-    auto *eStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("EStim", Parameters::numExcitatory, poissonParams, poissonInit);
-    auto *iStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("IStim", Parameters::numInhibitory, poissonParams, poissonInit);
-
-    eStim->setSpikeRecordingEnabled(true);
-    iStim->setSpikeRecordingEnabled(true);
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "EStimE", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
         "EStim", "E",
         {}, excitatoryStaticSynapseInit,
         {}, {},
-        initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
         "IStimI", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
         "IStim", "I",
         {}, excitatoryStaticSynapseInit,
         {}, {},
-        initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
-#else
-    // Add Poisson current injection
-    model.addCurrentSource<PoissonDelta>("EExt", "E", poissonParams, {});
-    model.addCurrentSource<PoissonDelta>("IExt", "I", poissonParams, {});
-#endif
-
-
+        initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
 #ifdef STDP
     model.addSynapsePopulation<STDPExponential, PostsynapticModels::DeltaCurr>(
