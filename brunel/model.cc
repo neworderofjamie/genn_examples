@@ -125,22 +125,51 @@ void modelDefinition(NNmodel &model)
     STDPExponential::VarValues stdpInit(
         Parameters::excitatoryWeight);  // 0 - Wij (mV)
 
+#ifdef SLOW_POISSON
+    NeuronModels::PoissonNew::ParamValues poissonParams(Parameters::inputRate); // 0 - rate (Hz)
+    NeuronModels::PoissonNew::VarValues poissonInit(0.0);                       // 0 - timeStepToSpike
+#else
     // Poisson input parameters
     PoissonDelta::ParamValues poissonParams(
         Parameters::excitatoryWeight,   // 0 - Weight (mV)
-        20.0);                          // 1 - rate (Hz)
+        Parameters::inputRate);         // 1 - rate (Hz)
+#endif
 
     // Create IF_curr neuron
     auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    // Add Poisson current injection
-    model.addCurrentSource<PoissonDelta>("EExt", "E", poissonParams, {});
-    model.addCurrentSource<PoissonDelta>("IExt", "I", poissonParams, {});
-
     // Enable spike recording
     e->setSpikeRecordingEnabled(true);
     i->setSpikeRecordingEnabled(true);
+
+#ifdef SLOW_POISSON
+    auto *eStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("EStim", Parameters::numExcitatory, poissonParams, poissonInit);
+    auto *iStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("IStim", Parameters::numInhibitory, poissonParams, poissonInit);
+
+    eStim->setSpikeRecordingEnabled(true);
+    iStim->setSpikeRecordingEnabled(true);
+
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "EStimE", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
+        "EStim", "E",
+        {}, excitatoryStaticSynapseInit,
+        {}, {},
+        initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
+
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
+        "IStimI", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
+        "IStim", "I",
+        {}, excitatoryStaticSynapseInit,
+        {}, {},
+        initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
+#else
+    // Add Poisson current injection
+    model.addCurrentSource<PoissonDelta>("EExt", "E", poissonParams, {});
+    model.addCurrentSource<PoissonDelta>("IExt", "I", poissonParams, {});
+#endif
+
+
 
 #ifdef STDP
     model.addSynapsePopulation<STDPExponential, PostsynapticModels::DeltaCurr>(

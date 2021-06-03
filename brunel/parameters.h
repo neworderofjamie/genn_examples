@@ -5,6 +5,7 @@
 
 // Toggle STDP
 //#define STDP
+//#define SLOW_POISSON
 
 //------------------------------------------------------------------------
 // Parameters
@@ -26,6 +27,9 @@ namespace Parameters
 
     // number of excitatory cells:number of inhibitory cells
     const double excitatoryInhibitoryRatio = 4.0;
+
+    // Rate of Poisson noise injected into each neuron (Hz)
+    const double inputRate = 20.0;
 
     const unsigned int numExcitatory = (unsigned int)std::round(((double)numNeurons * excitatoryInhibitoryRatio) / (1.0 + excitatoryInhibitoryRatio));
     const unsigned int numInhibitory = numNeurons - numExcitatory;
