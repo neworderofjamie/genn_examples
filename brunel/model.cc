@@ -133,25 +133,23 @@ void modelDefinition(NNmodel &model)
     auto *e = model.addNeuronPopulation<EulerLIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<EulerLIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
-    auto *eStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("EStim", Parameters::numExcitatory,
-                                                                      poissonParams, poissonInit);
-    auto *iStim = model.addNeuronPopulation<NeuronModels::PoissonNew>("IStim", Parameters::numInhibitory,
-                                                                      poissonParams, poissonInit);
+    auto *poisson = model.addNeuronPopulation<NeuronModels::PoissonNew>("Poisson", Parameters::numNeurons,
+                                                                        poissonParams, poissonInit);
 
     // Enable spike recording
     e->setSpikeRecordingEnabled(true);
     i->setSpikeRecordingEnabled(true);
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "EStimE", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
-        "EStim", "E",
+        "PoissonE", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
+        "Poisson", "E",
         {}, excitatoryStaticSynapseInit,
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::DeltaCurr>(
-        "IStimI", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
-        "IStim", "I",
+        "PoissonI", SynapseMatrixType::SPARSE_GLOBALG, Parameters::delayTimesteps,
+        "Poisson", "I",
         {}, excitatoryStaticSynapseInit,
         {}, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
