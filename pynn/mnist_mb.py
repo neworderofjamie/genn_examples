@@ -77,15 +77,18 @@ def get_testing_data():
 # ----------------------------------------------------------------------------
 # Parameters
 # ----------------------------------------------------------------------------
-DT = 1.0
+DT = 0.1
 INPUT_SCALE = 400.0
 
 TRAIN = False
+RECORD_V = False
 
 NUM_PN = 28 * 28
 NUM_KC = 20000
 NUM_MBON = 10
-NUM_PRESENT_TIMESTEPS = 20
+PRESENT_TIME_MS = 20.0
+
+PRESENT_TIMESTEPS = int(round(PRESENT_TIME_MS / DT))
 
 PN_KC_COL_LENGTH = 10
 
@@ -123,12 +126,12 @@ MBON_STIMULUS_CURRENT = 5.0
 PN_KC_WEIGHT = 0.2
 PN_KC_TAU_SYN = 3.0
 KC_MBON_WEIGHT = 0.0
-KC_MBON_TAU_SYN = 8.0
+KC_MBON_TAU_SYN = 3.0
 KC_MBON_PARAMS = {"tau": 10.0,
-                  "rho": 0.0001,
+                  "rho": 0.00001,
                   "eta": 0.001,
                   "wMin": 0.0,
-                  "wMax": 0.01}
+                  "wMax": 0.05}
 
 # ----------------------------------------------------------------------------
 # Model
@@ -156,7 +159,7 @@ symmetric_stdp = genn_model.create_custom_weight_update_class(
     sim_code=
         """
         const scalar dt = $(t) - $(sT_post);
-        const scalar timing = exp(-dt / $(tau));
+        const scalar timing = exp(-dt / $(tau)) - $(rho);
         const scalar newWeight = $(g) + ($(eta) * timing);
         $(g) = fmin($(wMax), fmax($(wMin), newWeight));
         """,
@@ -191,7 +194,7 @@ pn_input = model.add_current_source("pn_input", cs_model, pn , {}, {"magnitude":
 mbon_input = model.add_current_source("mbon_input", cs_model, mbon , {}, {"magnitude": 0.0})
 
 # Create synapse populations
-model.add_synapse_population("pn_kc", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+pn_kc = model.add_synapse_population("pn_kc", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     pn, kc,
     "StaticPulse", {}, {"g": PN_KC_WEIGHT}, {}, {},
     "ExpCurr", {"tau": PN_KC_TAU_SYN}, {},
@@ -210,7 +213,7 @@ else:
 
 # Build model and load it
 model.build()
-model.load(num_recording_timesteps=NUM_PRESENT_TIMESTEPS)
+model.load(num_recording_timesteps=PRESENT_TIMESTEPS)
 
 # Get views to efficiently access state variables
 pn_input_current_view = pn_input.vars["magnitude"].view
@@ -222,19 +225,24 @@ mbon_input_current_view = mbon_input.vars["magnitude"].view
 mbon_refrac_time_view = mbon.vars["RefracTime"].view
 mbon_v_view = mbon.vars["V"].view
 kc_mbon_g_view = kc_mbon.vars["g"].view
+
+pn_kc_insyn_view = pn_kc._assign_ext_ptr_array("inSyn", NUM_KC, "scalar")
+kc_mbon_insyn_view = kc_mbon._assign_ext_ptr_array("inSyn", NUM_MBON, "scalar")
+
 if TRAIN:
     kc_spike_time_view = kc._assign_ext_ptr_array("sT", NUM_KC, "scalar")
     mbon_spike_time_view = mbon._assign_ext_ptr_array("sT", NUM_MBON, "scalar")
 
 plot = True
 
-images = training_images if TRAIN else testing_images
-labels = training_labels if TRAIN else testing_labels
+images = training_images# if TRAIN else testing_images
+labels = training_labels# if TRAIN else testing_labels
 
 # Loop through stimuli
 pn_spikes = ([], [])
 kc_spikes = ([], [])
 mbon_spikes = ([], [])
+mbon_v = []
 NUM_STIM = 2000
 for s in range(NUM_STIM):
     # Set training image
@@ -248,9 +256,14 @@ for s in range(NUM_STIM):
         mbon_input.push_var_to_device("magnitude")
     
     # Loop through stimuli presentation
-    for i in range(NUM_PRESENT_TIMESTEPS):
+    for i in range(PRESENT_TIMESTEPS):
         model.step_time()
+        
+        if RECORD_V:
+            mbon.pull_var_from_device("V")
+            mbon_v.append(np.copy(mbon_v_view))
 
+    
     # Reset neurons
     pn_refrac_time_view[:] = 0.0
     pn_v_view[:] = -60.0
@@ -258,13 +271,17 @@ for s in range(NUM_STIM):
     kc_v_view[:] = -60.0
     mbon_refrac_time_view[:] = 0.0
     mbon_v_view[:] = -60.0
+    pn_kc_insyn_view[:] = 0.0
+    kc_mbon_insyn_view[:] = 0.0
     pn.push_var_to_device("RefracTime")
     pn.push_var_to_device("V")
     kc.push_var_to_device("RefracTime")
     kc.push_var_to_device("V")
     mbon.push_var_to_device("RefracTime")
     mbon.push_var_to_device("V")
-    
+    model.push_var_to_device("pn_kc", "inSyn")
+    model.push_var_to_device("kc_mbon", "inSyn")
+
     if TRAIN:
         kc_spike_time_view[:] = -np.finfo(np.float32).max
         mbon_spike_time_view[:] = -np.finfo(np.float32).max
@@ -294,15 +311,19 @@ if TRAIN:
     np.save("kc_mbon_g.npy", kc_mbon_g_view)
 
 if plot:
-    spike_fig, spike_axes = plt.subplots(3, sharex="col")
+    spike_fig, spike_axes = plt.subplots(4 if RECORD_V else 3, sharex="col")
 
     # Plot spikes
     spike_axes[0].scatter(np.concatenate(pn_spikes[0]), np.concatenate(pn_spikes[1]), s=1)
     spike_axes[1].scatter(np.concatenate(kc_spikes[0]), np.concatenate(kc_spikes[1]), s=1)
     spike_axes[2].scatter(np.concatenate(mbon_spikes[0]), np.concatenate(mbon_spikes[1]), s=1)
     
+    # Plot voltages
+    if RECORD_V:
+        spike_axes[3].plot(np.arange(0.0, PRESENT_TIME_MS * NUM_STIM, 0.1), np.vstack(mbon_v))
+    
     # Mark stimuli changes on figure
-    stimuli_bounds = np.arange(0.0, NUM_STIM * NUM_PRESENT_TIMESTEPS, NUM_PRESENT_TIMESTEPS)
+    stimuli_bounds = np.arange(0.0, NUM_STIM * PRESENT_TIME_MS, PRESENT_TIME_MS)
     spike_axes[0].vlines(stimuli_bounds, ymin=0, ymax=NUM_PN, linestyle="--")
     spike_axes[1].vlines(stimuli_bounds, ymin=0, ymax=NUM_KC, linestyle="--")
     spike_axes[2].vlines(stimuli_bounds, ymin=0, ymax=NUM_MBON, linestyle="--")
@@ -310,14 +331,20 @@ if plot:
     # Label axes
     spike_axes[0].set_title("PN")
     spike_axes[1].set_title("KC")
-    spike_axes[2].set_title("KC")
+    spike_axes[2].set_title("MBON")
+    
+    if RECORD_V:
+        spike_axes[3].set_title("MBON")
     
     # Show classification output
-    for b, s, l in zip(stimuli_bounds, mbon_spikes[1], labels):
-        classification = np.argmax(np.bincount(s, minlength=NUM_MBON))
-        colour = "green" if classification == l else "red"
-        spike_axes[2].hlines(classification, b, b + NUM_PRESENT_TIMESTEPS, 
-                             color=colour, alpha=0.5)
+    for b, t, s, l in zip(stimuli_bounds, mbon_spikes[0], mbon_spikes[1], labels):
+        if len(s) > 0:
+            first_spike = np.argmin(t)
+            classification = s[first_spike]
+            #classification = np.argmax(np.bincount(s, minlength=NUM_MBON))
+            colour = "green" if classification == l else "red"
+            spike_axes[2].hlines(classification, b, b + PRESENT_TIME_MS, 
+                                 color=colour, alpha=0.5)
     
     # Show training labels
     for i, x in enumerate(stimuli_bounds):
@@ -328,6 +355,6 @@ if plot:
         axis.hist(kc_mbon_g_view.flatten(), bins=100)
     #unique_neurons = [np.unique(k) for k in kc_spikes[1]]
     #for (i, a), (j, b) in combinations(enumerate(unique_neurons), 2):
-    #    print(i, j, len(np.intersect1d(a, b)))
+    #    print("label %u vs %u = %u" % (labels[i], labels[j], len(np.intersect1d(a, b))))
     
     plt.show()
