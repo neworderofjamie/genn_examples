@@ -60,7 +60,8 @@ int main()
     pushspikeTimesPreStimToDevice(NUM_PAIRS * NUM_NEURONS);
 
     // Loop through timesteps
-    SpikeRecorder spikes("spikes.csv", glbSpkCntExcitatory, glbSpkExcitatory, ",", true);
+    SpikeRecorder<> spikes(&getExcitatoryCurrentSpikes, &getExcitatoryCurrentSpikeCount, 
+                           "spikes.csv", ", ", true);
     while(iT < 60200) {
         // Simulate
         stepTime();
