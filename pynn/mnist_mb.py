@@ -80,8 +80,8 @@ def get_testing_data():
 DT = 0.1
 INPUT_SCALE = 400.0
 
-TRAIN = False
-RECORD_V = False
+TRAIN = True
+RECORD_V = True
 
 NUM_PN = 28 * 28
 NUM_KC = 20000
@@ -123,7 +123,7 @@ MBON_PARAMS = {
     "TauRefrac": 2.0}
 
 MBON_STIMULUS_CURRENT = 5.0
-PN_KC_WEIGHT = 0.2
+PN_KC_WEIGHT = 1.0
 PN_KC_TAU_SYN = 3.0
 KC_MBON_WEIGHT = 0.0
 KC_MBON_TAU_SYN = 3.0
@@ -132,6 +132,7 @@ KC_MBON_PARAMS = {"tau": 10.0,
                   "eta": 0.001,
                   "wMin": 0.0,
                   "wMax": 0.05}
+
 
 # ----------------------------------------------------------------------------
 # Model
@@ -173,6 +174,24 @@ symmetric_stdp = genn_model.create_custom_weight_update_class(
     is_pre_spike_time_required=True,
     is_post_spike_time_required=True)
 
+# custom IF neuron for gain control
+IF_neuron = genn_model.create_custom_neuron_class(
+    "IF_neuron",
+    param_names=["theta"],
+    var_name_types=[("V", "scalar")],
+    sim_code=
+    """
+    $(V)+= $(Isyn);
+    """,
+    threshold_condition_code=
+    """
+    $(V) >= $(theta)
+    """,
+    reset_code=
+    """
+    $(V)= 0.0;
+    """)
+
 # Create model
 model = genn_model.GeNNModel("float", "mnist_mb")
 model.dT = DT
@@ -183,11 +202,13 @@ lif_init = {"V": -60.0, "RefracTime": 0.0}
 pn = model.add_neuron_population("pn", NUM_PN, "LIF", PN_PARAMS, lif_init)
 kc = model.add_neuron_population("kc", NUM_KC, "LIF", KC_PARAMS, lif_init)
 mbon = model.add_neuron_population("mbon", NUM_MBON, "LIF", MBON_PARAMS, lif_init)
+ggn= model.add_neuron_population("ggn", 1, IF_neuron, {"theta": 100}, {"V": 0.0})
 
 # Turn on spike recording
 pn.spike_recording_enabled = True
 kc.spike_recording_enabled = True
 mbon.spike_recording_enabled = True
+ggn.spike_recording_enabled= True
 
 # Create current sources to deliver input and supervision to network
 pn_input = model.add_current_source("pn_input", cs_model, pn , {}, {"magnitude": 0.0})
@@ -200,6 +221,10 @@ pn_kc = model.add_synapse_population("pn_kc", "SPARSE_GLOBALG", genn_wrapper.NO_
     "ExpCurr", {"tau": PN_KC_TAU_SYN}, {},
     genn_model.init_connectivity("FixedNumberPreWithReplacement", {"colLength": PN_KC_COL_LENGTH}))
 
+kc_ggn = model.add_synapse_population("kc_ggn", "DENSE_GLOBALG", genn_wrapper.NO_DELAY, kc, ggn, "StaticPulse", {}, {"g": 1.0}, {}, {}, "DeltaCurr", {}, {})
+
+ggn_kc = model.add_synapse_population("ggn_kc", "DENSE_GLOBALG", genn_wrapper.NO_DELAY, ggn, kc, "StaticPulse", {}, {"g": 0.0}, {}, {}, "ExpCurr", {"tau": 5.0}, {})
+
 if TRAIN:
     kc_mbon = model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
                                            kc, mbon,
@@ -211,6 +236,7 @@ else:
                                            "StaticPulse", {}, {"g": np.load("kc_mbon_g.npy").flatten()}, {}, {},
                                            "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
 
+    
 # Build model and load it
 model.build()
 model.load(num_recording_timesteps=PRESENT_TIMESTEPS)
@@ -219,6 +245,7 @@ model.load(num_recording_timesteps=PRESENT_TIMESTEPS)
 pn_input_current_view = pn_input.vars["magnitude"].view
 pn_refrac_time_view = pn.vars["RefracTime"].view
 pn_v_view = pn.vars["V"].view
+ggn_v_view= ggn.vars["V"].view
 kc_refrac_time_view = kc.vars["RefracTime"].view
 kc_v_view = kc.vars["V"].view
 mbon_input_current_view = mbon_input.vars["magnitude"].view
@@ -228,6 +255,7 @@ kc_mbon_g_view = kc_mbon.vars["g"].view
 
 pn_kc_insyn_view = pn_kc._assign_ext_ptr_array("inSyn", NUM_KC, "scalar")
 kc_mbon_insyn_view = kc_mbon._assign_ext_ptr_array("inSyn", NUM_MBON, "scalar")
+ggn_kc_insyn_view= ggn_kc._assign_ext_ptr_array("inSyn", NUM_KC, "scalar")
 
 if TRAIN:
     kc_spike_time_view = kc._assign_ext_ptr_array("sT", NUM_KC, "scalar")
@@ -242,7 +270,9 @@ labels = training_labels# if TRAIN else testing_labels
 pn_spikes = ([], [])
 kc_spikes = ([], [])
 mbon_spikes = ([], [])
+ggn_spikes= ([], [])
 mbon_v = []
+ggn_v= []
 NUM_STIM = 2000
 for s in range(NUM_STIM):
     # Set training image
@@ -262,7 +292,8 @@ for s in range(NUM_STIM):
         if RECORD_V:
             mbon.pull_var_from_device("V")
             mbon_v.append(np.copy(mbon_v_view))
-
+            ggn.pull_var_from_device("V")
+            ggn_v.append(np.copy(ggn_v_view))
     
     # Reset neurons
     pn_refrac_time_view[:] = 0.0
@@ -271,16 +302,20 @@ for s in range(NUM_STIM):
     kc_v_view[:] = -60.0
     mbon_refrac_time_view[:] = 0.0
     mbon_v_view[:] = -60.0
+    ggn_v_view[:]= 0.0;
     pn_kc_insyn_view[:] = 0.0
     kc_mbon_insyn_view[:] = 0.0
+    ggn_kc_insyn_view[:] = 0.0
     pn.push_var_to_device("RefracTime")
     pn.push_var_to_device("V")
     kc.push_var_to_device("RefracTime")
     kc.push_var_to_device("V")
     mbon.push_var_to_device("RefracTime")
     mbon.push_var_to_device("V")
+    ggn.push_var_to_device("V")
     model.push_var_to_device("pn_kc", "inSyn")
     model.push_var_to_device("kc_mbon", "inSyn")
+    model.push_var_to_device("ggn_kc", "inSyn")
 
     if TRAIN:
         kc_spike_time_view[:] = -np.finfo(np.float32).max
@@ -294,7 +329,8 @@ for s in range(NUM_STIM):
         pn_spike_times, pn_spike_ids = pn.spike_recording_data
         kc_spike_times, kc_spike_ids = kc.spike_recording_data
         mbon_spike_times, mbon_spike_ids = mbon.spike_recording_data
-
+        ggn_spike_times, ggn_spike_ids = ggn.spike_recording_data
+        
         pn_spikes[0].append(pn_spike_times)
         pn_spikes[1].append(pn_spike_ids)
 
@@ -304,6 +340,9 @@ for s in range(NUM_STIM):
         mbon_spikes[0].append(mbon_spike_times)
         mbon_spikes[1].append(mbon_spike_ids)
 
+        ggn_spikes[0].append(ggn_spike_times)
+        ggn_spikes[1].append(ggn_spike_ids)
+        
 # Save weights
 if TRAIN:
     kc_mbon.pull_var_from_device("g")
@@ -317,10 +356,11 @@ if plot:
     spike_axes[0].scatter(np.concatenate(pn_spikes[0]), np.concatenate(pn_spikes[1]), s=1)
     spike_axes[1].scatter(np.concatenate(kc_spikes[0]), np.concatenate(kc_spikes[1]), s=1)
     spike_axes[2].scatter(np.concatenate(mbon_spikes[0]), np.concatenate(mbon_spikes[1]), s=1)
-    
+    spike_axes[2].scatter(np.concatenate(ggn_spikes[0]), np.concatenate(ggn_spikes[1]), c="r", s=1)
     # Plot voltages
     if RECORD_V:
         spike_axes[3].plot(np.arange(0.0, PRESENT_TIME_MS * NUM_STIM, 0.1), np.vstack(mbon_v))
+        spike_axes[3].plot(np.arange(0.0, PRESENT_TIME_MS * NUM_STIM, 0.1), np.vstack(ggn_v),"--")
     
     # Mark stimuli changes on figure
     stimuli_bounds = np.arange(0.0, NUM_STIM * PRESENT_TIME_MS, PRESENT_TIME_MS)
@@ -334,7 +374,7 @@ if plot:
     spike_axes[2].set_title("MBON")
     
     if RECORD_V:
-        spike_axes[3].set_title("MBON")
+        spike_axes[3].set_title("MBON/GGN")
     
     # Show classification output
     for b, t, s, l in zip(stimuli_bounds, mbon_spikes[0], mbon_spikes[1], labels):
