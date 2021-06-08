@@ -3,22 +3,19 @@ import matplotlib.pyplot as plt
 from os import path
 from struct import unpack
 
-from gzip import decompress
-from urllib import request
+from itertools import combinations
 from pygenn import genn_model, genn_wrapper
 
 import sys
 
-def get_image_data(url, filename, correct_magic):
+def get_image_data(raw_filename, filename, correct_magic):
     if path.exists(filename):
         print("Loading existing data")
         return np.load(filename)
     else:
-        print("Downloading dataset")
-        with request.urlopen(url) as response:
-            print("Decompressing dataset")
-            image_data = decompress(response.read())
-
+        with open(raw_filename, "rb") as f:
+            image_data = f.read()
+            
             # Unpack header from first 16 bytes of buffer
             magic, num_items, num_rows, num_cols = unpack('>IIII', image_data[:16])
             assert magic == correct_magic
@@ -31,20 +28,24 @@ def get_image_data(url, filename, correct_magic):
             # Reshape data into individual images
             image_data_np = np.reshape(image_data_np, (num_items, num_rows * num_cols))
 
+            # Convert image data to float and normalise
+            image_data_np = image_data_np.astype(np.float)
+            image_magnitude = np.sum(image_data_np, axis=1)
+            for i in range(num_items):
+                image_data_np[i] /= image_magnitude[i]
+
             # Write to disk
             np.save(filename, image_data_np)
 
             return image_data_np
 
-def get_label_data(url, filename, correct_magic):
+def get_label_data(raw_filename, filename, correct_magic):
     if path.exists(filename):
         print("Loading existing data")
         return np.load(filename)
     else:
-        print("Downloading dataset")
-        with request.urlopen(url) as response:
-            print("Decompressing dataset")
-            label_data = decompress(response.read())
+        with open(raw_filename, "rb") as f:
+            label_data = f.read()
 
             # Unpack header from first 8 bytes of buffer
             magic, num_items = unpack('>II', label_data[:8])
@@ -60,42 +61,33 @@ def get_label_data(url, filename, correct_magic):
             return label_data_np
 
 def get_training_data():
-    images = get_image_data("http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz", "training_images.npy", 2051)
-    labels = get_label_data("http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz", "training_labels.npy", 2049)
+    images = get_image_data("train-images-idx3-ubyte", "training_images.npy", 2051)
+    labels = get_label_data("train-labels-idx1-ubyte", "training_labels.npy", 2049)
     assert images.shape[0] == labels.shape[0]
 
     return images, labels
 
 def get_testing_data():
-    images = get_image_data("http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz", "testing_images.npy", 2051)
-    labels = get_label_data("http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz", "testing_labels.npy", 2049)
+    images = get_image_data("t10k-images-idx3-ubyte", "testing_images.npy", 2051)
+    labels = get_label_data("t10k-labels-idx1-ubyte", "testing_labels.npy", 2049)
     assert images.shape[0] == labels.shape[0]
 
     return images, labels
-
-def record_current_spikes(pop, spikes, dt):
-    current_spikes = pop.current_spikes
-    current_spike_times = np.ones(current_spikes.shape) * dt
-
-    if spikes is None:
-        return (np.copy(current_spikes), current_spike_times)
-    else:
-        return (np.hstack((spikes[0], current_spikes)),
-                np.hstack((spikes[1], current_spike_times)))
 
 # ----------------------------------------------------------------------------
 # Parameters
 # ----------------------------------------------------------------------------
 DT = 1.0
-INPUT_SCALE = 0.01
+INPUT_SCALE = 400.0
+
+TRAIN = False
 
 NUM_PN = 28 * 28
 NUM_KC = 20000
 NUM_MBON = 10
 NUM_PRESENT_TIMESTEPS = 20
-NUM_REST_TIMESTEPS = 1000
 
-PN_KC_SPARSITY = float(10 * NUM_KC) / float(NUM_KC * NUM_PN)
+PN_KC_COL_LENGTH = 10
 
 # PN params - large refractory period so only spikes once per presentation and increased capacitance
 PN_PARAMS = {
@@ -117,16 +109,6 @@ KC_PARAMS = {
     "Ioffset": 0.0,
     "TauRefrac": 2.0}
 
-# GGN params - huge threshold so, essentially, non-spiking
-GGN_PARAMS = {
-    "C": 0.2,
-    "TauM": 20.0,
-    "Vrest": -60.0,
-    "Vreset": -60.0,
-    "Vthresh": 10000.0,
-    "Ioffset": 0.0,
-    "TauRefrac": 2.0}
-
 # MBON params - standard LIF neurons
 MBON_PARAMS = {
     "C": 0.2,
@@ -137,28 +119,17 @@ MBON_PARAMS = {
     "Ioffset": 0.0,
     "TauRefrac": 2.0}
 
-PN_KC_WEIGHT = 0.35
+MBON_STIMULUS_CURRENT = 5.0
+PN_KC_WEIGHT = 0.2
 PN_KC_TAU_SYN = 3.0
-
-KC_GGN_WEIGHT = 0.015
-KC_GGN_TAU_SYN = 5.0
-
-GGN_KC_WEIGHT = -4.0
-GGN_KC_TAU_SYN = 4.0
-GGN_KC_PARAMS = {"Vmid": -54.1,
-                 "Vslope": 1.0,
-                 "Vthresh": -60.0}
-
-KC_MBON_WEIGHT = {"min": 0.00, "max": 0.05}
+KC_MBON_WEIGHT = 0.0
 KC_MBON_TAU_SYN = 8.0
 KC_MBON_PARAMS = {"tau": 10.0,
-                  "rho": 0.0,
-                  "eta": 0.01,
+                  "rho": 0.0001,
+                  "eta": 0.001,
                   "wMin": 0.0,
-                  "wMax": 0.1}
+                  "wMax": 0.01}
 
-MBON_MBON_WEIGHT = -5.0
-MBON_MBON_TAU_SYN = 3.0
 # ----------------------------------------------------------------------------
 # Model
 # ----------------------------------------------------------------------------
@@ -177,19 +148,6 @@ cs_model = genn_model.create_custom_current_source_class(
     var_name_types=[("magnitude", "scalar")],
     injection_code="$(injectCurrent, $(magnitude));")
 
-# Model for graded synapses with exponential activation
-graded_synapse_model = genn_model.create_custom_weight_update_class(
-    "graded_synapse_model",
-    param_names=["Vmid", "Vslope", "Vthresh"],
-    var_name_types=[("g", "scalar")],
-    event_code="$(addToInSyn, DT * $(g) * max(0.0, 1.0 / (1.0 + exp(($(Vmid) - $(V_pre)) / $(Vslope)))));",
-    event_threshold_condition_code="$(V_pre) > $(Vthresh)")
-
-lateral_inhibition = genn_model.create_custom_init_var_snippet_class(
-    "lateral_inhibition",
-    param_names=["g"],
-    var_init_code="$(value)=($(id_pre)==$(id_post)) ? 0.0 : $(g);")
-
 # STDP synapse with additive weight dependence
 symmetric_stdp = genn_model.create_custom_weight_update_class(
     "symmetric_stdp",
@@ -197,16 +155,15 @@ symmetric_stdp = genn_model.create_custom_weight_update_class(
     var_name_types=[("g", "scalar")],
     sim_code=
         """
-        $(addToInSyn, $(g));
         const scalar dt = $(t) - $(sT_post);
-        const scalar timing = exp(-dt / $(tau)) - $(rho);
+        const scalar timing = exp(-dt / $(tau));
         const scalar newWeight = $(g) + ($(eta) * timing);
         $(g) = fmin($(wMax), fmax($(wMin), newWeight));
         """,
     learn_post_code=
         """
         const scalar dt = $(t) - $(sT_pre);
-        const scalar timing = exp(-dt / $(tau));
+        const scalar timing = exp(-dt / $(tau)) - $(rho);
         const scalar newWeight = $(g) + ($(eta) * timing);
         $(g) = fmin($(wMax), fmax($(wMin), newWeight));
         """,
@@ -222,134 +179,155 @@ model._model.set_seed(1337)
 lif_init = {"V": -60.0, "RefracTime": 0.0}
 pn = model.add_neuron_population("pn", NUM_PN, "LIF", PN_PARAMS, lif_init)
 kc = model.add_neuron_population("kc", NUM_KC, "LIF", KC_PARAMS, lif_init)
-ggn = model.add_neuron_population("ggn", 1, "LIF", GGN_PARAMS, lif_init)
 mbon = model.add_neuron_population("mbon", NUM_MBON, "LIF", MBON_PARAMS, lif_init)
 
-# Create current source to deliver input to network
-pn_input = model.add_current_source("pn_input", cs_model, "pn" , {}, {"magnitude": 0.0})
+# Turn on spike recording
+pn.spike_recording_enabled = True
+kc.spike_recording_enabled = True
+mbon.spike_recording_enabled = True
+
+# Create current sources to deliver input and supervision to network
+pn_input = model.add_current_source("pn_input", cs_model, pn , {}, {"magnitude": 0.0})
+mbon_input = model.add_current_source("mbon_input", cs_model, mbon , {}, {"magnitude": 0.0})
 
 # Create synapse populations
 model.add_synapse_population("pn_kc", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     pn, kc,
     "StaticPulse", {}, {"g": PN_KC_WEIGHT}, {}, {},
     "ExpCurr", {"tau": PN_KC_TAU_SYN}, {},
-    genn_model.init_connectivity("FixedProbabilityNoAutapse", {"prob": PN_KC_SPARSITY}))
+    genn_model.init_connectivity("FixedNumberPreWithReplacement", {"colLength": PN_KC_COL_LENGTH}))
 
-model.add_synapse_population("kc_ggn", "DENSE_GLOBALG", genn_wrapper.NO_DELAY,
-                             kc, ggn,
-                             "StaticPulse", {}, {"g": KC_GGN_WEIGHT}, {}, {},
-                             "ExpCurr", {"tau": KC_GGN_TAU_SYN}, {})
-
-model.add_synapse_population("ggn_kc", "DENSE_GLOBALG", genn_wrapper.NO_DELAY,
-                             ggn, kc,
-                             graded_synapse_model, GGN_KC_PARAMS, {"g": GGN_KC_WEIGHT}, {}, {},
-                             "ExpCurr", {"tau": GGN_KC_TAU_SYN}, {})
-
-kc_mbon = model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
-                                       kc, mbon,
-                                       symmetric_stdp, KC_MBON_PARAMS, {"g": genn_model.init_var("Uniform", KC_MBON_WEIGHT)}, {}, {},
-                                       "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
-
-model.add_synapse_population("mbon_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
-                             mbon, mbon,
-                             "StaticPulse", {}, {"g": genn_model.init_var(lateral_inhibition, {"g": MBON_MBON_WEIGHT})}, {}, {},
-                             "ExpCurr", {"tau": MBON_MBON_TAU_SYN}, {})
+if TRAIN:
+    kc_mbon = model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+                                           kc, mbon,
+                                           symmetric_stdp, KC_MBON_PARAMS, {"g": KC_MBON_WEIGHT}, {}, {},
+                                           "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
+else:
+    kc_mbon = model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+                                           kc, mbon,
+                                           "StaticPulse", {}, {"g": np.load("kc_mbon_g.npy").flatten()}, {}, {},
+                                           "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
 
 # Build model and load it
 model.build()
-model.load()
-
-single_example_timesteps = NUM_PRESENT_TIMESTEPS + NUM_REST_TIMESTEPS
+model.load(num_recording_timesteps=NUM_PRESENT_TIMESTEPS)
 
 # Get views to efficiently access state variables
 pn_input_current_view = pn_input.vars["magnitude"].view
 pn_refrac_time_view = pn.vars["RefracTime"].view
-ggn_v_view = ggn.vars["V"].view
-kc_mbon_view = kc_mbon.vars["g"].view
+pn_v_view = pn.vars["V"].view
+kc_refrac_time_view = kc.vars["RefracTime"].view
+kc_v_view = kc.vars["V"].view
+mbon_input_current_view = mbon_input.vars["magnitude"].view
+mbon_refrac_time_view = mbon.vars["RefracTime"].view
+mbon_v_view = mbon.vars["V"].view
+kc_mbon_g_view = kc_mbon.vars["g"].view
+if TRAIN:
+    kc_spike_time_view = kc._assign_ext_ptr_array("sT", NUM_KC, "scalar")
+    mbon_spike_time_view = mbon._assign_ext_ptr_array("sT", NUM_MBON, "scalar")
 
-model.pull_var_from_device("kc_mbon", "g")
-before = np.copy(kc_mbon_view)
 plot = True
 
-label_spikes = np.zeros((NUM_MBON, NUM_MBON), dtype=int)
+images = training_images if TRAIN else testing_images
+labels = training_labels if TRAIN else testing_labels
 
-pn_spikes = None
-kc_spikes = None
-mbon_spikes = None
+# Loop through stimuli
+pn_spikes = ([], [])
+kc_spikes = ([], [])
+mbon_spikes = ([], [])
+NUM_STIM = 2000
+for s in range(NUM_STIM):
+    # Set training image
+    pn_input_current_view[:] = images[s] * INPUT_SCALE
+    pn_input.push_var_to_device("magnitude")
+    
+    # Turn on correct output neuron
+    if TRAIN:
+        mbon_input_current_view[:] = 0
+        mbon_input_current_view[labels[s]] = MBON_STIMULUS_CURRENT
+        mbon_input.push_var_to_device("magnitude")
+    
+    # Loop through stimuli presentation
+    for i in range(NUM_PRESENT_TIMESTEPS):
+        model.step_time()
 
-NUM_STIM = 100
-while model.timestep < (single_example_timesteps * NUM_STIM):
-    # Calculate the timestep within the presentation
-    timestep_in_example = model.timestep % single_example_timesteps
-    example = int(model.timestep // single_example_timesteps)
+    # Reset neurons
+    pn_refrac_time_view[:] = 0.0
+    pn_v_view[:] = -60.0
+    kc_refrac_time_view[:] = 0.0
+    kc_v_view[:] = -60.0
+    mbon_refrac_time_view[:] = 0.0
+    mbon_v_view[:] = -60.0
+    pn.push_var_to_device("RefracTime")
+    pn.push_var_to_device("V")
+    kc.push_var_to_device("RefracTime")
+    kc.push_var_to_device("V")
+    mbon.push_var_to_device("RefracTime")
+    mbon.push_var_to_device("V")
     
-    # If this is the first timestep of the presentation
-    if timestep_in_example == 0:
-        # Get image
-        input_vector = training_images[example]
-        
-        # Normalize
-        pn_input_current_view[:] = input_vector * INPUT_SCALE
-        model.push_var_to_device("pn_input", "magnitude")
-        
-        pn_refrac_time_view[:] = 0.0
-        model.push_var_to_device("pn", "RefracTime")
-        
-    # Otherwise, if this timestep is the start of the resting period
-    elif timestep_in_example == NUM_PRESENT_TIMESTEPS:
-        pn_input_current_view[:] = 0.0
-        model.push_var_to_device("pn_input", "magnitude")
-        
-    model.step_time()
-    
+    if TRAIN:
+        kc_spike_time_view[:] = -np.finfo(np.float32).max
+        mbon_spike_time_view[:] = -np.finfo(np.float32).max
+        model.push_var_to_device("SpikeTimes", "mbon")
+        model.push_var_to_device("SpikeTimes", "kc")
+
     if plot:
-        model.pull_current_spikes_from_device("pn")
-        pn_spikes = record_current_spikes(pn, pn_spikes, model.t)
+        model.pull_recording_buffers_from_device();
 
-    model.pull_current_spikes_from_device("kc")
-    kc_spikes = record_current_spikes(kc, kc_spikes, model.t)
+        pn_spike_times, pn_spike_ids = pn.spike_recording_data
+        kc_spike_times, kc_spike_ids = kc.spike_recording_data
+        mbon_spike_times, mbon_spike_ids = mbon.spike_recording_data
 
-    model.pull_current_spikes_from_device("mbon")
-    label_spikes[training_labels[example]] += np.bincount(mbon.current_spikes, minlength=NUM_MBON)
-    mbon_spikes = record_current_spikes(mbon, mbon_spikes, model.t)
+        pn_spikes[0].append(pn_spike_times)
+        pn_spikes[1].append(pn_spike_ids)
 
-model.pull_var_from_device("kc_mbon", "g")
-after = np.copy(kc_mbon_view)
+        kc_spikes[0].append(kc_spike_times)
+        kc_spikes[1].append(kc_spike_ids)
 
-stim_bins = np.arange(0, single_example_timesteps * NUM_STIM, single_example_timesteps)
+        mbon_spikes[0].append(mbon_spike_times)
+        mbon_spikes[1].append(mbon_spike_ids)
+
+# Save weights
+if TRAIN:
+    kc_mbon.pull_var_from_device("g")
+    kc_mbon_g_view = np.reshape(kc_mbon_g_view, (NUM_KC, NUM_MBON))
+    np.save("kc_mbon_g.npy", kc_mbon_g_view)
 
 if plot:
-    fig, axes = plt.subplots(4, sharex=True)
+    spike_fig, spike_axes = plt.subplots(3, sharex="col")
 
-    axes[0].set_title("PN")
-    axes[0].scatter(pn_spikes[1], pn_spikes[0], s=1)
-
-    axes[1].set_title("KC")
-    axes[1].scatter(kc_spikes[1], kc_spikes[0], s=1)
-
-    axes[2].set_title("MBON")
-    axes[2].scatter(mbon_spikes[1], mbon_spikes[0], s=1)
-
-kc_spike_counts = np.histogram(kc_spikes[1], bins=stim_bins)[0]
-mbon_spike_counts = np.histogram(mbon_spikes[1], bins=stim_bins)[0]
-print("KC spikes: min=%f, max=%f, mean=%f" % (np.amin(kc_spike_counts), np.amax(kc_spike_counts), np.average(kc_spike_counts)))
-print("MBON spikes: min=%f, max=%f, mean=%f" % (np.amin(mbon_spike_counts), np.amax(mbon_spike_counts), np.average(mbon_spike_counts)))
-
-print("Before: min=%f, max=%f" % (np.amin(before), np.amax(before)))
-print("After: min=%f, max=%f" % (np.amin(after), np.amax(after)))
-if plot:
-    axes[3].plot(stim_bins[:-1], kc_spike_counts)
-
-    axes[0].vlines(stim_bins, ymin=0, ymax=NUM_PN, linestyle="--", color="gray")
-    axes[1].vlines(stim_bins, ymin=0, ymax=NUM_KC, linestyle="--", color="gray")
-    axes[2].vlines(stim_bins, ymin=0, ymax=NUM_MBON, linestyle="--", color="gray")
-    axes[3].vlines(stim_bins, ymin=0, ymax=np.amax(kc_spikes), linestyle="--", color="gray")
-    '''
-    axes[4].hist(before, bins=10)
-    axes[5].hist(before, bins=10)
-    for i, a in enumerate(axes[6:]):
-        a.set_title(str(i))
-        a.bar(range(NUM_MBON), label_spikes[i])
-    '''
-    fig.savefig("test.png")
+    # Plot spikes
+    spike_axes[0].scatter(np.concatenate(pn_spikes[0]), np.concatenate(pn_spikes[1]), s=1)
+    spike_axes[1].scatter(np.concatenate(kc_spikes[0]), np.concatenate(kc_spikes[1]), s=1)
+    spike_axes[2].scatter(np.concatenate(mbon_spikes[0]), np.concatenate(mbon_spikes[1]), s=1)
+    
+    # Mark stimuli changes on figure
+    stimuli_bounds = np.arange(0.0, NUM_STIM * NUM_PRESENT_TIMESTEPS, NUM_PRESENT_TIMESTEPS)
+    spike_axes[0].vlines(stimuli_bounds, ymin=0, ymax=NUM_PN, linestyle="--")
+    spike_axes[1].vlines(stimuli_bounds, ymin=0, ymax=NUM_KC, linestyle="--")
+    spike_axes[2].vlines(stimuli_bounds, ymin=0, ymax=NUM_MBON, linestyle="--")
+    
+    # Label axes
+    spike_axes[0].set_title("PN")
+    spike_axes[1].set_title("KC")
+    spike_axes[2].set_title("KC")
+    
+    # Show classification output
+    for b, s, l in zip(stimuli_bounds, mbon_spikes[1], labels):
+        classification = np.argmax(np.bincount(s, minlength=NUM_MBON))
+        colour = "green" if classification == l else "red"
+        spike_axes[2].hlines(classification, b, b + NUM_PRESENT_TIMESTEPS, 
+                             color=colour, alpha=0.5)
+    
+    # Show training labels
+    for i, x in enumerate(stimuli_bounds):
+        spike_axes[0].text(x, 20, labels[i])
+    
+    if TRAIN:
+        fig, axis = plt.subplots()
+        axis.hist(kc_mbon_g_view.flatten(), bins=100)
+    #unique_neurons = [np.unique(k) for k in kc_spikes[1]]
+    #for (i, a), (j, b) in combinations(enumerate(unique_neurons), 2):
+    #    print(i, j, len(np.intersect1d(a, b)))
+    
     plt.show()
