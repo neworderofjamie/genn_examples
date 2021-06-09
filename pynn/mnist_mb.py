@@ -77,11 +77,11 @@ def get_testing_data():
 # ----------------------------------------------------------------------------
 # Parameters
 # ----------------------------------------------------------------------------
-DT = 0.1
+DT = 0.02
 INPUT_SCALE = 400.0
 
-TRAIN = True
-RECORD_V = True
+TRAIN = False
+RECORD_V = not TRAIN
 
 NUM_PN = 28 * 28
 NUM_KC = 20000
@@ -123,15 +123,15 @@ MBON_PARAMS = {
     "TauRefrac": 2.0}
 
 MBON_STIMULUS_CURRENT = 5.0
-PN_KC_WEIGHT = 1.0
+PN_KC_WEIGHT = 0.3
 PN_KC_TAU_SYN = 3.0
 KC_MBON_WEIGHT = 0.0
 KC_MBON_TAU_SYN = 3.0
 KC_MBON_PARAMS = {"tau": 10.0,
-                  "rho": 0.00001,
+                  "rho": 0.005,
                   "eta": 0.001,
                   "wMin": 0.0,
-                  "wMax": 0.05}
+                  "wMax": 0.1}
 
 
 # ----------------------------------------------------------------------------
@@ -205,10 +205,10 @@ mbon = model.add_neuron_population("mbon", NUM_MBON, "LIF", MBON_PARAMS, lif_ini
 ggn= model.add_neuron_population("ggn", 1, IF_neuron, {"theta": 100}, {"V": 0.0})
 
 # Turn on spike recording
-pn.spike_recording_enabled = True
-kc.spike_recording_enabled = True
-mbon.spike_recording_enabled = True
-ggn.spike_recording_enabled= True
+pn.spike_recording_enabled = not TRAIN
+kc.spike_recording_enabled = not TRAIN
+mbon.spike_recording_enabled = not TRAIN
+ggn.spike_recording_enabled= not TRAIN
 
 # Create current sources to deliver input and supervision to network
 pn_input = model.add_current_source("pn_input", cs_model, pn , {}, {"magnitude": 0.0})
@@ -223,7 +223,7 @@ pn_kc = model.add_synapse_population("pn_kc", "SPARSE_GLOBALG", genn_wrapper.NO_
 
 kc_ggn = model.add_synapse_population("kc_ggn", "DENSE_GLOBALG", genn_wrapper.NO_DELAY, kc, ggn, "StaticPulse", {}, {"g": 1.0}, {}, {}, "DeltaCurr", {}, {})
 
-ggn_kc = model.add_synapse_population("ggn_kc", "DENSE_GLOBALG", genn_wrapper.NO_DELAY, ggn, kc, "StaticPulse", {}, {"g": 0.0}, {}, {}, "ExpCurr", {"tau": 5.0}, {})
+ggn_kc = model.add_synapse_population("ggn_kc", "DENSE_GLOBALG", genn_wrapper.NO_DELAY, ggn, kc, "StaticPulse", {}, {"g": -5.0}, {}, {}, "ExpCurr", {"tau": 5.0}, {})
 
 if TRAIN:
     kc_mbon = model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
@@ -236,6 +236,7 @@ else:
                                            "StaticPulse", {}, {"g": np.load("kc_mbon_g.npy").flatten()}, {}, {},
                                            "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
 
+mbon_mbon = model.add_synapse_population("mbon_mbon", "DENSE_GLOBALG", genn_wrapper.NO_DELAY, mbon, mbon, "StaticPulse", {}, {"g": -5.0}, {}, {}, "ExpCurr", {"tau": 5.0}, {})
     
 # Build model and load it
 model.build()
@@ -256,12 +257,13 @@ kc_mbon_g_view = kc_mbon.vars["g"].view
 pn_kc_insyn_view = pn_kc._assign_ext_ptr_array("inSyn", NUM_KC, "scalar")
 kc_mbon_insyn_view = kc_mbon._assign_ext_ptr_array("inSyn", NUM_MBON, "scalar")
 ggn_kc_insyn_view= ggn_kc._assign_ext_ptr_array("inSyn", NUM_KC, "scalar")
+mbon_mbon_insyn_view= mbon_mbon._assign_ext_ptr_array("inSyn", NUM_MBON, "scalar")
 
 if TRAIN:
     kc_spike_time_view = kc._assign_ext_ptr_array("sT", NUM_KC, "scalar")
     mbon_spike_time_view = mbon._assign_ext_ptr_array("sT", NUM_MBON, "scalar")
 
-plot = True
+plot = not TRAIN
 
 images = training_images# if TRAIN else testing_images
 labels = training_labels# if TRAIN else testing_labels
@@ -273,8 +275,13 @@ mbon_spikes = ([], [])
 ggn_spikes= ([], [])
 mbon_v = []
 ggn_v= []
-NUM_STIM = 2000
+if TRAIN:
+    NUM_STIM = 60000
+else:
+    NUM_STIM = 2000
 for s in range(NUM_STIM):
+    if s % 500 == 0:
+        print(s)
     # Set training image
     pn_input_current_view[:] = images[s] * INPUT_SCALE
     pn_input.push_var_to_device("magnitude")
@@ -292,8 +299,8 @@ for s in range(NUM_STIM):
         if RECORD_V:
             mbon.pull_var_from_device("V")
             mbon_v.append(np.copy(mbon_v_view))
-            ggn.pull_var_from_device("V")
-            ggn_v.append(np.copy(ggn_v_view))
+            #ggn.pull_var_from_device("V")
+            #ggn_v.append(np.copy(ggn_v_view))
     
     # Reset neurons
     pn_refrac_time_view[:] = 0.0
@@ -306,6 +313,7 @@ for s in range(NUM_STIM):
     pn_kc_insyn_view[:] = 0.0
     kc_mbon_insyn_view[:] = 0.0
     ggn_kc_insyn_view[:] = 0.0
+    mbon_mbon_insyn_view[:] = 0.0
     pn.push_var_to_device("RefracTime")
     pn.push_var_to_device("V")
     kc.push_var_to_device("RefracTime")
@@ -316,6 +324,7 @@ for s in range(NUM_STIM):
     model.push_var_to_device("pn_kc", "inSyn")
     model.push_var_to_device("kc_mbon", "inSyn")
     model.push_var_to_device("ggn_kc", "inSyn")
+    model.push_var_to_device("mbon_mbon", "inSyn")
 
     if TRAIN:
         kc_spike_time_view[:] = -np.finfo(np.float32).max
@@ -359,8 +368,8 @@ if plot:
     spike_axes[2].scatter(np.concatenate(ggn_spikes[0]), np.concatenate(ggn_spikes[1]), c="r", s=1)
     # Plot voltages
     if RECORD_V:
-        spike_axes[3].plot(np.arange(0.0, PRESENT_TIME_MS * NUM_STIM, 0.1), np.vstack(mbon_v))
-        spike_axes[3].plot(np.arange(0.0, PRESENT_TIME_MS * NUM_STIM, 0.1), np.vstack(ggn_v),"--")
+        spike_axes[3].plot(np.arange(0.0, PRESENT_TIME_MS * NUM_STIM, DT), np.vstack(mbon_v))
+#        spike_axes[3].plot(np.arange(0.0, PRESENT_TIME_MS * NUM_STIM, DT), np.vstack(ggn_v),"--")
     
     # Mark stimuli changes on figure
     stimuli_bounds = np.arange(0.0, NUM_STIM * PRESENT_TIME_MS, PRESENT_TIME_MS)
