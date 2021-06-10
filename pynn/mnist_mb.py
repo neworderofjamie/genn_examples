@@ -203,7 +203,7 @@ pn_kc = model.add_synapse_population("pn_kc", "SPARSE_GLOBALG", genn_wrapper.NO_
 if TRAIN:
     kc_mbon = model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
                                            kc, mbon,
-                                           symmetric_stdp, KC_MBON_PARAMS, {"g": KC_MBON_WEIGHT}, {}, {},
+                                           symmetric_stdp, KC_MBON_PARAMS, {"g": np.ones(NUM_KC * NUM_MBON) * KC_MBON_WEIGHT}, {}, {},
                                            "ExpCurr", {"tau": KC_MBON_TAU_SYN}, {})
 else:
     kc_mbon = model.add_synapse_population("kc_mbon", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
