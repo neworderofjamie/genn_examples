@@ -24,4 +24,5 @@ para= {
     "INTERACTIVE": True,
     "eta": 0.0002,
     "rho": 0.18,
+    "SHUFFLE": False,
 }

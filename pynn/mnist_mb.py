@@ -294,6 +294,12 @@ def run_mb(para, g= None):
 
     for rs in range(STIM_SHIFT,NUM_STIM+STIM_SHIFT):
         s= rs % STIM_MOD
+        if para["SHUFFLE"]:
+            if s == 0:
+                idx= np.arange(STIM_MOD)
+                np.random.shuffle(idx)
+                images[STIM_SHIFT:STIM_SHIFT+STIM_MOD]= images[idx+STIM_SHIFT]
+                labels[STIM_SHIFT:STIM_SHIFT+STIM_MOD]= labels[idx+STIM_SHIFT]
         if rs % 500 == 0:
             kc_mbon.pull_var_from_device("g")
             print("{}: gmax: {}/{}, gmean: {}, nHigh: {}".format(rs, np.max(kc_mbon_g_view), para["wMax"], np.mean(kc_mbon_g_view), len(kc_mbon_g_view[kc_mbon_g_view > 0.9*max(kc_mbon_g_view)])))
