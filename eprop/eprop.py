@@ -9,7 +9,7 @@ adam_optimizer_model = genn_model.create_custom_custom_update_class(
     var_name_types=[("m", "scalar"), ("v", "scalar")],
     extra_global_params=[("alpha", "scalar"), ("firstMomentScale", "scalar"),
                          ("secondMomentScale", "scalar")],
-    var_refs=[("m", "scalar"), ("variable", "scalar")],
+    var_refs=[("gradient", "scalar"), ("variable", "scalar")],
     update_code="""
     // Update biased first moment estimate
     $(m) = ($(beta1) * $(m)) + ((1.0 - $(beta1)) * $(gradient));
@@ -72,15 +72,15 @@ recurrent_alif_model = genn_model.create_custom_neuron_class(
     $(RefracTime) <= 0.0 && $(V) >= ($(Vthresh) + ($(Beta) * $(A)))
     """,
     is_auto_refractory_required=False)
-    
+
 #----------------------------------------------------------------------------
 # Weight update models
 #----------------------------------------------------------------------------
 feedback_model = genn_model.create_custom_weight_update_class(
     "feedback",
-    var_name_types=[("w", "scalar")],
+    var_name_types=[("g", "scalar")],
     synapse_dynamics_code="""
-    $(addToInSyn, $(w) * $(E_pre));
+    $(addToInSyn, $(g) * $(E_pre));
     """)
 
 eprop_lif_model = genn_model.create_custom_weight_update_class(
@@ -89,8 +89,7 @@ eprop_lif_model = genn_model.create_custom_weight_update_class(
     derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
                     ("FTargetTimestep", genn_model.create_dpf_class(lambda pars, dt: (pars[2] * dt) / 1000.0)()),
                     ("AlphaFAv", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[3]))())],
-    var_name_types=[("g", "scalar"), ("eFiltered", "scalar"), ("DeltaG", "scalar"),
-                    ("M", "scalar"), ("V", "scalar")],
+    var_name_types=[("g", "scalar"), ("eFiltered", "scalar"), ("DeltaG", "scalar")],
     pre_var_name_types=[("ZFilter", "scalar")],
     post_var_name_types=[("Psi", "scalar"), ("FAvg", "scalar")],
     
@@ -107,7 +106,7 @@ eprop_lif_model = genn_model.create_custom_weight_update_class(
 
     post_spike_code="""
     $(FAvg) += (1.0 - $(AlphaFAv));
-    """
+    """,
     post_dynamics_code="""
     $(FAvg) *= $(AlphaFAv);
     if ($(RefracTime_post) > 0.0) {
@@ -133,8 +132,7 @@ eprop_alif_model = genn_model.create_custom_weight_update_class(
                     ("Rho", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
                     ("FTargetTimestep", genn_model.create_dpf_class(lambda pars, dt: (pars[3] * dt) / 1000.0)()),
                     ("AlphaFAv", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[4]))())],
-    var_name_types=[("g", "scalar"), ("eFiltered", "scalar"), {"epsilonA", "scalar"}, ("DeltaG", "scalar"),
-                    ("M", "scalar"), ("V", "scalar")],
+    var_name_types=[("g", "scalar"), ("eFiltered", "scalar"), {"epsilonA", "scalar"}, ("DeltaG", "scalar")],
     pre_var_name_types=[("ZFilter", "scalar")],
     post_var_name_types=[("Psi", "scalar"), ("FAvg", "scalar")],
     
@@ -151,7 +149,7 @@ eprop_alif_model = genn_model.create_custom_weight_update_class(
 
     post_spike_code="""
     $(FAvg) += (1.0 - $(AlphaFAv));
-    """
+    """,
     post_dynamics_code="""
     $(FAvg) *= $(AlphaFAv);
     if ($(RefracTime_post) > 0.0) {
@@ -179,6 +177,28 @@ eprop_alif_model = genn_model.create_custom_weight_update_class(
     // Apply weight update
     $(DeltaG) += (eFiltered * $(E_post)) + (($(FAvg) - $(FTargetTimestep)) * $(CReg) * e);
     $(eFiltered) = eFiltered;
+    """)
+
+output_learning_model = genn_model.create_custom_weight_update_class(
+    "output_learning",
+    param_names=["TauE"],
+    derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
+    var_name_types=[("g", "scalar"), ("DeltaG", "scalar")],
+    pre_var_name_types=[("ZFilter", "scalar")],
+
+    sim_code="""
+    $(addToInSyn, $(g));
+    """,
+
+    pre_spike_code="""
+    $(ZFilter) += 1.0;
+    """,
+    pre_dynamics_code="""
+    $(ZFilter) *= $(Alpha);
+    """,
+
+    synapse_dynamics_code="""
+    $(DeltaG) += $(ZFilter) * $(E_post);
     """)
 
 #----------------------------------------------------------------------------
