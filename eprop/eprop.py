@@ -32,7 +32,7 @@ recurrent_lif_model = genn_model.create_custom_neuron_class(
     derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
    
     sim_code="""
-    $(E) = $(IsynFeedback);
+    $(E) = $(ISynFeedback);
     $(V) = ($(Alpha) * $(V)) + $(Isyn);
     if ($(RefracTime) > 0.0) {
       $(RefracTime) -= DT;
@@ -54,9 +54,9 @@ recurrent_alif_model = genn_model.create_custom_neuron_class(
     additional_input_vars=[("ISynFeedback", "scalar", 0.0)],
     derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
                     ("Rho", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))())],
-   
+
     sim_code="""
-    $(E) = $(IsynFeedback);
+    $(E) = $(ISynFeedback);
     $(V) = ($(Alpha) * $(V)) + $(Isyn);
     $(A) *= $(Rho);
     if ($(RefracTime) > 0.0) {
