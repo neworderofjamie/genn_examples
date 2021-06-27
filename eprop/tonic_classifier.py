@@ -62,10 +62,7 @@ output_classification_model = genn_model.create_custom_neuron_class(
        const scalar piStar = ($(id) == $(labels)[$(indices)[trial]]) ? 1.0 : 0.0;
        $(E) = $(Pi) - piStar;
     }
-    "$(DeltaB) += $(E);
-    """,
-    threshold_condition_code="""
-    $(RefracTime) <= 0.0 && $(V) >= $(Vthresh)
+    $(DeltaB) += $(E);
     """,
     is_auto_refractory_required=False)
 
@@ -230,9 +227,11 @@ output_bias_optimiser_var_refs = {"gradient": genn_model.create_var_ref(output, 
 output_bias_optimiser = model.add_custom_update("output_bias_optimiser", "GradientLearn", eprop.adam_optimizer_model,
                                                 adam_params, adam_vars, output_bias_optimiser_var_refs)
 
+batch_timesteps = int(np.ceil(((max_stimuli_duration + CUE_TIME) * BATCH_SIZE) / TIMESTEP_MS))
+
 # Build and load model
 model.build()
-model.load(num_recording_timesteps=max_stimuli_duration)
+model.load(num_recording_timesteps=batch_timesteps)
 
 # Calculate initial transpose feedback weights
 model.custom_update("CalculateTranspose")
