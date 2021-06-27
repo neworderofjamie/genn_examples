@@ -6,7 +6,7 @@ from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 
 # Eprop imports
-import eprop
+#import eprop
 
 TIMESTEP_MS = 1.0
 TIMING_ENABLED = True
@@ -22,9 +22,56 @@ WEIGHT_0 = 1.0
 
 RESUME_EPOCH = None
 
+# ----------------------------------------------------------------------------
+# Custom models
+# ----------------------------------------------------------------------------
+adam_optimizer_model = genn_model.create_custom_custom_update_class(
+    "adam_optimizer",
+    param_names=["beta1", "beta2", "epsilon"],
+    var_name_types=[("m", "scalar"), ("v", "scalar")],
+    extra_global_params=[("alpha", "scalar"), ("firstMomentScale", "scalar"),
+                         ("secondMomentScale", "scalar")],
+    var_refs=[("gradient", "scalar"), ("variable", "scalar")],
+    update_code="""
+    // Update biased first moment estimate
+    $(m) = ($(beta1) * $(m)) + ((1.0 - $(beta1)) * $(gradient));
+    // Update biased second moment estimate
+    $(v) = ($(beta2) * $(v)) + ((1.0 - $(beta2)) * $(gradient) * $(gradient));
+    // Add gradient to variable, scaled by learning rate
+    $(variable) -= ($(alpha) * $(m) * $(firstMomentScale)) / (sqrt($(v) * $(secondMomentScale)) + $(epsilon));
+    // Zero gradient
+    $(gradient) = 0.0;
+    """)
+
 #----------------------------------------------------------------------------
 # Neuron models
 #----------------------------------------------------------------------------
+recurrent_alif_model = genn_model.create_custom_neuron_class(
+    "recurrent_alif",
+    param_names=["TauM", "TauAdap", "Vthresh", "TauRefrac", "Beta"],
+    var_name_types=[("V", "scalar"), ("A", "scalar"), ("RefracTime", "scalar"), ("E", "scalar")],
+    additional_input_vars=[("ISynFeedback", "scalar", 0.0)],
+    derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
+                    ("Rho", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))())],
+
+    sim_code="""
+    $(E) = $(ISynFeedback);
+    $(V) = ($(Alpha) * $(V)) + $(Isyn);
+    $(A) *= $(Rho);
+    if ($(RefracTime) > 0.0) {
+      $(RefracTime) -= DT;
+    }
+    """,
+    reset_code="""
+    $(RefracTime) = $(TauRefrac);
+    $(V) -= $(Vthresh);
+    $(A) += 1.0;
+    """,
+    threshold_condition_code="""
+    $(RefracTime) <= 0.0 && $(V) >= ($(Vthresh) + ($(Beta) * $(A)))
+    """,
+    is_auto_refractory_required=False)
+
 # **TODO** helper function to generate these models for arbitrary number of output neurons
 output_classification_model = genn_model.create_custom_neuron_class(
     "output_classification",
@@ -65,6 +112,103 @@ output_classification_model = genn_model.create_custom_neuron_class(
     $(DeltaB) += $(E);
     """,
     is_auto_refractory_required=False)
+
+#----------------------------------------------------------------------------
+# Weight update models
+#----------------------------------------------------------------------------
+feedback_model = genn_model.create_custom_weight_update_class(
+    "feedback",
+    var_name_types=[("g", "scalar")],
+    synapse_dynamics_code="""
+    $(addToInSyn, $(g) * $(E_pre));
+    """)
+
+eprop_alif_model = genn_model.create_custom_weight_update_class(
+    "eprop_alif",
+    param_names=["TauE", "TauA", "CReg", "FTarget", "TauFAvg", "Beta"],
+    derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
+                    ("Rho", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
+                    ("FTargetTimestep", genn_model.create_dpf_class(lambda pars, dt: (pars[3] * dt) / 1000.0)()),
+                    ("AlphaFAv", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[4]))())],
+    var_name_types=[("g", "scalar"), ("eFiltered", "scalar"), ("epsilonA", "scalar"), ("DeltaG", "scalar")],
+    pre_var_name_types=[("ZFilter", "scalar")],
+    post_var_name_types=[("Psi", "scalar"), ("FAvg", "scalar")],
+    
+    sim_code="""
+    $(addToInSyn, $(g));
+    """,
+
+    pre_spike_code="""
+    $(ZFilter) += 1.0;
+    """,
+    pre_dynamics_code="""
+    $(ZFilter) *= $(Alpha);
+    """,
+
+    post_spike_code="""
+    $(FAvg) += (1.0 - $(AlphaFAv));
+    """,
+    post_dynamics_code="""
+    $(FAvg) *= $(AlphaFAv);
+    if ($(RefracTime_post) > 0.0) {
+      $(Psi) = 0.0;
+    }
+    else {
+      $(Psi) = (1.0 / $(Vthresh_post)) * 0.3 * fmax(0.0, 1.0 - fabs(($(V_post) - ($(Vthresh_post) + ($(Beta_post) * $(A_post)))) / $(Vthresh_post)));
+    }
+    """,
+
+    synapse_dynamics_code="""
+    // Calculate some common factors in e and epsilon update
+    scalar epsilonA = $(epsilonA);
+    const scalar psiZFilter = $(Psi) * $(ZFilter);
+    const scalar psiBetaEpsilonA = $(Psi) * $(Beta) * epsilonA;
+    
+    // Calculate e and episilonA
+    const scalar e = psiZFilter  - psiBetaEpsilonA;
+    $(epsilonA) = psiZFilter + (($(Rho) * epsilonA) - psiBetaEpsilonA);
+    
+    // Calculate filtered version of eligibility trace
+    scalar eFiltered = $(eFiltered);
+    eFiltered = (eFiltered * $(Alpha)) + e;
+    
+    // Apply weight update
+    $(DeltaG) += (eFiltered * $(E_post)) + (($(FAvg) - $(FTargetTimestep)) * $(CReg) * e);
+    $(eFiltered) = eFiltered;
+    """)
+
+output_learning_model = genn_model.create_custom_weight_update_class(
+    "output_learning",
+    param_names=["TauE"],
+    derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
+    var_name_types=[("g", "scalar"), ("DeltaG", "scalar")],
+    pre_var_name_types=[("ZFilter", "scalar")],
+
+    sim_code="""
+    $(addToInSyn, $(g));
+    """,
+
+    pre_spike_code="""
+    $(ZFilter) += 1.0;
+    """,
+    pre_dynamics_code="""
+    $(ZFilter) *= $(Alpha);
+    """,
+
+    synapse_dynamics_code="""
+    $(DeltaG) += $(ZFilter) * $(E_post);
+    """)
+
+#----------------------------------------------------------------------------
+# Postsynaptic models
+#----------------------------------------------------------------------------
+feedback_psm_model = genn_model.create_custom_postsynaptic_class(
+    "feedback_psm",
+    apply_input_code="""
+    $(ISynFeedback) += $(inSyn);
+    $(inSyn) = 0;
+    """)
+
 
 # Create dataset
 dataset = tonic.datasets.SHD(save_to='./data', train=True)
@@ -165,7 +309,7 @@ model.timing_enabled = TIMING_ENABLED
 # Add neuron populations
 input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArray",
                                     {}, {"startSpike": None, "endSpike": None})
-recurrent = model.add_neuron_population("Recurrent", NUM_RECURRENT_NEURONS, eprop.recurrent_alif_model,
+recurrent = model.add_neuron_population("Recurrent", NUM_RECURRENT_NEURONS, recurrent_alif_model,
                                         recurrent_params, recurrent_vars)
 output = model.add_neuron_population("Output", NUM_OUTPUT_NEURONS, output_classification_model,
                                      output_params, output_vars)
@@ -181,26 +325,26 @@ recurrent.spike_recording_enabled = True
 input_recurrent = model.add_synapse_population(
     "InputRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
     input, recurrent,
-    eprop.eprop_alif_model, eprop_params, input_recurrent_vars, eprop_pre_vars, eprop_post_vars,
+    eprop_alif_model, eprop_params, input_recurrent_vars, eprop_pre_vars, eprop_post_vars,
     "DeltaCurr", {}, {})
 
 recurrent_recurrent = model.add_synapse_population(
     "RecurrentRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
     recurrent, recurrent,
-    eprop.eprop_alif_model, eprop_params, recurrent_recurrent_vars, eprop_pre_vars, eprop_post_vars,
+    eprop_alif_model, eprop_params, recurrent_recurrent_vars, eprop_pre_vars, eprop_post_vars,
     "DeltaCurr", {}, {})
 
 recurrent_output = model.add_synapse_population(
     "RecurrentOutput", "DENSE_INDIVIDUALG", NO_DELAY,
     recurrent, output,
-    eprop.output_learning_model, recurrent_output_params, recurrent_output_vars, recurrent_output_pre_vars, {},
+    output_learning_model, recurrent_output_params, recurrent_output_vars, recurrent_output_pre_vars, {},
     "DeltaCurr", {}, {})
 
 output_recurrent = model.add_synapse_population(
     "OutputRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
     output, recurrent,
-    eprop.feedback_model, {}, {"g": 0.0}, {}, {},
-    eprop.feedback_psm_model, {}, {})
+    feedback_model, {}, {"g": 0.0}, {}, {},
+    feedback_psm_model, {}, {})
 
 # Add custom update for calculating initial tranpose weights
 model.add_custom_update("recurrent_hidden_transpose", "CalculateTranspose", "Transpose",
@@ -209,22 +353,22 @@ model.add_custom_update("recurrent_hidden_transpose", "CalculateTranspose", "Tra
 # Add custom updates for updating weights using Adam optimiser
 input_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(input_recurrent, "DeltaG"),
                                       "variable": genn_model.create_wu_var_ref(input_recurrent, "g")}
-input_recurrent_optimiser = model.add_custom_update("input_recurrent_optimiser", "GradientLearn", eprop.adam_optimizer_model,
+input_recurrent_optimiser = model.add_custom_update("input_recurrent_optimiser", "GradientLearn", adam_optimizer_model,
                                                     adam_params, adam_vars, input_recurrent_optimiser_var_refs)
 
 recurrent_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_recurrent, "DeltaG"),
                                           "variable": genn_model.create_wu_var_ref(recurrent_recurrent, "g")}
-recurrent_recurrent_optimiser = model.add_custom_update("recurrent_recurrent_optimiser", "GradientLearn", eprop.adam_optimizer_model,
+recurrent_recurrent_optimiser = model.add_custom_update("recurrent_recurrent_optimiser", "GradientLearn", adam_optimizer_model,
                                                         adam_params, adam_vars, recurrent_recurrent_optimiser_var_refs)
 
 recurrent_output_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_output, "DeltaG"),
                                        "variable": genn_model.create_wu_var_ref(recurrent_output, "g" , output_recurrent, "g")}
-recurrent_output_optimiser = model.add_custom_update("recurrent_output_optimiser", "GradientLearn", eprop.adam_optimizer_model,
+recurrent_output_optimiser = model.add_custom_update("recurrent_output_optimiser", "GradientLearn", adam_optimizer_model,
                                                      adam_params, adam_vars, recurrent_output_optimiser_var_refs)
 
 output_bias_optimiser_var_refs = {"gradient": genn_model.create_var_ref(output, "DeltaB"),
                                   "variable": genn_model.create_var_ref(output, "B")}
-output_bias_optimiser = model.add_custom_update("output_bias_optimiser", "GradientLearn", eprop.adam_optimizer_model,
+output_bias_optimiser = model.add_custom_update("output_bias_optimiser", "GradientLearn", adam_optimizer_model,
                                                 adam_params, adam_vars, output_bias_optimiser_var_refs)
 
 batch_timesteps = int(np.ceil(((max_stimuli_duration + CUE_TIME) * BATCH_SIZE) / TIMESTEP_MS))
