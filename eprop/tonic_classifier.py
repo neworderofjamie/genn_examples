@@ -16,9 +16,12 @@ MAX_STIMULI_TIME = 1369.140625
 MAX_SPIKES_PER_STIMULI = 14917
 CUE_TIME = 20.0
 
+ADAM_BETA1 = 0.9
+ADAM_BETA2 = 0.999
+
 BATCH_SIZE = 512
 
-RECORD = True
+RECORD = False
 
 NUM_RECURRENT_NEURONS = 800
 NUM_OUTPUT_NEURONS = 32
@@ -37,6 +40,16 @@ def write_spike_file(filename, data):
     np.savetxt(filename, np.column_stack(data), fmt=["%f","%d"], 
                delimiter=",", header="Time [ms], Neuron ID")
 
+def update_adam(learning_rate, adam_step, optimiser_custom_updates):
+    first_moment_scale = 1.0 / (1.0 - (ADAM_BETA1 ** adam_step))
+    second_moment_scale = 1.0 / (1.0 - (ADAM_BETA2 ** adam_step))
+    
+    # Loop through optimisers and set
+    for o in optimiser_custom_updates:
+        o.extra_global_params["alpha"].view[:] = learning_rate
+        o.extra_global_params["firstMomentScale"].view[:] = first_moment_scale
+        o.extra_global_params["secondMomentScale"].view[:] = second_moment_scale
+        
 # ----------------------------------------------------------------------------
 # Custom models
 # ----------------------------------------------------------------------------
@@ -236,7 +249,7 @@ num_outputs = len(dataset.classes)
 
 # Create dataset loader
 # **HACK** shuffling, batching and h5py don't currently play nice
-dataset_loader = tonic.datasets.DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
+#dataset_loader = tonic.datasets.DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
 
 # ----------------------------------------------------------------------------
 # Neuron initialisation
@@ -282,7 +295,7 @@ else:
     recurrent_output_vars["g"] = None
 
 # Optimiser initialisation
-adam_params = {"beta1": 0.9, "beta2": 0.999, "epsilon": 1E-8}
+adam_params = {"beta1": ADAM_BETA1, "beta2": ADAM_BETA2, "epsilon": 1E-8}
 adam_vars = {"m": 0.0, "v": 0.0}
 
 # ----------------------------------------------------------------------------
@@ -379,10 +392,13 @@ input_recurrent_g_view = input_recurrent.vars["g"].view
 recurrent_recurrent_g_view = recurrent_recurrent.vars["g"].view
 recurrent_output_g_view = recurrent_output.vars["g"].view
 
-for epoch in range(10):
+for epoch in range(1):
     print("Epoch %u" % epoch)
     
-    # Extract batches of data from dataset
+    # Create dataset loader
+    # **HACK** shuffling, batching and h5py don't currently play nice
+    # **HACK** you shouldn't have to recreate this every epoch, you should just be able to make a new iterator
+    dataset_loader = tonic.datasets.DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
     for batch_idx, (batch_events, batch_labels) in enumerate(dataset_loader):
         print("\tBatch %u" % batch_idx)
         batch_start_time = perf_counter()
@@ -442,7 +458,12 @@ for epoch in range(10):
                 num_correct += 1
 
         print("\t\t%u / %u correct" % (num_correct, len(batch_events)))
-
+        
+        # Calculate the correct scaling for adam optimiser
+        adam_step = (epoch * len(data_loader)) + batch_idx + 1
+        update_adam(learning_rate, adam_step, [input_recurrent_optimiser, recurrent_recurrent_optimiser,
+                                               recurrent_output_optimiser, output_bias_optimiser])
+        
         # Now batch is complete, apply gradients
         model.custom_update("GradientLearn")
 
@@ -453,6 +474,7 @@ for epoch in range(10):
             # Write spikes
             write_spike_file("input_spikes_%u_%u.csv" % (epoch, batch_idx), input.spike_recording_data)
             write_spike_file("recurrent_spikes_%u_%u.csv" % (epoch, batch_idx), recurrent.spike_recording_data)
+
         batch_end_time = perf_counter()
         print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
 
