@@ -460,7 +460,7 @@ for epoch in range(1):
         print("\t\t%u / %u correct" % (num_correct, len(batch_events)))
         
         # Calculate the correct scaling for adam optimiser
-        adam_step = (epoch * len(data_loader)) + batch_idx + 1
+        adam_step = (epoch * len(dataset_loader)) + batch_idx + 1
         update_adam(learning_rate, adam_step, [input_recurrent_optimiser, recurrent_recurrent_optimiser,
                                                recurrent_output_optimiser, output_bias_optimiser])
         
