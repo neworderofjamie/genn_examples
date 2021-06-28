@@ -2,6 +2,7 @@ import numpy as np
 import tonic
 import matplotlib.pyplot as plt
 
+from time import perf_counter
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 
@@ -384,7 +385,8 @@ for epoch in range(10):
     # Extract batches of data from dataset
     for batch_idx, (batch_events, batch_labels) in enumerate(dataset_loader):
         print("\tBatch %u" % batch_idx)
-        
+        batch_start_time = perf_counter()
+
         # Reset time
         model.timestep = 0
         model.t = 0.0
@@ -417,7 +419,7 @@ for epoch in range(10):
         # Copy labels into output
         output_labels_view[0:len(batch_labels)] = batch_labels
         output.push_var_to_device("labels")
-        
+
         # Loop through trials in batch
         num_correct = 0
         for trial, label in enumerate(batch_labels):
@@ -425,16 +427,16 @@ for epoch in range(10):
             classification_output = np.zeros(num_outputs)
             for i in range(TRIAL_TIMESTEPS):
                 model.step_time()
-                
+
                 # If we're in cue region of this trial
                 if i > STIMULI_TIMESTEPS:
                     # Pull Pi from device and add to total
                     output.pull_var_from_device("Pi")
                     classification_output += output_pi_view[:num_outputs]
-                    
+
                     if RECORD:
                         output.pull_var_from_device("E")
-            
+
             # If maximum output matches label, increment counter
             if np.argmax(classification_output) == label:
                 num_correct += 1
@@ -443,15 +445,17 @@ for epoch in range(10):
 
         # Now batch is complete, apply gradients
         model.custom_update("GradientLearn")
-        
+
         if RECORD:
             # Download recording data
             model.pull_recording_buffers_from_device()
-            
+
             # Write spikes
             write_spike_file("input_spikes_%u_%u.csv" % (epoch, batch_idx), input.spike_recording_data)
             write_spike_file("recurrent_spikes_%u_%u.csv" % (epoch, batch_idx), recurrent.spike_recording_data)
-    
+        batch_end_time = perf_counter()
+        print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
+
     # Pull weights and biases from device
     input_recurrent.pull_var_from_device("g")
     recurrent_recurrent.pull_var_from_device("g")
@@ -459,7 +463,7 @@ for epoch in range(10):
     output.pull_var_from_device("B")
 
     # Save weights and biases to disk
-    np.save("g_input_recurrent_%u.npy" % epoch, input_recurrent_g_view
+    np.save("g_input_recurrent_%u.npy" % epoch, input_recurrent_g_view)
     np.save("g_recurrent_recurrent_%u.npy" % epoch, recurrent_recurrent_g_view)
     np.save("g_recurrent_output_%u.npy" % epoch, recurrent_output_g_view)
     np.save("b_output_%u.npy" % epoch, output_b_view)
