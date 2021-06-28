@@ -260,7 +260,11 @@ recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0, "E": 0.0}
 
 # Output population
 output_params = {"TauOut": 20.0, "TrialTime": MAX_STIMULI_TIME + CUE_TIME, "StimuliTime": MAX_STIMULI_TIME}
-output_vars = {"Y": 0.0, "Pi": 0.0, "E": 0.0, "B": 0.0, "DeltaB": 0.0}
+output_vars = {"Y": 0.0, "Pi": 0.0, "E": 0.0, "DeltaB": 0.0}
+if RESUME_EPOCH is None:
+    output_vars["B"] = 0.0
+else:
+    output_vars["B"] = np.load("b_output_%u.npy" % RESUME_EPOCH)
 
 # ----------------------------------------------------------------------------
 # Synapse initialisation
@@ -276,14 +280,14 @@ input_recurrent_vars = {"eFiltered": 0.0, "epsilonA": 0.0, "DeltaG": 0.0}
 if RESUME_EPOCH is None:
     input_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(num_input_neurons)})
 else:
-    input_recurrent_vars["g"] = None
+    input_recurrent_vars["g"] = np.load("g_input_recurrent_%u.npy" % RESUME_EPOCH)
 
 # Recurrent->recurrent synapse parameters
 recurrent_recurrent_vars = {"eFiltered": 0.0, "epsilonA": 0.0, "DeltaG": 0.0}
 if RESUME_EPOCH is None:
     recurrent_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(NUM_RECURRENT_NEURONS)})
 else:
-    recurrent_recurrent_vars["g"] = None
+    recurrent_recurrent_vars["g"] = np.load("g_recurrent_recurrent_%u.npy" % RESUME_EPOCH)
 
 # Recurrent->output synapse parameters
 recurrent_output_params = {"TauE": 20.0}
@@ -292,7 +296,7 @@ recurrent_output_vars = {"DeltaG": 0.0}
 if RESUME_EPOCH is None:
     recurrent_output_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(NUM_RECURRENT_NEURONS)})
 else:
-    recurrent_output_vars["g"] = None
+    recurrent_output_vars["g"] = np.load("g_recurrent_output_%u.npy" % RESUME_EPOCH)
 
 # Optimiser initialisation
 adam_params = {"beta1": ADAM_BETA1, "beta2": ADAM_BETA2, "epsilon": 1E-8}
@@ -392,9 +396,11 @@ input_recurrent_g_view = input_recurrent.vars["g"].view
 recurrent_recurrent_g_view = recurrent_recurrent.vars["g"].view
 recurrent_output_g_view = recurrent_output.vars["g"].view
 
-for epoch in range(1):
+# Loop through epochs
+epoch_start = 0 if RESUME_EPOCH is None else (RESUME_EPOCH + 1)
+for epoch in range(epoch_start, 10):
     print("Epoch %u" % epoch)
-    
+
     # Create dataset loader
     # **HACK** shuffling, batching and h5py don't currently play nice
     # **HACK** you shouldn't have to recreate this every epoch, you should just be able to make a new iterator
