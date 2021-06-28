@@ -247,10 +247,6 @@ num_input_neurons = np.product(dataset.sensor_size)
 # Calculate number of valid outputs from classes
 num_outputs = len(dataset.classes)
 
-# Create dataset loader
-# **HACK** shuffling, batching and h5py don't currently play nice
-#dataset_loader = tonic.datasets.DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
-
 # ----------------------------------------------------------------------------
 # Neuron initialisation
 # ----------------------------------------------------------------------------
@@ -397,7 +393,6 @@ for epoch in range(1):
     
     # Create dataset loader
     # **HACK** shuffling, batching and h5py don't currently play nice
-    # **HACK** you shouldn't have to recreate this every epoch, you should just be able to make a new iterator
     dataset_loader = tonic.datasets.DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
     for batch_idx, (batch_events, batch_labels) in enumerate(dataset_loader):
         print("\tBatch %u" % batch_idx)
@@ -434,7 +429,7 @@ for epoch in range(1):
 
         # Copy labels into output
         output_labels_view[0:len(batch_labels)] = batch_labels
-        output.push_var_to_device("labels")
+        output.push_extra_global_param_to_device("labels")
 
         # Loop through trials in batch
         num_correct = 0
