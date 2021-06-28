@@ -373,8 +373,12 @@ input_spike_times_view = input.extra_global_params["spikeTimes"].view
 output_labels_view = output.extra_global_params["labels"].view
 output_pi_view = output.vars["Pi"].view
 output_e_view = output.vars["E"].view
+output_b_view = output.vars["B"].view
+input_recurrent_g_view = input_recurrent.vars["g"].view
+recurrent_recurrent_g_view = recurrent_recurrent.vars["g"].view
+recurrent_output_g_view = recurrent_output.vars["g"].view
 
-for epoch in range(1):
+for epoch in range(10):
     print("Epoch %u" % epoch)
     
     # Extract batches of data from dataset
@@ -447,7 +451,18 @@ for epoch in range(1):
             # Write spikes
             write_spike_file("input_spikes_%u_%u.csv" % (epoch, batch_idx), input.spike_recording_data)
             write_spike_file("recurrent_spikes_%u_%u.csv" % (epoch, batch_idx), recurrent.spike_recording_data)
-        
+    
+    # Pull weights and biases from device
+    input_recurrent.pull_var_from_device("g")
+    recurrent_recurrent.pull_var_from_device("g")
+    recurrent_output.pull_var_from_device("g")
+    output.pull_var_from_device("B")
+
+    # Save weights and biases to disk
+    np.save("g_input_recurrent_%u.npy" % epoch, input_recurrent_g_view
+    np.save("g_recurrent_recurrent_%u.npy" % epoch, recurrent_recurrent_g_view)
+    np.save("g_recurrent_output_%u.npy" % epoch, recurrent_output_g_view)
+    np.save("b_output_%u.npy" % epoch, output_b_view)
 
 if TIMING_ENABLED:
     print("Init: %f" % model.init_time)
