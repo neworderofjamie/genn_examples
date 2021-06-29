@@ -23,11 +23,12 @@ BATCH_SIZE = 512
 
 RECORD = False
 
-NUM_RECURRENT_NEURONS = 800
+NUM_RECURRENT_NEURONS = 256
 NUM_OUTPUT_NEURONS = 32
 
 WEIGHT_0 = 1.0
 
+NUM_EPOCHS = 100
 RESUME_EPOCH = None
 
 STIMULI_TIMESTEPS = int(np.ceil(MAX_STIMULI_TIME / TIMESTEP_MS))
@@ -394,7 +395,7 @@ recurrent_output_g_view = recurrent_output.vars["g"].view
 
 # Loop through epochs
 epoch_start = 0 if RESUME_EPOCH is None else (RESUME_EPOCH + 1)
-for epoch in range(epoch_start, 10):
+for epoch in range(epoch_start, NUM_EPOCHS):
     print("Epoch %u" % epoch)
 
     # Create dataset loader
