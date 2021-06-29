@@ -29,7 +29,7 @@ NUM_OUTPUT_NEURONS = 32
 
 WEIGHT_0 = 1.0
 
-NUM_EPOCHS = 100
+NUM_EPOCHS = 5
 RESUME_EPOCH = None
 
 STIMULI_TIMESTEPS = int(np.ceil(MAX_STIMULI_TIME / TIMESTEP_MS))
@@ -401,6 +401,7 @@ performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
 
 # Loop through epochs
 epoch_start = 0 if RESUME_EPOCH is None else (RESUME_EPOCH + 1)
+adam_step = 1
 for epoch in range(epoch_start, NUM_EPOCHS):
     print("Epoch %u" % epoch)
 
@@ -470,10 +471,10 @@ for epoch in range(epoch_start, NUM_EPOCHS):
         performance_file.flush()
 
         # Calculate the correct scaling for adam optimiser
-        adam_step = (epoch * len(dataset_loader)) + batch_idx + 1
         update_adam(learning_rate, adam_step, [input_recurrent_optimiser, recurrent_recurrent_optimiser,
                                                recurrent_output_optimiser, output_bias_optimiser])
-        
+        adam_step += 1
+
         # Now batch is complete, apply gradients
         model.custom_update("GradientLearn")
 
