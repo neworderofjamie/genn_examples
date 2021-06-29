@@ -20,7 +20,7 @@ CUE_TIME = 20.0
 ADAM_BETA1 = 0.9
 ADAM_BETA2 = 0.999
 
-BATCH_SIZE = 512
+BATCH_SIZE = 256
 
 RECORD = False
 
@@ -406,7 +406,7 @@ for epoch in range(epoch_start, NUM_EPOCHS):
 
     # Create dataset loader
     # **HACK** shuffling, batching and h5py don't currently play nice
-    dataset_loader = tonic.datasets.DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
+    dataset_loader = tonic.datasets.DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
     for batch_idx, (batch_events, batch_labels) in enumerate(dataset_loader):
         print("\tBatch %u" % batch_idx)
         batch_start_time = perf_counter()
