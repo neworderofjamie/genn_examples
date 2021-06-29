@@ -1,3 +1,4 @@
+import csv
 import numpy as np
 import tonic
 import matplotlib.pyplot as plt
@@ -393,6 +394,11 @@ input_recurrent_g_view = input_recurrent.vars["g"].view
 recurrent_recurrent_g_view = recurrent_recurrent.vars["g"].view
 recurrent_output_g_view = recurrent_output.vars["g"].view
 
+# Open file
+performance_file = open("performance.csv", "w")
+performance_csv = csv.writer(performance_file, delimiter=",")
+performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
+
 # Loop through epochs
 epoch_start = 0 if RESUME_EPOCH is None else (RESUME_EPOCH + 1)
 for epoch in range(epoch_start, NUM_EPOCHS):
@@ -460,7 +466,9 @@ for epoch in range(epoch_start, NUM_EPOCHS):
                 num_correct += 1
 
         print("\t\t%u / %u correct" % (num_correct, len(batch_events)))
-        
+        performance_csv.writerow((epoch, batch_idx, len(batch_events), num_correct))
+        performance_file.flush()
+
         # Calculate the correct scaling for adam optimiser
         adam_step = (epoch * len(dataset_loader)) + batch_idx + 1
         update_adam(learning_rate, adam_step, [input_recurrent_optimiser, recurrent_recurrent_optimiser,
@@ -492,6 +500,7 @@ for epoch in range(epoch_start, NUM_EPOCHS):
     np.save("g_recurrent_output_%u.npy" % epoch, recurrent_output_g_view)
     np.save("b_output_%u.npy" % epoch, output_b_view)
 
+performance_file.close()
 if TIMING_ENABLED:
     print("Init: %f" % model.init_time)
     print("Init sparse: %f" % model.init_sparse_time)
