@@ -7,6 +7,7 @@ from time import perf_counter
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 
+from dataloader import DataLoader
 # Eprop imports
 #import eprop
 
@@ -243,6 +244,9 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
 # Create dataset
 dataset = tonic.datasets.SHD(save_to='./data', train=True)
 
+# Create loader
+data_loader = DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
+
 # Calculate number of input neurons from sensor size
 num_input_neurons = np.product(dataset.sensor_size)
 
@@ -399,6 +403,7 @@ performance_file = open("performance.csv", "w")
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
 
+        
 # Loop through epochs
 epoch_start = 0 if RESUME_EPOCH is None else (RESUME_EPOCH + 1)
 adam_step = 1
@@ -407,8 +412,8 @@ for epoch in range(epoch_start, NUM_EPOCHS):
 
     # Create dataset loader
     # **HACK** shuffling, batching and h5py don't currently play nice
-    dataset_loader = tonic.datasets.DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
-    for batch_idx, (batch_events, batch_labels) in enumerate(dataset_loader):
+    data_iter = iter(data_loader)
+    for batch_idx, batch_data in enumerate(data_iter):
         print("\tBatch %u" % batch_idx)
         batch_start_time = perf_counter()
 
@@ -417,6 +422,7 @@ for epoch in range(epoch_start, NUM_EPOCHS):
         model.t = 0.0
 
         # Get duration of each stimuli in batch
+        batch_events, batch_labels = zip(*batch_data)
         batch_stimuli_durations = [np.amax(e[:,0]) for e in batch_events]
 
         # Concatenate together all spike times, offsetting so each stimuli ends at the start of the cue time of each trial
