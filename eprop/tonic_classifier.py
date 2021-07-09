@@ -14,8 +14,8 @@ from dataloader import DataLoader
 TIMESTEP_MS = 1.0
 TIMING_ENABLED = True
 
-MAX_STIMULI_TIME = 1369.140625
-MAX_SPIKES_PER_STIMULI = 14917
+MAX_STIMULI_TIME = 1568.0#1369.140625
+MAX_SPIKES_PER_STIMULI = 10000#14917
 CUE_TIME = 20.0
 
 ADAM_BETA1 = 0.9
@@ -25,8 +25,8 @@ BATCH_SIZE = 256
 
 RECORD = False
 
-NUM_RECURRENT_NEURONS = 256
-NUM_OUTPUT_NEURONS = 32
+NUM_RECURRENT_NEURONS = 800
+NUM_OUTPUT_NEURONS = 16
 
 WEIGHT_0 = 1.0
 
@@ -34,7 +34,8 @@ NUM_EPOCHS = 5
 RESUME_EPOCH = None
 
 STIMULI_TIMESTEPS = int(np.ceil(MAX_STIMULI_TIME / TIMESTEP_MS))
-TRIAL_TIMESTEPS = int(np.ceil((MAX_STIMULI_TIME + CUE_TIME) / TIMESTEP_MS))
+CUE_TIMESTEPS = int(np.ceil(CUE_TIME / TIMESTEP_MS))
+TRIAL_TIMESTEPS = STIMULI_TIMESTEPS + CUE_TIMESTEPS
 
 # ----------------------------------------------------------------------------
 # Helper functions
@@ -46,13 +47,13 @@ def write_spike_file(filename, data):
 def update_adam(learning_rate, adam_step, optimiser_custom_updates):
     first_moment_scale = 1.0 / (1.0 - (ADAM_BETA1 ** adam_step))
     second_moment_scale = 1.0 / (1.0 - (ADAM_BETA2 ** adam_step))
-    
+
     # Loop through optimisers and set
     for o in optimiser_custom_updates:
         o.extra_global_params["alpha"].view[:] = learning_rate
         o.extra_global_params["firstMomentScale"].view[:] = first_moment_scale
         o.extra_global_params["secondMomentScale"].view[:] = second_moment_scale
-        
+
 # ----------------------------------------------------------------------------
 # Custom models
 # ----------------------------------------------------------------------------
@@ -122,14 +123,14 @@ output_classification_model = genn_model.create_custom_neuron_class(
     m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x2));
     m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x4));
     m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x8));
-    m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x10));
+    //m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x10));
     const scalar expPi = exp($(Y) - m);
     scalar sumExpPi = expPi;
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x1);
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x2);
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x4);
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x8);
-    sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x10);
+    //sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x10);
     $(Pi) = expPi / sumExpPi;
 
     // If we should be presenting stimuli
@@ -242,13 +243,14 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
 
 
 # Create dataset
-dataset = tonic.datasets.SHD(save_to='./data', train=True)
+dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
 
 # Create loader
-data_loader = DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
+data_loader = DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
 
 # Calculate number of input neurons from sensor size
-num_input_neurons = np.product(dataset.sensor_size)
+# **NOTE** we add one as we use an additional neuron to 
+num_input_neurons = np.product(dataset.sensor_size) + 1
 
 # Calculate number of valid outputs from classes
 num_outputs = len(dataset.classes)
@@ -403,15 +405,18 @@ performance_file = open("performance.csv", "w")
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
 
-        
+# Create 'signal' spike times and neuron indices for a single batch
+# **NOTE** so it can concatenated with tonic we use microseconds for times
+signal_spike_times = (MAX_STIMULI_TIME * 1000.0) + np.arange(0.0, CUE_TIME * 1000.0, TIMESTEP_MS * 1000.0)
+signal_spike_idx = np.tile(num_input_neurons - 1, CUE_TIMESTEPS)
+
 # Loop through epochs
 epoch_start = 0 if RESUME_EPOCH is None else (RESUME_EPOCH + 1)
 adam_step = 1
 for epoch in range(epoch_start, NUM_EPOCHS):
     print("Epoch %u" % epoch)
 
-    # Create dataset loader
-    # **HACK** shuffling, batching and h5py don't currently play nice
+    # Get new data iterator for new epoch
     data_iter = iter(data_loader)
     for batch_idx, batch_data in enumerate(data_iter):
         print("\tBatch %u" % batch_idx)
@@ -423,12 +428,14 @@ for epoch in range(epoch_start, NUM_EPOCHS):
 
         # Get duration of each stimuli in batch
         batch_events, batch_labels = zip(*batch_data)
-        batch_stimuli_durations = [np.amax(e[:,0]) for e in batch_events]
+        #batch_stimuli_durations = [np.amax(e[:,0]) for e in batch_events]
 
         # Concatenate together all spike times, offsetting so each stimuli ends at the start of the cue time of each trial
-        spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + e[:,0] + ((MAX_STIMULI_TIME * 1000.0) - d)
-                                      for i, (d, e) in enumerate(zip(batch_stimuli_durations, batch_events))])
-        spike_ids = np.concatenate([e[:,1] for e in batch_events]).astype(int)
+        #spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + e[:,0] + ((MAX_STIMULI_TIME * 1000.0) - d)
+        #                              for i, (d, e) in enumerate(zip(batch_stimuli_durations, batch_events))])
+        spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + np.concatenate((e[:,0], signal_spike_times))
+                                      for i, e in enumerate(batch_events)])
+        spike_ids = np.concatenate([np.concatenate((e[:,1], signal_spike_idx)) for e in batch_events]).astype(int)
 
         # Indirectly sort spikes, first by neuron id and then by time
         spike_order = np.lexsort((spike_times, spike_ids))
