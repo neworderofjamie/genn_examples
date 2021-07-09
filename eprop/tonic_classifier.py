@@ -246,7 +246,7 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
 dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
 
 # Create loader
-data_loader = DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
+data_loader = DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
 
 # Calculate number of input neurons from sensor size
 # **NOTE** we add one as we use an additional neuron to 
