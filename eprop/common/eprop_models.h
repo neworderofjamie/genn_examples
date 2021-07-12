@@ -149,15 +149,14 @@ IMPLEMENT_MODEL(Continuous);
 class EProp : public WeightUpdateModels::Base
 {
 public:
-    DECLARE_WEIGHT_UPDATE_MODEL(EProp, 4, 5, 1, 2);
+    DECLARE_WEIGHT_UPDATE_MODEL(EProp, 4, 3, 1, 2);
     
     SET_PARAM_NAMES({"TauE",        // Eligibility trace time constant [ms]
                      "CReg",        // Regularizer strength
                      "FTarget",     // Target spike rate [Hz]
                      "TauFAvg"});   // Firing rate averaging time constant [ms]
 
-    SET_VARS({{"g", "scalar"}, {"eFiltered", "scalar"}, {"DeltaG", "scalar"},
-              {"M", "scalar"}, {"V", "scalar"}});
+    SET_VARS({{"g", "scalar"}, {"eFiltered", "scalar"}, {"DeltaG", "scalar"}});
 
     SET_PRE_VARS({{"ZFilter", "scalar"}});
     SET_POST_VARS({{"Psi", "scalar"}, {"FAvg", "scalar"}});
@@ -198,7 +197,7 @@ IMPLEMENT_MODEL(EProp);
 class EPropALIF : public WeightUpdateModels::Base
 {
 public:
-    DECLARE_WEIGHT_UPDATE_MODEL(EPropALIF, 6, 6, 1, 2);
+    DECLARE_WEIGHT_UPDATE_MODEL(EPropALIF, 6, 4, 1, 2);
     
     SET_PARAM_NAMES({"TauE",        // Eligibility trace time constant [ms]
                      "TauA",        // Neuron adaption time constant [ms]
@@ -207,8 +206,8 @@ public:
                      "TauFAvg",     // Firing rate averaging time constant [ms]
                      "Beta"});      // Scale of neuron adaption [mV]
 
-    SET_VARS({{"g", "scalar"}, {"eFiltered", "scalar"}, {"epsilonA", "scalar"}, 
-              {"DeltaG", "scalar"}, {"M", "scalar"}, {"V", "scalar"}});
+    SET_VARS({{"g", "scalar"}, {"eFiltered", "scalar"}, 
+              {"epsilonA", "scalar"}, {"DeltaG", "scalar"}});
 
     SET_PRE_VARS({{"ZFilter", "scalar"}});
     SET_POST_VARS({{"Psi", "scalar"}, {"FAvg", "scalar"}});
@@ -258,12 +257,11 @@ IMPLEMENT_MODEL(EPropALIF);
 class OutputLearning : public WeightUpdateModels::Base
 {
 public:
-    DECLARE_WEIGHT_UPDATE_MODEL(OutputLearning, 1, 4, 1, 0);
+    DECLARE_WEIGHT_UPDATE_MODEL(OutputLearning, 1, 2, 1, 0);
 
     SET_PARAM_NAMES({"TauE"});  // Eligibility trace time constant [ms]
 
-    SET_VARS({{"g", "scalar"}, {"DeltaG", "scalar"},
-              {"M", "scalar"}, {"V", "scalar"}});
+    SET_VARS({{"g", "scalar"}, {"DeltaG", "scalar"}});
 
     SET_PRE_VARS({{"ZFilter", "scalar"}});
 

@@ -14,9 +14,6 @@
 // Auto-generated model code
 #include "s_mnist_CODE/definitions.h"
 
-// Batch-learning includes
-#include "batch_learning.h"
-
 // Model parameters
 #include "../../common/mnist_helpers.h"
 #include "parameters.h"
@@ -61,9 +58,8 @@ int main()
 #endif
         initializeSparse();
         
-        // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
-        BatchLearning::transposeCUDA(d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
-                                     Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
+        // Calculate initial transpose
+        updateCalculateTranspose();
 
         std::ofstream performance("performance.csv");
         performance << "Epoch, Batch, Num trials, Number correct" << std::endl;
@@ -143,19 +139,20 @@ int main()
 #endif
                 // Update weights
                 const unsigned int adamStep = (epoch * numBatches) + batch;
-                #define ADAM_OPTIMIZER_CUDA(POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS)   BatchLearning::adamOptimizerCUDA(d_DeltaG##POP_NAME, d_M##POP_NAME, d_V##POP_NAME, d_g##POP_NAME, NUM_SRC_NEURONS, NUM_TRG_NEURONS, adamStep, learningRate)
-
-                ADAM_OPTIMIZER_CUDA(InputRecurrentALIF, Parameters::numInputNeurons, Parameters::numRecurrentNeurons);
-                ADAM_OPTIMIZER_CUDA(ALIFALIFRecurrent, Parameters::numRecurrentNeurons, Parameters::numRecurrentNeurons);
-
-                BatchLearning::adamOptimizerTransposeCUDA(d_DeltaGRecurrentALIFOutput, d_MRecurrentALIFOutput, d_VRecurrentALIFOutput, d_gRecurrentALIFOutput, d_gOutputRecurrentALIF, 
-                                                          Parameters::numRecurrentNeurons, Parameters::numOutputNeurons, 
-                                                          adamStep, learningRate);
-
-                // Update biases
-                BatchLearning::adamOptimizerCUDA(d_DeltaBOutput, d_MOutput, d_VOutput, d_BOutput,
-                                                 Parameters::numOutputNeurons, 1,
-                                                 adamStep, learningRate);
+                
+                // Apply learning
+                const scalar firstMomentScale = 1.0f / (1.0f - std::pow(Parameters::adamBeta1, adamStep + 1));
+                const scalar secondMomentScale = 1.0f / (1.0f - std::pow(Parameters::adamBeta2, adamStep + 1));
+                alphaInputRecurrentWeightOptimiser = learningRate;
+                alphaRecurrentRecurrentWeightOptimiser = learningRate;
+                alphaRecurrentOutputWeightOptimiser = learningRate;
+                firstMomentScaleInputRecurrentWeightOptimiser = firstMomentScale;
+                firstMomentScaleRecurrentRecurrentWeightOptimiser = firstMomentScale;
+                firstMomentScaleRecurrentOutputWeightOptimiser = firstMomentScale;
+                secondMomentScaleInputRecurrentWeightOptimiser = secondMomentScale;
+                secondMomentScaleRecurrentRecurrentWeightOptimiser = secondMomentScale;
+                secondMomentScaleRecurrentOutputWeightOptimiser = secondMomentScale;
+                updateGradientLearn();
 
                 // Display performance in this epoch
                 std::cout << "\t\t" << numCorrect << "/" << numTrialsInBatch << "  correct" << std::endl;

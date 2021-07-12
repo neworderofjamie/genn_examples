@@ -11,12 +11,12 @@
 class OutputClassification : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(OutputClassification, 1, 7);
+    DECLARE_MODEL(OutputClassification, 1, 5);
 
     SET_PARAM_NAMES({"TauOut"});    // Membrane time constant [ms]
 
     SET_VARS({{"Y", "scalar"}, {"Pi", "scalar"}, {"E", "scalar"},
-              {"B", "scalar"}, {"DeltaB", "scalar"}, {"M", "scalar", VarAccess::READ_ONLY}, {"V", "scalar", VarAccess::READ_ONLY}});
+              {"B", "scalar"}, {"DeltaB", "scalar"}});
 
     SET_DERIVED_PARAMS({
         {"Kappa", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[0]); }}});
@@ -95,9 +95,7 @@ void modelDefinition(ModelSpec &model)
         0.0,    // Pi
         0.0,    // E
         0.0,    // B
-        0.0,    // DeltaB
-        0.0,    // M
-        0.0);   // V
+        0.0);   // DeltaB
 
     EPropALIF::ParamValues epropALIFParamVals(
         20.0,                                           // Eligibility trace time constant [ms]
@@ -124,10 +122,8 @@ void modelDefinition(ModelSpec &model)
 #endif
         0.0,                                                        // eFiltered
         0.0,                                                        // epsilonA
-        0.0,                                                        // DeltaG
-        0.0,                                                        // M
-        0.0);                                                       // V
-        
+        0.0);                                                       // DeltaG
+
     // Recurrent connections
     InitVarSnippet::Normal::ParamValues recurrentRecurrentWeightDist(0.0, weight0 / sqrt(Parameters::numRecurrentNeurons * 2));
     EPropALIF::VarValues recurrentRecurrentALIFInitVals(
@@ -138,10 +134,8 @@ void modelDefinition(ModelSpec &model)
 #endif
         0.0,                                                            // eFiltered
         0.0,                                                            // epsilonA
-        0.0,                                                            // DeltaG
-        0.0,                                                            // M
-        0.0);                                                           // V
-
+        0.0);                                                           // DeltaG
+        
     // Feedforward recurrent->output connections
     OutputLearning::ParamValues recurrentOutputParamVals(
         20.0);   // Eligibility trace time constant [ms]
@@ -156,9 +150,7 @@ void modelDefinition(ModelSpec &model)
 #else
         initVar<InitVarSnippet::Normal>(recurrentOutputWeightDist), // g
 #endif
-        0.0,                                                        // DeltaG
-        0.0,                                                        // M
-        0.0);                                                       // V
+        0.0);                                                       // DeltaG
 
     // Feedback connections
     // **HACK** this is actually a nasty corner case for the initialisation rules
@@ -187,43 +179,64 @@ void modelDefinition(ModelSpec &model)
     // Synapse populations
     //---------------------------------------------------------------------------
     // Input->recurrent connections
-    model.addSynapsePopulation<EPropALIF, PostsynapticModels::DeltaCurr>(
+    auto *inputRecurrent = model.addSynapsePopulation<EPropALIF, PostsynapticModels::DeltaCurr>(
         "InputRecurrentALIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "Input", "RecurrentALIF",
         epropALIFParamVals, inputRecurrentALIFInitVals, epropPreInitVals, epropPostInitVals,
         {}, {});
 
     // Recurrent->recurrent connections
-    model.addSynapsePopulation<EPropALIF, PostsynapticModels::DeltaCurr>(
+    auto *recurrentRecurrent = model.addSynapsePopulation<EPropALIF, PostsynapticModels::DeltaCurr>(
         "ALIFALIFRecurrent", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "RecurrentALIF", "RecurrentALIF",
         epropALIFParamVals, recurrentRecurrentALIFInitVals, epropPreInitVals, epropPostInitVals,
         {}, {});
 
-    // Output->recurrent populations
-    model.addSynapsePopulation<Continuous, Feedback>(
-        "OutputRecurrentALIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
-        "Output", "RecurrentALIF",
-        {}, outputRecurrentInitVals,
-        {}, {});
-
     // Recurrent->output connections
-    model.addSynapsePopulation<OutputLearning, PostsynapticModels::DeltaCurr>(
+    auto *recurrentOutput = model.addSynapsePopulation<OutputLearning, PostsynapticModels::DeltaCurr>(
         "RecurrentALIFOutput", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
         "RecurrentALIF", "Output",
         recurrentOutputParamVals, recurrentOutputInitVals, recurrentOutputPreInitVals, {},
+        {}, {});
+
+    // Output->recurrent populations
+    auto *outputRecurrent = model.addSynapsePopulation<Continuous, Feedback>(
+        "OutputRecurrentALIF", SynapseMatrixType::DENSE_INDIVIDUALG, NO_DELAY,
+        "Output", "RecurrentALIF",
+        {}, outputRecurrentInitVals,
         {}, {});
     
     //---------------------------------------------------------------------------
     // Custom updates
     //---------------------------------------------------------------------------
-    AdamOptimizer::ParamValues adamParams(0.001, 0.9, 0.999, 1E-8);
+    AdamOptimizer::ParamValues adamParams(Parameters::adamBeta1, Parameters::adamBeta2, 1E-8);
     AdamOptimizer::VarValues adamVarValues(0.0, 0.0);
-    AdamOptimizer::VarReferences<NeuronVarReference> adamBiasVarReferences(NeuronVarReference(output, "DeltaB"),    // Gradient 
-                                                                                               NeuronVarReference(output, "B"));        // Variable
     
+    AdamOptimizer::VarReferences adamBiasVarReferences(createVarRef(output, "DeltaB"),    // Gradient 
+                                                       createVarRef(output, "B"));        // Variable
     model.addCustomUpdate<AdamOptimizer>("OutputBiasOptimiser", "GradientLearn",
                                          adamParams, adamVarValues, adamBiasVarReferences);
-    model.addCustomUpdate<AdamOptimizer>("OutputBiasOptimiser2", "GradientLearnSlow",
-                                         adamParams, adamVarValues, adamBiasVarReferences);                                  
+
+    AdamOptimizer::WUVarReferences adamInputRecurrentVarReferences(
+        createWUVarRef(inputRecurrent, "DeltaG"),    // Gradient 
+        createWUVarRef(inputRecurrent, "g"));        // Variable
+    model.addCustomUpdate<AdamOptimizer>("InputRecurrentWeightOptimiser", "GradientLearn",
+                                         adamParams, adamVarValues, adamInputRecurrentVarReferences);
+
+    AdamOptimizer::WUVarReferences adamRecurrentRecurrentVarReferences(
+        createWUVarRef(recurrentRecurrent, "DeltaG"),    // Gradient 
+        createWUVarRef(recurrentRecurrent, "g"));        // Variable
+    model.addCustomUpdate<AdamOptimizer>("RecurrentRecurrentWeightOptimiser", "GradientLearn",
+                                         adamParams, adamVarValues, adamRecurrentRecurrentVarReferences);     
+
+    AdamOptimizer::WUVarReferences adamRecurrentOutputVarReferences(
+        createWUVarRef(recurrentOutput, "DeltaG"),                      // Gradient 
+        createWUVarRef(recurrentOutput, "g", outputRecurrent, "g"));    // Variable
+    model.addCustomUpdate<AdamOptimizer>("RecurrentOutputWeightOptimiser", "GradientLearn",
+                                         adamParams, adamVarValues, adamRecurrentOutputVarReferences);
+
+    CustomUpdateModels::Transpose::WUVarReferences transposeRecurrentOutputVarReferences(
+        createWUVarRef(recurrentOutput, "g", outputRecurrent, "g"));    // Variable
+    model.addCustomUpdate<CustomUpdateModels::Transpose>("RecurrentOutputWeightTranspose", "CalculateTranspose",
+                                                         {}, {}, transposeRecurrentOutputVarReferences);
 }

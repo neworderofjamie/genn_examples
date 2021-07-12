@@ -19,4 +19,7 @@ namespace Parameters
     constexpr unsigned int numInputNeurons = 100;
     constexpr unsigned int numRecurrentNeurons = 800;
     constexpr unsigned int numOutputNeurons = 16;
+    
+    constexpr double adamBeta1 = 0.9;
+    constexpr double adamBeta2 = 0.999;
 }
