@@ -21,7 +21,7 @@ CUE_TIME = 20.0
 ADAM_BETA1 = 0.9
 ADAM_BETA2 = 0.999
 
-BATCH_SIZE = 256
+BATCH_SIZE = 512
 
 RECORD = False
 
@@ -30,8 +30,8 @@ NUM_OUTPUT_NEURONS = 16
 
 WEIGHT_0 = 1.0
 
-NUM_EPOCHS = 5
-RESUME_EPOCH = None
+NUM_EPOCHS = 10
+RESUME_EPOCH = 4
 
 STIMULI_TIMESTEPS = int(np.ceil(MAX_STIMULI_TIME / TIMESTEP_MS))
 CUE_TIMESTEPS = int(np.ceil(CUE_TIME / TIMESTEP_MS))
@@ -401,9 +401,13 @@ recurrent_recurrent_g_view = recurrent_recurrent.vars["g"].view
 recurrent_output_g_view = recurrent_output.vars["g"].view
 
 # Open file
-performance_file = open("performance.csv", "w")
-performance_csv = csv.writer(performance_file, delimiter=",")
-performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
+if RESUME_EPOCH is None:
+    performance_file = open("performance.csv", "w")
+    performance_csv = csv.writer(performance_file, delimiter=",")
+    performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
+else:
+    performance_file = open("performance.csv", "a")
+    performance_csv = csv.writer(performance_file, delimiter=",")
 
 # Create 'signal' spike times and neuron indices for a single batch
 # **NOTE** so it can concatenated with tonic we use microseconds for times
