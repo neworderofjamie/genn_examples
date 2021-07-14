@@ -13,9 +13,10 @@ from dataloader import DataLoader
 
 TIMESTEP_MS = 1.0
 TIMING_ENABLED = True
+SHD = True
 
-MAX_STIMULI_TIME = 1568.0#1369.140625
-MAX_SPIKES_PER_STIMULI = 10000#14917
+MAX_STIMULI_TIME = 1369.140625 if SHD else 1568.0
+MAX_SPIKES_PER_STIMULI = 14917 if SHD else 10000
 CUE_TIME = 20.0
 
 ADAM_BETA1 = 0.9
@@ -26,7 +27,7 @@ BATCH_SIZE = 512
 RECORD = False
 
 NUM_RECURRENT_NEURONS = 800
-NUM_OUTPUT_NEURONS = 16
+NUM_OUTPUT_NEURONS = 32 if SHD else 16
 
 WEIGHT_0 = 1.0
 
@@ -105,8 +106,8 @@ recurrent_alif_model = genn_model.create_custom_neuron_class(
     is_auto_refractory_required=False)
 
 # **TODO** helper function to generate these models for arbitrary number of output neurons
-output_classification_model = genn_model.create_custom_neuron_class(
-    "output_classification",
+output_classification_model_16 = genn_model.create_custom_neuron_class(
+    "output_classification_16",
     param_names=["TauOut", "TrialTime", "StimuliTime"],
     var_name_types=[("Y", "scalar"), ("Pi", "scalar"), ("E", "scalar"), ("B", "scalar"), ("DeltaB", "scalar")],
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
@@ -123,14 +124,52 @@ output_classification_model = genn_model.create_custom_neuron_class(
     m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x2));
     m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x4));
     m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x8));
-    //m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x10));
     const scalar expPi = exp($(Y) - m);
     scalar sumExpPi = expPi;
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x1);
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x2);
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x4);
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x8);
-    //sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x10);
+    $(Pi) = expPi / sumExpPi;
+
+    // If we should be presenting stimuli
+    if(trialTime < $(StimuliTime)) {
+       $(E) = 0.0;
+    }
+    else {
+       const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
+       $(E) = $(Pi) - piStar;
+    }
+    $(DeltaB) += $(E);
+    """,
+    is_auto_refractory_required=False)
+
+output_classification_model_32 = genn_model.create_custom_neuron_class(
+    "output_classification_32",
+    param_names=["TauOut", "TrialTime", "StimuliTime"],
+    var_name_types=[("Y", "scalar"), ("Pi", "scalar"), ("E", "scalar"), ("B", "scalar"), ("DeltaB", "scalar")],
+    derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
+    extra_global_params=[("labels", "uint8_t*")],
+
+    sim_code="""
+    // Split timestep into trial index and time
+    const int trial = (int)floor($(t) / $(TrialTime));
+    const float trialTime = $(t) - (trial * $(TrialTime));
+
+    $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
+    scalar m = $(Y);
+    m = fmax(m, __shfl_xor_sync(0xFFFFFFFF, m, 0x1));
+    m = fmax(m, __shfl_xor_sync(0xFFFFFFFF, m, 0x2));
+    m = fmax(m, __shfl_xor_sync(0xFFFFFFFF, m, 0x4));
+    m = fmax(m, __shfl_xor_sync(0xFFFFFFFF, m, 0x8));
+    m = fmax(m, __shfl_xor_sync(0xFFFFFFFF, m, 0x10));
+    const scalar expPi = exp($(Y) - m);
+    scalar sumExpPi = expPi;
+    sumExpPi +=  __shfl_xor_sync(0xFFFFFFFF, sumExpPi, 0x1);
+    sumExpPi +=  __shfl_xor_sync(0xFFFFFFFF, sumExpPi, 0x2);
+    sumExpPi +=  __shfl_xor_sync(0xFFFFFFFF, sumExpPi, 0x4);
+    sumExpPi +=  __shfl_xor_sync(0xFFFFFFFF, sumExpPi, 0x8);
+    sumExpPi +=  __shfl_xor_sync(0xFFFFFFFF, sumExpPi, 0x10);
     $(Pi) = expPi / sumExpPi;
 
     // If we should be presenting stimuli
@@ -243,7 +282,10 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
 
 
 # Create dataset
-dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
+if SHD:
+    dataset = tonic.datasets.SHD(save_to='./data', train=True)
+else:
+    dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
 
 # Create loader
 data_loader = DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
@@ -318,7 +360,7 @@ input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArra
                                     {}, {"startSpike": None, "endSpike": None})
 recurrent = model.add_neuron_population("Recurrent", NUM_RECURRENT_NEURONS, recurrent_alif_model,
                                         recurrent_params, recurrent_vars)
-output = model.add_neuron_population("Output", NUM_OUTPUT_NEURONS, output_classification_model,
+output = model.add_neuron_population("Output", NUM_OUTPUT_NEURONS, output_classification_model_32 if SHD else output_classification_model_16,
                                      output_params, output_vars)
 
 # Allocate memory for input spikes and labels
@@ -432,13 +474,16 @@ for epoch in range(epoch_start, NUM_EPOCHS):
 
         # Get duration of each stimuli in batch
         batch_events, batch_labels = zip(*batch_data)
-        #batch_stimuli_durations = [np.amax(e[:,0]) for e in batch_events]
 
         # Concatenate together all spike times, offsetting so each stimuli ends at the start of the cue time of each trial
-        #spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + e[:,0] + ((MAX_STIMULI_TIME * 1000.0) - d)
-        #                              for i, (d, e) in enumerate(zip(batch_stimuli_durations, batch_events))])
-        spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + np.concatenate((e[:,0], signal_spike_times))
-                                      for i, e in enumerate(batch_events)])
+        if SHD:
+            batch_stimuli_durations = [np.amax(e[:,0]) for e in batch_events]
+            spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + np.concatenate((e[:,0] + ((MAX_STIMULI_TIME * 1000.0) - d), signal_spike_times))
+                                          for i, (d, e) in enumerate(zip(batch_stimuli_durations, batch_events))])
+        else:
+            spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + np.concatenate((e[:,0], signal_spike_times))
+                                          for i, e in enumerate(batch_events)])
+
         spike_ids = np.concatenate([np.concatenate((e[:,1], signal_spike_idx)) for e in batch_events]).astype(int)
 
         # Indirectly sort spikes, first by neuron id and then by time
