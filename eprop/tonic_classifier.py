@@ -17,7 +17,7 @@ SHD = True
 
 MAX_STIMULI_TIME = 1369.140625 if SHD else 1568.0
 MAX_SPIKES_PER_STIMULI = 14917 if SHD else 10000
-CUE_TIME = 20.0
+#CUE_TIME = 20.0
 
 ADAM_BETA1 = 0.9
 ADAM_BETA2 = 0.999
@@ -31,12 +31,12 @@ NUM_OUTPUT_NEURONS = 32 if SHD else 16
 
 WEIGHT_0 = 1.0
 
-NUM_EPOCHS = 10
-RESUME_EPOCH = None
+NUM_EPOCHS = 50
+RESUME_EPOCH = 9
 
 STIMULI_TIMESTEPS = int(np.ceil(MAX_STIMULI_TIME / TIMESTEP_MS))
-CUE_TIMESTEPS = int(np.ceil(CUE_TIME / TIMESTEP_MS))
-TRIAL_TIMESTEPS = STIMULI_TIMESTEPS + CUE_TIMESTEPS
+#CUE_TIMESTEPS = int(np.ceil(CUE_TIME / TIMESTEP_MS))
+TRIAL_TIMESTEPS = STIMULI_TIMESTEPS # + CUE_TIMESTEPS
 
 # ----------------------------------------------------------------------------
 # Helper functions
@@ -133,13 +133,13 @@ output_classification_model_16 = genn_model.create_custom_neuron_class(
     $(Pi) = expPi / sumExpPi;
 
     // If we should be presenting stimuli
-    if(trialTime < $(StimuliTime)) {
-       $(E) = 0.0;
-    }
-    else {
+    //if(trialTime < $(StimuliTime)) {
+    //   $(E) = 0.0;
+    //}
+    //else {
        const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
        $(E) = $(Pi) - piStar;
-    }
+    //}
     $(DeltaB) += $(E);
     """,
     is_auto_refractory_required=False)
@@ -173,13 +173,13 @@ output_classification_model_32 = genn_model.create_custom_neuron_class(
     $(Pi) = expPi / sumExpPi;
 
     // If we should be presenting stimuli
-    if(trialTime < $(StimuliTime)) {
-       $(E) = 0.0;
-    }
-    else {
+    //if(trialTime < $(StimuliTime)) {
+    //   $(E) = 0.0;
+    //}
+    //else {
        const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
        $(E) = $(Pi) - piStar;
-    }
+    //}
     $(DeltaB) += $(E);
     """,
     is_auto_refractory_required=False)
@@ -292,7 +292,7 @@ data_loader = DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
 
 # Calculate number of input neurons from sensor size
 # **NOTE** we add one as we use an additional neuron to 
-num_input_neurons = np.product(dataset.sensor_size) + 1
+num_input_neurons = np.product(dataset.sensor_size) 
 
 # Calculate number of valid outputs from classes
 num_outputs = len(dataset.classes)
@@ -305,7 +305,7 @@ recurrent_params = {"TauM": 20.0, "TauAdap": 2000.0, "Vthresh": 0.6, "TauRefrac"
 recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0, "E": 0.0}
 
 # Output population
-output_params = {"TauOut": 20.0, "TrialTime": MAX_STIMULI_TIME + CUE_TIME, "StimuliTime": MAX_STIMULI_TIME}
+output_params = {"TauOut": 20.0, "TrialTime": MAX_STIMULI_TIME, "StimuliTime": MAX_STIMULI_TIME}
 output_vars = {"Y": 0.0, "Pi": 0.0, "E": 0.0, "DeltaB": 0.0}
 if RESUME_EPOCH is None:
     output_vars["B"] = 0.0
@@ -453,8 +453,8 @@ else:
 
 # Create 'signal' spike times and neuron indices for a single batch
 # **NOTE** so it can concatenated with tonic we use microseconds for times
-signal_spike_times = (MAX_STIMULI_TIME * 1000.0) + np.arange(0.0, CUE_TIME * 1000.0, TIMESTEP_MS * 1000.0)
-signal_spike_idx = np.tile(num_input_neurons - 1, CUE_TIMESTEPS)
+#signal_spike_times = (MAX_STIMULI_TIME * 1000.0) + np.arange(0.0, CUE_TIME * 1000.0, TIMESTEP_MS * 1000.0)
+#signal_spike_idx = np.tile(num_input_neurons - 1, CUE_TIMESTEPS)
 
 # Loop through epochs
 epoch_start = 0 if RESUME_EPOCH is None else (RESUME_EPOCH + 1)
@@ -476,15 +476,10 @@ for epoch in range(epoch_start, NUM_EPOCHS):
         batch_events, batch_labels = zip(*batch_data)
 
         # Concatenate together all spike times, offsetting so each stimuli ends at the start of the cue time of each trial
-        if SHD:
-            batch_stimuli_durations = [np.amax(e[:,0]) for e in batch_events]
-            spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + np.concatenate((e[:,0] + ((MAX_STIMULI_TIME * 1000.0) - d), signal_spike_times))
-                                          for i, (d, e) in enumerate(zip(batch_stimuli_durations, batch_events))])
-        else:
-            spike_times = np.concatenate([(i * 1000.0 * (MAX_STIMULI_TIME + CUE_TIME)) + np.concatenate((e[:,0], signal_spike_times))
-                                          for i, e in enumerate(batch_events)])
+        spike_times = np.concatenate([(i * 1000.0 * MAX_STIMULI_TIME) + e[:,0]
+                                      for i, e in enumerate(batch_events)])
 
-        spike_ids = np.concatenate([np.concatenate((e[:,1], signal_spike_idx)) for e in batch_events]).astype(int)
+        spike_ids = np.concatenate([e[:,1] for e in batch_events]).astype(int)
 
         # Indirectly sort spikes, first by neuron id and then by time
         spike_order = np.lexsort((spike_times, spike_ids))
@@ -515,14 +510,12 @@ for epoch in range(epoch_start, NUM_EPOCHS):
             for i in range(TRIAL_TIMESTEPS):
                 model.step_time()
 
-                # If we're in cue region of this trial
-                if i > STIMULI_TIMESTEPS:
-                    # Pull Pi from device and add to total
-                    output.pull_var_from_device("Pi")
-                    classification_output += output_pi_view[:num_outputs]
+                # Pull Pi from device and add to total
+                output.pull_var_from_device("Pi")
+                classification_output += output_pi_view[:num_outputs]
 
-                    if RECORD:
-                        output.pull_var_from_device("E")
+                if RECORD:
+                    output.pull_var_from_device("E")
 
             # If maximum output matches label, increment counter
             if np.argmax(classification_output) == label:
