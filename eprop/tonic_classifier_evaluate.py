@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from time import perf_counter
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
+from pygenn.genn_wrapper.Models import VarAccess_READ_ONLY
 
 from dataloader import DataLoader
 # Eprop imports
@@ -67,11 +68,18 @@ recurrent_alif_model = genn_model.create_custom_neuron_class(
 output_classification_model = genn_model.create_custom_neuron_class(
     "output_classification",
     param_names=["TauOut"],
-    var_name_types=[("Y", "scalar"), ("B", "scalar")],
+    var_name_types=[("Y", "scalar"), ("YSum", "scalar"), ("B", "scalar", VarAccess_READ_ONLY)],
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
 
     sim_code="""
+    // Reset YSum at start of each batch
+    if($(t) == 0.0) {
+        $(YSum) = 0.0;
+    }
+    
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
+    
+    $(YSum) += $(Y);
     """,
     is_auto_refractory_required=False)
 
@@ -100,8 +108,7 @@ recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0}
 
 # Output population
 output_params = {"TauOut": 20.0}
-output_vars = {"Y": 0.0}
-output_vars["B"] = np.load("b_output_trained.npy")
+output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("b_output_trained.npy")}
 
 # ----------------------------------------------------------------------------
 # Synapse initialisation
@@ -166,7 +173,7 @@ input_neuron_start_spike = input.vars["startSpike"].view
 input_neuron_end_spike = input.vars["endSpike"].view
 input_spike_times_view = input.extra_global_params["spikeTimes"].view
 
-output_y_view = output.vars["Y"].view
+output_y_sum_view = output.vars["YSum"].view
 
 # Open file
 performance_file = open("performance_evaluate.csv", "w")
@@ -233,13 +240,11 @@ for batch_idx, batch_data in enumerate(data_iter):
     for i in range(TRIAL_TIMESTEPS):
         model.step_time()
 
-        # Pull Y from device and add to total
-        # **TODO** sum on device
-        output.pull_var_from_device("Y")
-        classification_output += output_y_view[:len(batch_events),:num_outputs]
-
+    # Pull sum of outputs from device
+    output.pull_var_from_device("YSum")
+    
     # If maximum output matches label, increment counter
-    num_correct += np.sum(np.argmax(classification_output, axis=1) == batch_labels)
+    num_correct += np.sum(np.argmax(output_y_sum_view[:len(batch_events),:], axis=1) == batch_labels)
 
     print("\t%u / %u correct = %f %%" % (num_correct, len(batch_events), 100.0 * num_correct / len(batch_events)))
     total_num += len(batch_events)
