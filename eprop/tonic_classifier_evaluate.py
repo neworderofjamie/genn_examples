@@ -170,7 +170,7 @@ output_y_view = output.vars["Y"].view
 # Open file
 performance_file = open("performance_evaluate.csv", "w")
 performance_csv = csv.writer(performance_file, delimiter=",")
-performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
+performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
 # Get new data iterator for new epoch
 data_iter = iter(data_loader)
@@ -225,7 +225,7 @@ for batch_idx, batch_data in enumerate(data_iter):
             num_correct += 1
 
     print("\t\t%u / %u correct" % (num_correct, len(batch_events)))
-    performance_csv.writerow((epoch, batch_idx, len(batch_events), num_correct))
+    performance_csv.writerow((batch_idx, len(batch_events), num_correct))
     performance_file.flush()
 
     if RECORD:
