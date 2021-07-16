@@ -184,6 +184,7 @@ performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 data_iter = iter(data_loader)
 total_num = 0;
 total_num_correct = 0
+start_time = perf_counter()
 for batch_idx, batch_data in enumerate(data_iter):
     print("Batch %u" % batch_idx)
     batch_start_time = perf_counter()
@@ -266,7 +267,9 @@ for batch_idx, batch_data in enumerate(data_iter):
     batch_end_time = perf_counter()
     print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
 
+end_time = perf_counter()
 print("%u / %u correct = %f %%" % (total_num_correct, total_num, 100.0 * total_num_correct / total_num))
+print("Time:%f ms" % ((end_time - start_time) * 1000.0))
 
 performance_file.close()
 if TIMING_ENABLED:
