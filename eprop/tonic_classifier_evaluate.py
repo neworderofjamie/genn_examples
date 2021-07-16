@@ -19,7 +19,7 @@ MAX_STIMULI_TIME = 1369.140625 if SHD else 1568.0
 MAX_SPIKES_PER_STIMULI = 14917 if SHD else 10000
 #CUE_TIME = 20.0
 
-BATCH_SIZE = 512
+BATCH_SIZE = 64
 
 RECORD = False
 
@@ -82,7 +82,7 @@ else:
     dataset = tonic.datasets.SMNIST(save_to='./data', train=False)
 
 # Create loader
-data_loader = DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
+data_loader = DataLoader(dataset, shuffle=False, batch_size=BATCH_SIZE)
 
 # Calculate number of input neurons from sensor size
 # **NOTE** we add one as we use an additional neuron to 
@@ -121,6 +121,7 @@ recurrent_output_vars = {"g": np.load("g_recurrent_output_trained.npy")}
 model = genn_model.GeNNModel("float", "tonic_classifier_evaluate")
 model.dT = TIMESTEP_MS
 model.timing_enabled = TIMING_ENABLED
+model.batch_size = BATCH_SIZE
 
 # Add neuron populations
 input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArray",
@@ -158,7 +159,7 @@ recurrent_output = model.add_synapse_population(
 
 # Build and load model
 model.build()
-model.load(num_recording_timesteps=TRIAL_TIMESTEPS * BATCH_SIZE)
+model.load(num_recording_timesteps=TRIAL_TIMESTEPS)
 
 # Get views
 input_neuron_start_spike = input.vars["startSpike"].view
@@ -174,57 +175,76 @@ performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
 # Get new data iterator for new epoch
 data_iter = iter(data_loader)
+total_num = 0;
+total_num_correct = 0
 for batch_idx, batch_data in enumerate(data_iter):
-    print("\tBatch %u" % batch_idx)
+    print("Batch %u" % batch_idx)
     batch_start_time = perf_counter()
 
     # Reset time
     model.timestep = 0
     model.t = 0.0
 
-    # Get duration of each stimuli in batch
+    # Unzip batch data into events and labels
     batch_events, batch_labels = zip(*batch_data)
-
-    # Concatenate together all spike times, offsetting so each stimuli ends at the start of the cue time of each trial
-    spike_times = np.concatenate([(i * 1000.0 * MAX_STIMULI_TIME) + e[:,0]
-                                  for i, e in enumerate(batch_events)])
-
-    spike_ids = np.concatenate([e[:,1] for e in batch_events]).astype(int)
-
-    # Indirectly sort spikes, first by neuron id and then by time
-    spike_order = np.lexsort((spike_times, spike_ids))
-
-    # Use this to re-order spike ids
-    spike_ids = spike_ids[spike_order]
+    
+    # Sort events first by neuron id and then by time and use to order spike times
+    batch_spike_times = [e[np.lexsort((e[:,1], e[:,1])),0]
+                         for e in batch_events]
+    
+    # Convert events ids to integer
+    batch_id_int = [e[:,1].astype(int) for e in batch_events]
+    
+    # Calculate starting index of spikes in each stimuli across the batch
+    # **NOTE** we calculate extra end value for use if padding is required
+    cum_spikes_per_stimuli = np.concatenate(([0], np.cumsum([len(e) for e in batch_id_int])))
+    
+    # Add this cumulative sum onto the cumulative sum of spikes per neuron
+    # **NOTE** zip will stop before extra cum_spikes_per_stimuli value
+    end_spikes = np.vstack([c + np.cumsum(np.bincount(e, minlength=num_input_neurons)) 
+                            for e, c in zip(batch_id_int, cum_spikes_per_stimuli)])
+    
+    start_spikes = np.empty((len(batch_events), num_input_neurons), dtype=int)
+    start_spikes[:,0] = cum_spikes_per_stimuli[:-1]
+    start_spikes[:,1:] = end_spikes[:,:-1]
+    
+    if len(batch_events) != BATCH_SIZE:
+        spike_padding = np.ones((BATCH_SIZE - len(batch_events), num_input_neurons), dtype=int) * cum_spikes_per_stimuli[-1]
+        end_spikes = np.vstack((end_spikes, spike_padding))
+        start_spikes = np.vstack((start_spikes, spike_padding))
+    
+    # Concatenate together all spike times
+    spike_times = np.concatenate(batch_spike_times)
 
     # Check that spike times will fit in view, copy them and push them
     assert len(spike_times) <= len(input_spike_times_view)
-    input_spike_times_view[0:len(spike_ids)] = spike_times[spike_order] / 1000.0
+    input_spike_times_view[0:len(spike_times)] = spike_times / 1000.0
     input.push_extra_global_param_to_device("spikeTimes")
 
     # Calculate start and end spike indices
-    input_neuron_end_spike[:] = np.cumsum(np.bincount(spike_ids, minlength=num_input_neurons))
-    input_neuron_start_spike[:] = np.concatenate(([0], input_neuron_end_spike[:-1]))
+    input_neuron_end_spike[:] = end_spikes
+    input_neuron_start_spike[:] = start_spikes
     input.push_var_to_device("startSpike")
     input.push_var_to_device("endSpike")
 
-    # Loop through trials in batch
+    # Loop through timesteps
     num_correct = 0
-    for trial, label in enumerate(batch_labels):
-        # Loop through timesteps in each trial
-        classification_output = np.zeros(num_outputs)
-        for i in range(TRIAL_TIMESTEPS):
-            model.step_time()
+    classification_output = np.zeros((len(batch_events), num_outputs))
+    for i in range(TRIAL_TIMESTEPS):
+        model.step_time()
 
-            # Pull Pi from device and add to total
-            output.pull_var_from_device("Y")
-            classification_output += output_y_view[:num_outputs]
+        # Pull Y from device and add to total
+        # **TODO** sum on device
+        output.pull_var_from_device("Y")
+        classification_output += output_y_view[:len(batch_events),:num_outputs]
 
-        # If maximum output matches label, increment counter
-        if np.argmax(classification_output) == label:
-            num_correct += 1
+    # If maximum output matches label, increment counter
+    num_correct += np.sum(np.argmax(classification_output, axis=1) == batch_labels)
 
-    print("\t\t%u / %u correct" % (num_correct, len(batch_events)))
+    print("\t%u / %u correct = %f %%" % (num_correct, len(batch_events), 100.0 * num_correct / len(batch_events)))
+    total_num += len(batch_events)
+    total_num_correct += num_correct
+    
     performance_csv.writerow((batch_idx, len(batch_events), num_correct))
     performance_file.flush()
 
@@ -233,18 +253,20 @@ for batch_idx, batch_data in enumerate(data_iter):
         model.pull_recording_buffers_from_device()
 
         # Write spikes
-        write_spike_file("input_spikes_%u_%u.csv" % (epoch, batch_idx), input.spike_recording_data)
-        write_spike_file("recurrent_spikes_%u_%u.csv" % (epoch, batch_idx), recurrent.spike_recording_data)
-
+        for i, s in enumerate(input.spike_recording_data):
+            write_spike_file("input_spikes_%u_%u.csv" % (batch_idx, i), s)
+        for i, s in enumerate(recurrent.spike_recording_data):
+            write_spike_file("recurrent_spikes_%u_%u.csv" % (batch_idx, i), s)
+    
     batch_end_time = perf_counter()
     print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
+
+print("%u / %u correct = %f %%" % (total_num_correct, total_num, 100.0 * total_num_correct / total_num))
+
 performance_file.close()
 if TIMING_ENABLED:
     print("Init: %f" % model.init_time)
     print("Init sparse: %f" % model.init_sparse_time)
     print("Neuron update: %f" % model.neuron_update_time)
     print("Presynaptic update: %f" % model.presynaptic_update_time)
-    print("Synapse dynamics: %f" % model.synapse_dynamics_time)
-    print("Gradient learning custom update: %f" % model.get_custom_update_time("GradientLearn"))
-    print("Gradient learning custom update transpose: %f" % model.get_custom_update_transpose_time("GradientLearn"))
    
