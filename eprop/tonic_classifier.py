@@ -485,6 +485,7 @@ for epoch in range(epoch_start, NUM_EPOCHS):
         spike_order = np.lexsort((spike_times, spike_ids))
 
         # Use this to re-order spike ids
+        # **TODO** order doesn't effect  bincount so this is unnecesary
         spike_ids = spike_ids[spike_order]
 
         # Check that spike times will fit in view, copy them and push them
