@@ -25,7 +25,7 @@ parser.add_argument("--dataset", choices=["smnist", "shd"])
 args = parser.parse_args()
 
 MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
-MAX_SPIKES_PER_STIMULI = {"smnist": 10000, "shd": 14917}
+MAX_SPIKES_PER_STIMULI = {"smnist": 10088, "shd": 14917}
 
 # ----------------------------------------------------------------------------
 # Helper functions
@@ -246,6 +246,8 @@ for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerat
     model.t = 0.0
 
     # Check that spike times will fit in view, copy them and push them
+    if len(spike_times) > len(input_spike_times_view):
+        print(len(spike_times), len(input_spike_times_view))
     assert len(spike_times) <= len(input_spike_times_view)
     input_spike_times_view[0:len(spike_times)] = spike_times / 1000.0
     input.push_extra_global_param_to_device("spikeTimes")
