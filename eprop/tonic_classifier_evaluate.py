@@ -192,7 +192,11 @@ batch_data = []
 data_iter = iter(data_loader)
 for d in data_iter:
     # Unzip batch data into events and labels
-    batch_events, batch_labels = zip(*d)
+    if args.batch_size == 1:
+        batch_events = [d[0]]
+        batch_labels = [d[1]]
+    else:
+        batch_events, batch_labels = zip(*d)
     
     # Sort events first by neuron id and then by time and use to order spike times
     batch_spike_times = [e[np.lexsort((e[:,1], e[:,1])),0]
@@ -262,7 +266,10 @@ for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerat
     output.pull_var_from_device("YSum")
     
     # If maximum output matches label, increment counter
-    num_correct += np.sum(np.argmax(output_y_sum_view[:len(batch_labels),:], axis=1) == batch_labels)
+    if args.batch_size == 1:
+        num_correct += np.sum(np.argmax(output_y_sum_view) == batch_labels)
+    else:
+        num_correct += np.sum(np.argmax(output_y_sum_view[:len(batch_labels),:], axis=1) == batch_labels)
 
     print("\t%u / %u correct = %f %%" % (num_correct, len(batch_labels), 100.0 * num_correct / len(batch_labels)))
     total_num += len(batch_labels)
