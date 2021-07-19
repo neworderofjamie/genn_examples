@@ -3,6 +3,7 @@ import numpy as np
 import tonic
 import matplotlib.pyplot as plt
 
+from argparse import ArgumentParser
 from time import perf_counter
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
@@ -11,32 +12,26 @@ from dataloader import DataLoader
 # Eprop imports
 #import eprop
 
-TIMESTEP_MS = 1.0
-TIMING_ENABLED = True
-SHD = True
+# Build command line parse
+parser = ArgumentParser(description="Train eProp classifier")
+parser.add_argument("--dt", type=float, default=1.0)
+parser.add_argument("--timing", action="store_true")
+parser.add_argument("--record", action="store_true")
+parser.add_argument("--batch-size", type=int, default=512)
+parser.add_argument("--num-recurrent-alif", type=int, default=256)
+parser.add_argument("--num-epochs", type=int, default=0)
+parser.add_argument("--resume-epoch", type=int, default=None)
+parser.add_argument("--dataset", choices=["smnist", "shd"])
+args = parser.parse_args()
 
-MAX_STIMULI_TIME = 1369.140625 if SHD else 1568.0
-MAX_SPIKES_PER_STIMULI = 14917 if SHD else 10000
-#CUE_TIME = 20.0
+MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
+MAX_SPIKES_PER_STIMULI = {"smnist": 10000, "shd": 14917}
 
 ADAM_BETA1 = 0.9
 ADAM_BETA2 = 0.999
 
-BATCH_SIZE = 512
-
-RECORD = False
-
-NUM_RECURRENT_NEURONS = 800
-NUM_OUTPUT_NEURONS = 32 if SHD else 16
-
 WEIGHT_0 = 1.0
 
-NUM_EPOCHS = 50
-RESUME_EPOCH = 9
-
-STIMULI_TIMESTEPS = int(np.ceil(MAX_STIMULI_TIME / TIMESTEP_MS))
-#CUE_TIMESTEPS = int(np.ceil(CUE_TIME / TIMESTEP_MS))
-TRIAL_TIMESTEPS = STIMULI_TIMESTEPS # + CUE_TIMESTEPS
 
 # ----------------------------------------------------------------------------
 # Helper functions
@@ -108,15 +103,14 @@ recurrent_alif_model = genn_model.create_custom_neuron_class(
 # **TODO** helper function to generate these models for arbitrary number of output neurons
 output_classification_model_16 = genn_model.create_custom_neuron_class(
     "output_classification_16",
-    param_names=["TauOut", "TrialTime", "StimuliTime"],
+    param_names=["TauOut", "TrialTime"],
     var_name_types=[("Y", "scalar"), ("Pi", "scalar"), ("E", "scalar"), ("B", "scalar"), ("DeltaB", "scalar")],
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
     extra_global_params=[("labels", "uint8_t*")],
 
     sim_code="""
-    // Split timestep into trial index and time
+    // Calculate trial index from time
     const int trial = (int)floor($(t) / $(TrialTime));
-    const float trialTime = $(t) - (trial * $(TrialTime));
 
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
     scalar m = $(Y);
@@ -132,29 +126,23 @@ output_classification_model_16 = genn_model.create_custom_neuron_class(
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x8);
     $(Pi) = expPi / sumExpPi;
 
-    // If we should be presenting stimuli
-    //if(trialTime < $(StimuliTime)) {
-    //   $(E) = 0.0;
-    //}
-    //else {
-       const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
-       $(E) = $(Pi) - piStar;
-    //}
+    const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
+    $(E) = $(Pi) - piStar;
+
     $(DeltaB) += $(E);
     """,
     is_auto_refractory_required=False)
 
 output_classification_model_32 = genn_model.create_custom_neuron_class(
     "output_classification_32",
-    param_names=["TauOut", "TrialTime", "StimuliTime"],
+    param_names=["TauOut", "TrialTime"],
     var_name_types=[("Y", "scalar"), ("Pi", "scalar"), ("E", "scalar"), ("B", "scalar"), ("DeltaB", "scalar")],
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
     extra_global_params=[("labels", "uint8_t*")],
 
     sim_code="""
-    // Split timestep into trial index and time
+    // Calculate trial index from time
     const int trial = (int)floor($(t) / $(TrialTime));
-    const float trialTime = $(t) - (trial * $(TrialTime));
 
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
     scalar m = $(Y);
@@ -172,14 +160,9 @@ output_classification_model_32 = genn_model.create_custom_neuron_class(
     sumExpPi +=  __shfl_xor_sync(0xFFFFFFFF, sumExpPi, 0x10);
     $(Pi) = expPi / sumExpPi;
 
-    // If we should be presenting stimuli
-    //if(trialTime < $(StimuliTime)) {
-    //   $(E) = 0.0;
-    //}
-    //else {
-       const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
-       $(E) = $(Pi) - piStar;
-    //}
+    const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
+    $(E) = $(Pi) - piStar;
+
     $(DeltaB) += $(E);
     """,
     is_auto_refractory_required=False)
@@ -282,13 +265,18 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
 
 
 # Create dataset
-if SHD:
+if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=True)
-else:
+elif args.dataset == "smnist":
     dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
+else:
+    raise RuntimeError("Unknown dataset '%s'" % args.dataset)
+
+# Build file suffix
+name_suffix = "%u" % (args.num_recurrent_alif)
 
 # Create loader
-data_loader = DataLoader(dataset, shuffle=True, batch_size=BATCH_SIZE)
+data_loader = DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
 
 # Calculate number of input neurons from sensor size
 # **NOTE** we add one as we use an additional neuron to 
@@ -296,6 +284,13 @@ num_input_neurons = np.product(dataset.sensor_size)
 
 # Calculate number of valid outputs from classes
 num_outputs = len(dataset.classes)
+
+# Round up to power-of-two
+num_output_neurons = int(2**(np.ceil(np.log2(num_outputs))))
+
+# Mapping of output neuron numbers to models
+output_neuron_models = {16: output_classification_model_16,
+                        32: output_classification_model_32}
 
 # ----------------------------------------------------------------------------
 # Neuron initialisation
@@ -305,44 +300,44 @@ recurrent_params = {"TauM": 20.0, "TauAdap": 2000.0, "Vthresh": 0.6, "TauRefrac"
 recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0, "E": 0.0}
 
 # Output population
-output_params = {"TauOut": 20.0, "TrialTime": MAX_STIMULI_TIME, "StimuliTime": MAX_STIMULI_TIME}
+output_params = {"TauOut": 20.0, "TrialTime": MAX_STIMULI_TIMES[args.dataset]}
 output_vars = {"Y": 0.0, "Pi": 0.0, "E": 0.0, "DeltaB": 0.0}
-if RESUME_EPOCH is None:
+if args.resume_epoch is None:
     output_vars["B"] = 0.0
 else:
-    output_vars["B"] = np.load("b_output_%u.npy" % RESUME_EPOCH)
+    output_vars["B"] = np.load("b_%s_output_%s_%u.npy" % (args.dataset, args.resume_epoch, name_suffix))
 
 # ----------------------------------------------------------------------------
 # Synapse initialisation
 # ----------------------------------------------------------------------------
 # eProp parameters common across all populations
-eprop_params = {"TauE": 20.0, "TauA": 2000.0, "CReg": 1.0 / (BATCH_SIZE * 1000.0),
+eprop_params = {"TauE": 20.0, "TauA": 2000.0, "CReg": 1.0 / (args.batch_size * 1000.0),
                 "FTarget": 10.0, "TauFAvg": 500.0, "Beta": 0.0174}
 eprop_pre_vars = {"ZFilter": 0.0}
 eprop_post_vars = {"Psi": 0.0, "FAvg": 0.0}
 
 # Input->recurrent synapse parameters
 input_recurrent_vars = {"eFiltered": 0.0, "epsilonA": 0.0, "DeltaG": 0.0}
-if RESUME_EPOCH is None:
+if args.resume_epoch is None:
     input_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(num_input_neurons)})
 else:
-    input_recurrent_vars["g"] = np.load("g_input_recurrent_%u.npy" % RESUME_EPOCH)
+    input_recurrent_vars["g"] = np.load("g_%s_input_recurrent_%s_%u.npy" % (args.dataset, args.resume_epoch, name_suffix))
 
 # Recurrent->recurrent synapse parameters
 recurrent_recurrent_vars = {"eFiltered": 0.0, "epsilonA": 0.0, "DeltaG": 0.0}
-if RESUME_EPOCH is None:
-    recurrent_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(NUM_RECURRENT_NEURONS)})
+if args.resume_epoch is None:
+    recurrent_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(args.num_recurrent_alif)})
 else:
-    recurrent_recurrent_vars["g"] = np.load("g_recurrent_recurrent_%u.npy" % RESUME_EPOCH)
+    recurrent_recurrent_vars["g"] = np.load("g_%s_recurrent_recurrent_%s_%u.npy" % (args.dataset, args.resume_epoch, name_suffix))
 
 # Recurrent->output synapse parameters
 recurrent_output_params = {"TauE": 20.0}
 recurrent_output_pre_vars = {"ZFilter": 0.0}
 recurrent_output_vars = {"DeltaG": 0.0}
-if RESUME_EPOCH is None:
-    recurrent_output_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(NUM_RECURRENT_NEURONS)})
+if args.resume_epoch is None:
+    recurrent_output_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(args.num_recurrent_alif)})
 else:
-    recurrent_output_vars["g"] = np.load("g_recurrent_output_%u.npy" % RESUME_EPOCH)
+    recurrent_output_vars["g"] = np.load("g_%s_recurrent_output_%s_%u.npy" % (args.dataset, args.resume_epoch, name_suffix))
 
 # Optimiser initialisation
 adam_params = {"beta1": ADAM_BETA1, "beta2": ADAM_BETA2, "epsilon": 1E-8}
@@ -351,25 +346,25 @@ adam_vars = {"m": 0.0, "v": 0.0}
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-model = genn_model.GeNNModel("float", "tonic_classifier")
-model.dT = TIMESTEP_MS
-model.timing_enabled = TIMING_ENABLED
+model = genn_model.GeNNModel("float", "%s_tonic_classifier_%s" % (args.dataset, name_suffix))
+model.dT = args.dt
+model.timing_enabled = args.timing
 
 # Add neuron populations
 input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArray",
                                     {}, {"startSpike": None, "endSpike": None})
-recurrent = model.add_neuron_population("Recurrent", NUM_RECURRENT_NEURONS, recurrent_alif_model,
+recurrent = model.add_neuron_population("Recurrent", args.num_recurrent_alif, recurrent_alif_model,
                                         recurrent_params, recurrent_vars)
-output = model.add_neuron_population("Output", NUM_OUTPUT_NEURONS, output_classification_model_32 if SHD else output_classification_model_16,
+output = model.add_neuron_population("Output", num_output_neurons, output_neuron_models[num_output_neurons],
                                      output_params, output_vars)
 
 # Allocate memory for input spikes and labels
-input.set_extra_global_param("spikeTimes", np.zeros(BATCH_SIZE * MAX_SPIKES_PER_STIMULI, dtype=np.float32))
-output.set_extra_global_param("labels", np.zeros(BATCH_SIZE, dtype=np.uint8))
+input.set_extra_global_param("spikeTimes", np.zeros(args.batch_size * MAX_SPIKES_PER_STIMULI[args.dataset], dtype=np.float32))
+output.set_extra_global_param("labels", np.zeros(args.batch_size, dtype=np.uint8))
 
 # Turn on recording
-input.spike_recording_enabled = True
-recurrent.spike_recording_enabled = True
+input.spike_recording_enabled = args.record
+recurrent.spike_recording_enabled = args.record
 
 # Add synapse populations
 input_recurrent = model.add_synapse_population(
@@ -422,8 +417,9 @@ output_bias_optimiser = model.add_custom_update("output_bias_optimiser", "Gradie
                                                 adam_params, adam_vars, output_bias_optimiser_var_refs)
 
 # Build and load model
+stimuli_timesteps = int(np.ceil(MAX_STIMULI_TIMES[args.dataset] / args.dt))
 model.build()
-model.load(num_recording_timesteps=TRIAL_TIMESTEPS * BATCH_SIZE)
+model.load(num_recording_timesteps=stimuli_timesteps * args.batch_size)
 
 # Calculate initial transpose feedback weights
 model.custom_update("CalculateTranspose")
@@ -443,23 +439,19 @@ recurrent_recurrent_g_view = recurrent_recurrent.vars["g"].view
 recurrent_output_g_view = recurrent_output.vars["g"].view
 
 # Open file
-if RESUME_EPOCH is None:
-    performance_file = open("performance.csv", "w")
+if args.resume_epoch is None:
+    performance_file = open("%s_performance_%s.csv" % (args.dataset, name_suffix), "w")
     performance_csv = csv.writer(performance_file, delimiter=",")
     performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
 else:
-    performance_file = open("performance.csv", "a")
+    performance_file = open("%s_performance_%s.csv" % (args.dataset, name_suffix), "a")
     performance_csv = csv.writer(performance_file, delimiter=",")
 
-# Create 'signal' spike times and neuron indices for a single batch
-# **NOTE** so it can concatenated with tonic we use microseconds for times
-#signal_spike_times = (MAX_STIMULI_TIME * 1000.0) + np.arange(0.0, CUE_TIME * 1000.0, TIMESTEP_MS * 1000.0)
-#signal_spike_idx = np.tile(num_input_neurons - 1, CUE_TIMESTEPS)
-
 # Loop through epochs
-epoch_start = 0 if RESUME_EPOCH is None else (RESUME_EPOCH + 1)
+epoch_start = 0 if args.resume_epoch is None else (args.resume_epoch + 1)
 adam_step = 1
-for epoch in range(epoch_start, NUM_EPOCHS):
+start_time = perf_counter()
+for epoch in range(epoch_start, args.num_epochs):
     print("Epoch %u" % epoch)
 
     # Get new data iterator for new epoch
@@ -475,18 +467,14 @@ for epoch in range(epoch_start, NUM_EPOCHS):
         # Get duration of each stimuli in batch
         batch_events, batch_labels = zip(*batch_data)
 
-        # Concatenate together all spike times, offsetting so each stimuli ends at the start of the cue time of each trial
-        spike_times = np.concatenate([(i * 1000.0 * MAX_STIMULI_TIME) + e[:,0]
+        # Concatenate together all spike times
+        spike_times = np.concatenate([(i * 1000.0 * MAX_STIMULI_TIMES[args.dataset]) + e[:,0]
                                       for i, e in enumerate(batch_events)])
 
         spike_ids = np.concatenate([e[:,1] for e in batch_events]).astype(int)
 
         # Indirectly sort spikes, first by neuron id and then by time
         spike_order = np.lexsort((spike_times, spike_ids))
-
-        # Use this to re-order spike ids
-        # **TODO** order doesn't effect  bincount so this is unnecesary
-        spike_ids = spike_ids[spike_order]
 
         # Check that spike times will fit in view, copy them and push them
         assert len(spike_times) <= len(input_spike_times_view)
@@ -508,21 +496,18 @@ for epoch in range(epoch_start, NUM_EPOCHS):
         for trial, label in enumerate(batch_labels):
             # Loop through timesteps in each trial
             classification_output = np.zeros(num_outputs)
-            for i in range(TRIAL_TIMESTEPS):
+            for i in range(stimuli_timesteps):
                 model.step_time()
 
                 # Pull Pi from device and add to total
                 output.pull_var_from_device("Pi")
                 classification_output += output_pi_view[:num_outputs]
 
-                if RECORD:
-                    output.pull_var_from_device("E")
-
             # If maximum output matches label, increment counter
             if np.argmax(classification_output) == label:
                 num_correct += 1
 
-        print("\t\t%u / %u correct" % (num_correct, len(batch_events)))
+        print("\t\t%u / %u correct = %f %%" % (num_correct, len(batch_events), 100.0 * num_correct / len(batch_events)))
         performance_csv.writerow((epoch, batch_idx, len(batch_events), num_correct))
         performance_file.flush()
 
@@ -534,13 +519,13 @@ for epoch in range(epoch_start, NUM_EPOCHS):
         # Now batch is complete, apply gradients
         model.custom_update("GradientLearn")
 
-        if RECORD:
+        if args.record:
             # Download recording data
             model.pull_recording_buffers_from_device()
 
             # Write spikes
-            write_spike_file("input_spikes_%u_%u.csv" % (epoch, batch_idx), input.spike_recording_data)
-            write_spike_file("recurrent_spikes_%u_%u.csv" % (epoch, batch_idx), recurrent.spike_recording_data)
+            write_spike_file("%s_input_spikes_%s_%u_%u.csv" % (args.dataset, name_suffix, epoch, batch_idx), input.spike_recording_data)
+            write_spike_file("%s_recurrent_spikes_%s_%u_%u.csv" % (args.dataset, name_suffix, epoch, batch_idx), recurrent.spike_recording_data)
 
         batch_end_time = perf_counter()
         print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
@@ -552,13 +537,15 @@ for epoch in range(epoch_start, NUM_EPOCHS):
     output.pull_var_from_device("B")
 
     # Save weights and biases to disk
-    np.save("g_input_recurrent_%u.npy" % epoch, input_recurrent_g_view)
-    np.save("g_recurrent_recurrent_%u.npy" % epoch, recurrent_recurrent_g_view)
-    np.save("g_recurrent_output_%u.npy" % epoch, recurrent_output_g_view)
-    np.save("b_output_%u.npy" % epoch, output_b_view)
+    np.save("g_%s_input_recurrent_%s_%u.npy" % (args.dataset, name_suffix, epoch), input_recurrent_g_view)
+    np.save("g_%s_recurrent_recurrent_%s_%u.npy" % (args.dataset, name_suffix, epoch), recurrent_recurrent_g_view)
+    np.save("g_%s_recurrent_output_%s_%u.npy" % (args.dataset, name_suffix, epoch), recurrent_output_g_view)
+    np.save("b_%s_output_%s_%u.npy" % (args.dataset, name_suffix, epoch), output_b_view)
+end_time = perf_counter()
+print("Time:%f ms" % ((end_time - start_time) * 1000.0))
 
 performance_file.close()
-if TIMING_ENABLED:
+if args.timing:
     print("Init: %f" % model.init_time)
     print("Init sparse: %f" % model.init_sparse_time)
     print("Neuron update: %f" % model.neuron_update_time)
