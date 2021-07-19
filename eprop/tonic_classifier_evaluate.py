@@ -186,21 +186,13 @@ performance_file = open("%s_performance_evaluate_%s.csv" % (args.dataset, name_s
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
-# Get new data iterator for new epoch
+# Read batches of data using data loader
+start_processing_time = perf_counter()
+batch_data = []
 data_iter = iter(data_loader)
-total_num = 0;
-total_num_correct = 0
-start_time = perf_counter()
-for batch_idx, batch_data in enumerate(data_iter):
-    print("Batch %u" % batch_idx)
-    batch_start_time = perf_counter()
-
-    # Reset time
-    model.timestep = 0
-    model.t = 0.0
-
+for d in data_iter:
     # Unzip batch data into events and labels
-    batch_events, batch_labels = zip(*batch_data)
+    batch_events, batch_labels = zip(*d)
     
     # Sort events first by neuron id and then by time and use to order spike times
     batch_spike_times = [e[np.lexsort((e[:,1], e[:,1])),0]
@@ -218,10 +210,12 @@ for batch_idx, batch_data in enumerate(data_iter):
     end_spikes = np.vstack([c + np.cumsum(np.bincount(e, minlength=num_input_neurons)) 
                             for e, c in zip(batch_id_int, cum_spikes_per_stimuli)])
     
+    # Build start spikes array
     start_spikes = np.empty((len(batch_events), num_input_neurons), dtype=int)
     start_spikes[:,0] = cum_spikes_per_stimuli[:-1]
     start_spikes[:,1:] = end_spikes[:,:-1]
     
+    # If this isn't a full batch
     if len(batch_events) != args.batch_size:
         spike_padding = np.ones((args.batch_size - len(batch_events), num_input_neurons), dtype=int) * cum_spikes_per_stimuli[-1]
         end_spikes = np.vstack((end_spikes, spike_padding))
@@ -229,6 +223,23 @@ for batch_idx, batch_data in enumerate(data_iter):
     
     # Concatenate together all spike times
     spike_times = np.concatenate(batch_spike_times)
+    
+    # Add tuple of pre-processed data to list
+    batch_data.append((start_spikes, end_spikes, spike_times, batch_labels))
+
+end_process_time = perf_counter()
+print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
+
+total_num = 0;
+total_num_correct = 0
+start_time = perf_counter()
+for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerate(batch_data):
+    print("Batch %u" % batch_idx)
+    batch_start_time = perf_counter()
+
+    # Reset time
+    model.timestep = 0
+    model.t = 0.0
 
     # Check that spike times will fit in view, copy them and push them
     assert len(spike_times) <= len(input_spike_times_view)
@@ -243,7 +254,7 @@ for batch_idx, batch_data in enumerate(data_iter):
 
     # Loop through timesteps
     num_correct = 0
-    classification_output = np.zeros((len(batch_events), num_outputs))
+    classification_output = np.zeros((len(batch_labels), num_outputs))
     for i in range(stimuli_timesteps):
         model.step_time()
 
@@ -251,13 +262,13 @@ for batch_idx, batch_data in enumerate(data_iter):
     output.pull_var_from_device("YSum")
     
     # If maximum output matches label, increment counter
-    num_correct += np.sum(np.argmax(output_y_sum_view[:len(batch_events),:], axis=1) == batch_labels)
+    num_correct += np.sum(np.argmax(output_y_sum_view[:len(batch_labels),:], axis=1) == batch_labels)
 
-    print("\t%u / %u correct = %f %%" % (num_correct, len(batch_events), 100.0 * num_correct / len(batch_events)))
-    total_num += len(batch_events)
+    print("\t%u / %u correct = %f %%" % (num_correct, len(batch_labels), 100.0 * num_correct / len(batch_labels)))
+    total_num += len(batch_labels)
     total_num_correct += num_correct
     
-    performance_csv.writerow((batch_idx, len(batch_events), num_correct))
+    performance_csv.writerow((batch_idx, len(batch_labels), num_correct))
     performance_file.flush()
 
     if args.record:
