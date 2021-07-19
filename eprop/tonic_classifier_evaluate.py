@@ -18,6 +18,7 @@ parser = ArgumentParser(description="Train eProp classifier")
 parser.add_argument("--dt", type=float, default=1.0)
 parser.add_argument("--timing", action="store_true")
 parser.add_argument("--record", action="store_true")
+parser.add_argument("--backend")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--num-recurrent-alif", type=int, default=256)
 parser.add_argument("--dataset", choices=["smnist", "shd"])
@@ -99,7 +100,6 @@ num_input_neurons = np.product(dataset.sensor_size)
 # Calculate number of valid outputs from classes
 num_outputs = len(dataset.classes)
 
-
 # Round up to power-of-two
 # **NOTE** not really necessary for evaluation - could slice up weights
 num_output_neurons = int(2**(np.ceil(np.log2(num_outputs))))
@@ -130,7 +130,7 @@ recurrent_output_vars = {"g": np.load("g_%s_recurrent_output_%s.npy" % (args.dat
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-model = genn_model.GeNNModel("float", "%s_tonic_classifier_evaluate_%s" % (args.dataset, name_suffix))
+model = genn_model.GeNNModel("float", "%s_tonic_classifier_evaluate_%s" % (args.dataset, name_suffix), backend=args.backend)
 model.dT = args.dt
 model.timing_enabled = args.timing
 model.batch_size = args.batch_size
