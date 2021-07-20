@@ -21,7 +21,7 @@ parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--num-recurrent-alif", type=int, default=256)
 parser.add_argument("--num-epochs", type=int, default=50)
 parser.add_argument("--resume-epoch", type=int, default=None)
-parser.add_argument("--dataset", choices=["smnist", "shd"])
+parser.add_argument("--dataset", choices=["smnist", "shd"], required=True)
 args = parser.parse_args()
 
 MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
@@ -362,7 +362,7 @@ adam_vars = {"m": 0.0, "v": 0.0}
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-model = genn_model.GeNNModel("float", "%s_tonic_classifier_%s" % (args.dataset, name_suffix))
+model = genn_model.GeNNModel("float", "%s_tonic_classifier_%s" % (args.dataset, name_suffix), backend="OpenCL")
 model.dT = args.dt
 model.timing_enabled = args.timing
 
