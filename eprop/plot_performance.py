@@ -2,7 +2,7 @@ from glob import glob
 import numpy as np
 from matplotlib import pyplot as plt
 
-prefix = ""#"hsd_"
+prefix = "shd_"
 files = list(glob(prefix + "performance*.csv"))
 
 fig, axis = plt.subplots()

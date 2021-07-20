@@ -30,7 +30,7 @@ model.dT = TIMESTEP
 fixed_prob = {"prob": PROBABILITY_CONNECTION}
 
 lif_params = {"C": 1.0, "TauM": 20.0, "Vrest": -49.0, "Vreset": RESET_VOLTAGE,
-              "Vthresh": THRESHOHOLD_VOLTAGE, "Ioffset": 0.0, "TauRefrac": 5.0}
+              "Vthresh": THRESHOHOLD_VOLTAGE, "Ioffset": 0.0, "TauRefrac": 5.1}
 
 lif_init = {"V": genn_model.init_var("Uniform", {"min": RESET_VOLTAGE, "max": THRESHOHOLD_VOLTAGE}),
             "RefracTime": 0.0}
@@ -71,7 +71,7 @@ model.add_synapse_population("IE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
     genn_model.init_connectivity("FixedProbability", fixed_prob))
 
 print("Building Model")
-model.build()
+print(model.build().get_device_bytes())
 print("Loading Model")
 model.load(num_recording_timesteps=10000)
 
