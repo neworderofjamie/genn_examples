@@ -22,6 +22,7 @@ parser.add_argument("--backend")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--num-recurrent-alif", type=int, default=256)
 parser.add_argument("--dataset", choices=["smnist", "shd"])
+parser.add_argument("--trained-epoch", type=int, default=49)
 args = parser.parse_args()
 
 MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
@@ -77,8 +78,7 @@ output_classification_model = genn_model.create_custom_neuron_class(
 
 recurrent_reset_model = genn_model.create_custom_custom_update_class(
     "recurrent_reset",
-    var_refs=[("V", "scalar"), ("A", "scalar"), ("RefracTime", "scalar"), 
-             ("ZFilter1", "scalar"), ("ZFilter2", "scalar")],
+    var_refs=[("V", "scalar"), ("A", "scalar"), ("RefracTime", "scalar")],
     update_code="""
     $(V) = 0.0;
     $(A) = 0.0;
@@ -127,19 +127,19 @@ recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0}
 
 # Output population
 output_params = {"TauOut": 20.0}
-output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("b_%s_output_%s.npy" % (args.dataset, name_suffix))}
+output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("b_%s_output_%s_%u.npy" % (args.dataset, name_suffix, args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
 # Synapse initialisation
 # ----------------------------------------------------------------------------
 # Input->recurrent synapse parameters
-input_recurrent_vars = {"g": np.load("g_%s_input_recurrent_%s.npy" % (args.dataset, name_suffix))}
+input_recurrent_vars = {"g": np.load("g_%s_input_recurrent_%s_%u.npy" % (args.dataset, name_suffix, args.trained_epoch))}
 
 # Recurrent->recurrent synapse parameters
-recurrent_recurrent_vars = {"g": np.load("g_%s_recurrent_recurrent_%s.npy" % (args.dataset, name_suffix))}
+recurrent_recurrent_vars = {"g": np.load("g_%s_recurrent_recurrent_%s_%u.npy" % (args.dataset, name_suffix, args.trained_epoch))}
 
 # Recurrent->output synapse parameters
-recurrent_output_vars = {"g": np.load("g_%s_recurrent_output_%s.npy" % (args.dataset, name_suffix))}
+recurrent_output_vars = {"g": np.load("g_%s_recurrent_output_%s_%u.npy" % (args.dataset, name_suffix, args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
 # Model description
