@@ -69,6 +69,11 @@ output_classification_model = genn_model.create_custom_neuron_class(
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
 
     sim_code="""
+    // Reset YSum at start of each batch
+    if($(t) == 0.0) {
+        $(YSum) = 0.0;
+    }
+
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
     
     $(YSum) += $(Y);
@@ -183,18 +188,6 @@ recurrent_output = model.add_synapse_population(
     "StaticPulse", {}, recurrent_output_vars, {}, {},
     "DeltaCurr", {}, {})
 
-recurrent_reset_var_refs = {"V": genn_model.create_var_ref(recurrent, "V"),
-                            "A": genn_model.create_var_ref(recurrent, "A"),
-                            "RefracTime": genn_model.create_var_ref(recurrent, "RefracTime")}
-model.add_custom_update("recurrent_reset", "Reset", recurrent_reset_model,
-                        {}, {}, recurrent_reset_var_refs)
-
-output_reset_var_refs = {"Y": genn_model.create_var_ref(output, "Y"),
-                         "YSum": genn_model.create_var_ref(output, "YSum"),}
-model.add_custom_update("output_reset", "Reset", output_reset_model,
-                        {}, {}, output_reset_var_refs)
-
-
 # Build and load model
 stimuli_timesteps = int(np.ceil(MAX_STIMULI_TIMES[args.dataset] / args.dt))
 model.build()
@@ -292,9 +285,6 @@ for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerat
 
     # Pull sum of outputs from device
     output.pull_var_from_device("YSum")
-    
-    # Run custom update to reset model state
-    model.custom_update("Reset")
             
     # If maximum output matches label, increment counter
     if args.batch_size == 1:
