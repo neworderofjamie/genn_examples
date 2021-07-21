@@ -68,17 +68,31 @@ output_classification_model = genn_model.create_custom_neuron_class(
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
 
     sim_code="""
-    // Reset YSum at start of each batch
-    if($(t) == 0.0) {
-        $(YSum) = 0.0;
-    }
-    
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
     
     $(YSum) += $(Y);
     """,
     is_auto_refractory_required=False)
 
+
+recurrent_reset_model = genn_model.create_custom_custom_update_class(
+    "recurrent_reset",
+    var_refs=[("V", "scalar"), ("A", "scalar"), ("RefracTime", "scalar"), 
+             ("ZFilter1", "scalar"), ("ZFilter2", "scalar")],
+    update_code="""
+    $(V) = 0.0;
+    $(A) = 0.0;
+    $(RefracTime) = 0.0;
+    """)
+
+output_reset_model = genn_model.create_custom_custom_update_class(
+    "output_reset",
+    var_refs=[("Y", "scalar"), ("YSum", "scalar")],
+    update_code="""
+    $(Y) = 0.0;
+    $(YSum) = 0.0;
+    """)
+    
 # Create dataset
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=False)
@@ -168,6 +182,18 @@ recurrent_output = model.add_synapse_population(
     recurrent, output,
     "StaticPulse", {}, recurrent_output_vars, {}, {},
     "DeltaCurr", {}, {})
+
+recurrent_reset_var_refs = {"V": genn_model.create_var_ref(recurrent, "V"),
+                            "A": genn_model.create_var_ref(recurrent, "A"),
+                            "RefracTime": genn_model.create_var_ref(recurrent, "RefracTime")}
+model.add_custom_update("recurrent_reset", "Reset", recurrent_reset_model,
+                        {}, {}, recurrent_reset_var_refs)
+
+output_reset_var_refs = {"Y": genn_model.create_var_ref(output, "Y"),
+                         "YSum": genn_model.create_var_ref(output, "YSum"),}
+model.add_custom_update("output_reset", "Reset", output_reset_model,
+                        {}, {}, output_reset_var_refs)
+
 
 # Build and load model
 stimuli_timesteps = int(np.ceil(MAX_STIMULI_TIMES[args.dataset] / args.dt))
@@ -267,6 +293,9 @@ for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerat
     # Pull sum of outputs from device
     output.pull_var_from_device("YSum")
     
+    # Run custom update to reset model state
+    model.custom_update("Reset")
+            
     # If maximum output matches label, increment counter
     if args.batch_size == 1:
         num_correct += np.sum(np.argmax(output_y_sum_view) == batch_labels)
