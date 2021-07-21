@@ -71,32 +71,6 @@ adam_optimizer_model = genn_model.create_custom_custom_update_class(
     $(gradient) = 0.0;
     """)
 
-input_reset_model = genn_model.create_custom_custom_update_class(
-    "input_reset",
-    var_refs=[("ZFilter", "scalar")],
-    update_code="""
-    $(ZFilter) = 0.0;
-    """)
-
-recurrent_reset_model = genn_model.create_custom_custom_update_class(
-    "recurrent_reset",
-    var_refs=[("V", "scalar"), ("A", "scalar"), ("RefracTime", "scalar"), 
-             ("ZFilter1", "scalar"), ("ZFilter2", "scalar")],
-    update_code="""
-    $(V) = 0.0;
-    $(A) = 0.0;
-    $(RefracTime) = 0.0;
-    $(ZFilter1) = 0.0;
-    $(ZFilter2) = 0.0;
-    """)
-
-output_reset_model = genn_model.create_custom_custom_update_class(
-    "output_reset",
-    var_refs=[("Y", "scalar")],
-    update_code="""
-    $(Y) = 0.0;
-    """)
-
 #----------------------------------------------------------------------------
 # Neuron models
 #----------------------------------------------------------------------------
@@ -442,23 +416,6 @@ output_bias_optimiser_var_refs = {"gradient": genn_model.create_var_ref(output, 
 output_bias_optimiser = model.add_custom_update("output_bias_optimiser", "GradientLearn", adam_optimizer_model,
                                                 adam_params, adam_vars, output_bias_optimiser_var_refs)
 
-# Add custom updates for resetting model between trials
-input_reset_var_refs = {"ZFilter": genn_model.create_wu_pre_var_ref(input_recurrent, "ZFilter")}
-model.add_custom_update("input_reset", "Reset", input_reset_model,
-                        {}, {}, input_reset_var_refs)
-
-recurrent_reset_var_refs = {"V": genn_model.create_var_ref(recurrent, "V"),
-                            "A": genn_model.create_var_ref(recurrent, "A"),
-                            "RefracTime": genn_model.create_var_ref(recurrent, "RefracTime"),
-                            "ZFilter1": genn_model.create_wu_pre_var_ref(recurrent_recurrent, "ZFilter"),
-                            "ZFilter2": genn_model.create_wu_pre_var_ref(recurrent_output, "ZFilter")}
-model.add_custom_update("recurrent_reset", "Reset", recurrent_reset_model,
-                        {}, {}, recurrent_reset_var_refs)
-
-output_reset_var_refs = {"Y": genn_model.create_var_ref(output, "Y")}
-model.add_custom_update("output_reset", "Reset", output_reset_model,
-                        {}, {}, output_reset_var_refs)
-
 # Build and load model
 stimuli_timesteps = int(np.ceil(MAX_STIMULI_TIMES[args.dataset] / args.dt))
 model.build()
@@ -545,10 +502,7 @@ for epoch in range(epoch_start, args.num_epochs):
                 # Pull Pi from device and add to total
                 output.pull_var_from_device("Pi")
                 classification_output += output_pi_view[:num_outputs]
-            
-            # Run custom update to reset model state
-            model.custom_update("Reset")
-            
+
             # If maximum output matches label, increment counter
             if np.argmax(classification_output) == label:
                 num_correct += 1
