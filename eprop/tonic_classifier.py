@@ -516,7 +516,6 @@ for epoch in range(epoch_start, args.num_epochs):
         input.push_var_to_device("endSpike")
 
         # Loop through timesteps
-        num_correct = 0
         classification_output = np.zeros((len(batch_labels), num_outputs))
         for i in range(stimuli_timesteps):
             model.step_time()
@@ -529,8 +528,8 @@ for epoch in range(epoch_start, args.num_epochs):
             else:
                 classification_output += output_pi_view[:len(batch_labels), :num_outputs]
   
-        # If maximum output matches label, increment counter
-        num_correct += np.sum(np.argmax(classification_output[:len(batch_labels),:], axis=1) == batch_labels)
+        # Calculate number of outputs which match label
+        num_correct = np.sum(np.argmax(classification_output[:len(batch_labels),:], axis=1) == batch_labels)
 
         print("\t%u / %u correct = %f %%" % (num_correct, len(batch_labels), 100.0 * num_correct / len(batch_labels)))
         performance_csv.writerow((epoch, batch_idx, len(batch_labels), num_correct))
