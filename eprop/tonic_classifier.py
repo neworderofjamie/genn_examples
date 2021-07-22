@@ -120,9 +120,6 @@ output_classification_model_16 = genn_model.create_custom_neuron_class(
     extra_global_params=[("labels", "uint8_t*")],
 
     sim_code="""
-    // Calculate trial index from time
-    const int trial = (int)floor($(t) / $(TrialTime));
-
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
     scalar m = $(Y);
     m = fmax(m, __shfl_xor_sync(0xFFFF, m, 0x1));
@@ -137,7 +134,7 @@ output_classification_model_16 = genn_model.create_custom_neuron_class(
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x8);
     $(Pi) = expPi / sumExpPi;
 
-    const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
+    const scalar piStar = ($(id) == $(labels)[$(batch)]) ? 1.0 : 0.0;
     $(E) = $(Pi) - piStar;
 
     $(DeltaB) += $(E);
@@ -152,9 +149,6 @@ output_classification_model_32 = genn_model.create_custom_neuron_class(
     extra_global_params=[("labels", "uint8_t*")],
 
     sim_code="""
-    // Calculate trial index from time
-    const int trial = (int)floor($(t) / $(TrialTime));
-
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
     scalar m = $(Y);
     m = fmax(m, __shfl_xor_sync(0xFFFFFFFF, m, 0x1));
@@ -171,7 +165,7 @@ output_classification_model_32 = genn_model.create_custom_neuron_class(
     sumExpPi +=  __shfl_xor_sync(0xFFFFFFFF, sumExpPi, 0x10);
     $(Pi) = expPi / sumExpPi;
 
-    const scalar piStar = ($(id) == $(labels)[trial]) ? 1.0 : 0.0;
+    const scalar piStar = ($(id) == $(labels)[$(batch)]) ? 1.0 : 0.0;
     $(E) = $(Pi) - piStar;
 
     $(DeltaB) += $(E);
