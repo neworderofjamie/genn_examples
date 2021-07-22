@@ -530,7 +530,7 @@ for epoch in range(epoch_start, args.num_epochs):
         # Calculate number of outputs which match label
         num_correct = np.sum(np.argmax(classification_output[:len(batch_labels),:], axis=1) == batch_labels)
 
-        print("\t%u / %u correct = %f %%" % (num_correct, len(batch_labels), 100.0 * num_correct / len(batch_labels)))
+        print("\t\t%u / %u correct = %f %%" % (num_correct, len(batch_labels), 100.0 * num_correct / len(batch_labels)))
         performance_csv.writerow((epoch, batch_idx, len(batch_labels), num_correct))
         performance_file.flush()
 
