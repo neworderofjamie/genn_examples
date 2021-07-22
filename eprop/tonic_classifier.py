@@ -63,7 +63,7 @@ adam_optimizer_model = genn_model.create_custom_custom_update_class(
     var_name_types=[("m", "scalar"), ("v", "scalar")],
     extra_global_params=[("alpha", "scalar"), ("firstMomentScale", "scalar"),
                          ("secondMomentScale", "scalar")],
-    var_refs=[("gradient", "scalar"), ("variable", "scalar")],
+    var_refs=[("gradient", "scalar", VarAccessMode_READ_ONLY), ("variable", "scalar")],
     update_code="""
     // Update biased first moment estimate
     $(m) = ($(beta1) * $(m)) + ((1.0 - $(beta1)) * $(gradient));
@@ -71,16 +71,15 @@ adam_optimizer_model = genn_model.create_custom_custom_update_class(
     $(v) = ($(beta2) * $(v)) + ((1.0 - $(beta2)) * $(gradient) * $(gradient));
     // Add gradient to variable, scaled by learning rate
     $(variable) -= ($(alpha) * $(m) * $(firstMomentScale)) / (sqrt($(v) * $(secondMomentScale)) + $(epsilon));
-    // Zero gradient
-    $(gradient) = 0.0;
     """)
 
 gradient_batch_reduce_model = genn_model.create_custom_custom_update_class(
     "gradient_batch_reduce",
     var_name_types=[("reducedGradient", "scalar", VarAccess_REDUCE_BATCH_SUM)],
-    var_refs=[("gradient", "scalar", VarAccessMode_READ_ONLY)],
+    var_refs=[("gradient", "scalar")],
     update_code="""
     $(reducedGradient) = $(gradient);
+    $(gradient) = 0;
     """)
 
 #----------------------------------------------------------------------------
