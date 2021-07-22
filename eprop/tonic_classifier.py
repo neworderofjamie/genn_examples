@@ -5,10 +5,14 @@ import matplotlib.pyplot as plt
 
 from argparse import ArgumentParser
 from time import perf_counter
+from random import shuffle
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
-
+from pygenn.genn_wrapper.Models import (VarAccess_READ_ONLY,
+                                        VarAccessMode_READ_ONLY, 
+                                        VarAccess_REDUCE_BATCH_SUM)
 from dataloader import DataLoader
+from tonic_preprocessor import preprocess_data
 # Eprop imports
 #import eprop
 
@@ -71,6 +75,14 @@ adam_optimizer_model = genn_model.create_custom_custom_update_class(
     $(gradient) = 0.0;
     """)
 
+gradient_batch_reduce_model = genn_model.create_custom_custom_update_class(
+    "gradient_batch_reduce",
+    var_name_types=[("reducedGradient", "scalar", VarAccess_REDUCE_BATCH_SUM)],
+    var_refs=[("gradient", "scalar", VarAccessMode_READ_ONLY)],
+    update_code="""
+    $(reducedGradient) = $(gradient);
+    """)
+
 #----------------------------------------------------------------------------
 # Neuron models
 #----------------------------------------------------------------------------
@@ -104,7 +116,7 @@ recurrent_alif_model = genn_model.create_custom_neuron_class(
 output_classification_model_16 = genn_model.create_custom_neuron_class(
     "output_classification_16",
     param_names=["TauOut", "TrialTime"],
-    var_name_types=[("Y", "scalar"), ("Pi", "scalar"), ("E", "scalar"), ("B", "scalar"), ("DeltaB", "scalar")],
+    var_name_types=[("Y", "scalar"), ("Pi", "scalar"), ("E", "scalar"), ("B", "scalar", VarAccess_READ_ONLY), ("DeltaB", "scalar")],
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
     extra_global_params=[("labels", "uint8_t*")],
 
@@ -136,7 +148,7 @@ output_classification_model_16 = genn_model.create_custom_neuron_class(
 output_classification_model_32 = genn_model.create_custom_neuron_class(
     "output_classification_32",
     param_names=["TauOut", "TrialTime"],
-    var_name_types=[("Y", "scalar"), ("Pi", "scalar"), ("E", "scalar"), ("B", "scalar"), ("DeltaB", "scalar")],
+    var_name_types=[("Y", "scalar"), ("Pi", "scalar"), ("E", "scalar"), ("B", "scalar", VarAccess_READ_ONLY), ("DeltaB", "scalar")],
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
     extra_global_params=[("labels", "uint8_t*")],
 
@@ -172,7 +184,7 @@ output_classification_model_32 = genn_model.create_custom_neuron_class(
 #----------------------------------------------------------------------------
 feedback_model = genn_model.create_custom_weight_update_class(
     "feedback",
-    var_name_types=[("g", "scalar")],
+    var_name_types=[("g", "scalar", VarAccess_READ_ONLY)],
     synapse_dynamics_code="""
     $(addToInSyn, $(g) * $(E_pre));
     """)
@@ -184,7 +196,7 @@ eprop_alif_model = genn_model.create_custom_weight_update_class(
                     ("Rho", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
                     ("FTargetTimestep", genn_model.create_dpf_class(lambda pars, dt: (pars[3] * dt) / 1000.0)()),
                     ("AlphaFAv", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[4]))())],
-    var_name_types=[("g", "scalar"), ("eFiltered", "scalar"), ("epsilonA", "scalar"), ("DeltaG", "scalar")],
+    var_name_types=[("g", "scalar", VarAccess_READ_ONLY), ("eFiltered", "scalar"), ("epsilonA", "scalar"), ("DeltaG", "scalar")],
     pre_var_name_types=[("ZFilter", "scalar")],
     post_var_name_types=[("Psi", "scalar"), ("FAvg", "scalar")],
     
@@ -235,7 +247,7 @@ output_learning_model = genn_model.create_custom_weight_update_class(
     "output_learning",
     param_names=["TauE"],
     derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
-    var_name_types=[("g", "scalar"), ("DeltaG", "scalar")],
+    var_name_types=[("g", "scalar", VarAccess_READ_ONLY), ("DeltaG", "scalar")],
     pre_var_name_types=[("ZFilter", "scalar")],
 
     sim_code="""
@@ -343,12 +355,16 @@ else:
 adam_params = {"beta1": ADAM_BETA1, "beta2": ADAM_BETA2, "epsilon": 1E-8}
 adam_vars = {"m": 0.0, "v": 0.0}
 
+# Batch reduction initialisation
+gradient_batch_reduce_vars = {"reducedGradient": 0.0}
+
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
 model = genn_model.GeNNModel("float", "%s_tonic_classifier_%s" % (args.dataset, name_suffix))
 model.dT = args.dt
 model.timing_enabled = args.timing
+model.batch_size = args.batch_size
 
 # Add neuron populations
 input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArray",
@@ -395,23 +411,40 @@ output_recurrent = model.add_synapse_population(
 model.add_custom_update("recurrent_hidden_transpose", "CalculateTranspose", "Transpose",
                         {}, {}, {"variable": genn_model.create_wu_var_ref(recurrent_output, "g", output_recurrent, "g")})
 
-# Add custom updates for updating weights using Adam optimiser
-input_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(input_recurrent, "DeltaG"),
+# Add custom updates for reducing gradients across the batch
+input_recurrent_reduction_var_refs = {"gradient": genn_model.create_wu_var_ref(input_recurrent, "DeltaG")}
+input_recurrent_reduction = model.add_custom_update("input_recurrent_reduction", "GradientBatchReduce", gradient_batch_reduce_model, 
+                                                    {}, gradient_batch_reduce_vars, input_recurrent_reduction_var_refs)
+
+recurrent_recurrent_reduction_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_recurrent, "DeltaG")}
+recurrent_recurrent_reduction = model.add_custom_update("recurrent_recurrent_reduction", "GradientBatchReduce", gradient_batch_reduce_model, 
+                                                        {}, gradient_batch_reduce_vars, recurrent_recurrent_reduction_var_refs)
+
+recurrent_output_reduction_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_output, "DeltaG")}
+recurrent_output_reduction = model.add_custom_update("recurrent_output_reduction", "GradientBatchReduce", gradient_batch_reduce_model, 
+                                                     {}, gradient_batch_reduce_vars, recurrent_output_reduction_var_refs)
+
+output_bias_reduction_var_refs = {"gradient": genn_model.create_var_ref(output, "DeltaB")}
+output_bias_reduction = model.add_custom_update("output_bias_reduction", "GradientBatchReduce", gradient_batch_reduce_model, 
+                                                {}, gradient_batch_reduce_vars, output_bias_reduction_var_refs)
+                        
+# Add custom updates for updating reduced weights using Adam optimiser
+input_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(input_recurrent_reduction, "reducedGradient"),
                                       "variable": genn_model.create_wu_var_ref(input_recurrent, "g")}
 input_recurrent_optimiser = model.add_custom_update("input_recurrent_optimiser", "GradientLearn", adam_optimizer_model,
                                                     adam_params, adam_vars, input_recurrent_optimiser_var_refs)
 
-recurrent_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_recurrent, "DeltaG"),
+recurrent_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_recurrent_reduction, "reducedGradient"),
                                           "variable": genn_model.create_wu_var_ref(recurrent_recurrent, "g")}
 recurrent_recurrent_optimiser = model.add_custom_update("recurrent_recurrent_optimiser", "GradientLearn", adam_optimizer_model,
                                                         adam_params, adam_vars, recurrent_recurrent_optimiser_var_refs)
 
-recurrent_output_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_output, "DeltaG"),
+recurrent_output_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_output_reduction, "reducedGradient"),
                                        "variable": genn_model.create_wu_var_ref(recurrent_output, "g" , output_recurrent, "g")}
 recurrent_output_optimiser = model.add_custom_update("recurrent_output_optimiser", "GradientLearn", adam_optimizer_model,
                                                      adam_params, adam_vars, recurrent_output_optimiser_var_refs)
 
-output_bias_optimiser_var_refs = {"gradient": genn_model.create_var_ref(output, "DeltaB"),
+output_bias_optimiser_var_refs = {"gradient": genn_model.create_var_ref(output_bias_reduction, "reducedGradient"),
                                   "variable": genn_model.create_var_ref(output, "B")}
 output_bias_optimiser = model.add_custom_update("output_bias_optimiser", "GradientLearn", adam_optimizer_model,
                                                 adam_params, adam_vars, output_bias_optimiser_var_refs)
@@ -453,10 +486,15 @@ adam_step = 1
 start_time = perf_counter()
 for epoch in range(epoch_start, args.num_epochs):
     print("Epoch %u" % epoch)
-
-    # Get new data iterator for new epoch
-    data_iter = iter(data_loader)
-    for batch_idx, batch_data in enumerate(data_iter):
+    
+    # Read batches of data using data loader
+    start_processing_time = perf_counter()
+    batch_data = preprocess_data(data_loader, args.batch_size, num_input_neurons)
+    end_process_time = perf_counter()
+    print("\tData processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
+    
+    # Loop through batch
+    for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerate(batch_data):
         print("\tBatch %u" % batch_idx)
         batch_start_time = perf_counter()
 
@@ -464,51 +502,38 @@ for epoch in range(epoch_start, args.num_epochs):
         model.timestep = 0
         model.t = 0.0
 
-        # Get duration of each stimuli in batch
-        batch_events, batch_labels = zip(*batch_data)
-
-        # Concatenate together all spike times
-        spike_times = np.concatenate([(i * 1000.0 * MAX_STIMULI_TIMES[args.dataset]) + e[:,0]
-                                      for i, e in enumerate(batch_events)])
-
-        spike_ids = np.concatenate([e[:,1] for e in batch_events]).astype(int)
-
-        # Indirectly sort spikes, first by neuron id and then by time
-        spike_order = np.lexsort((spike_times, spike_ids))
-
         # Check that spike times will fit in view, copy them and push them
+        if len(spike_times) > len(input_spike_times_view):
+            print(len(spike_times), len(input_spike_times_view))
         assert len(spike_times) <= len(input_spike_times_view)
-        input_spike_times_view[0:len(spike_ids)] = spike_times[spike_order] / 1000.0
+        input_spike_times_view[0:len(spike_times)] = spike_times / 1000.0
         input.push_extra_global_param_to_device("spikeTimes")
 
         # Calculate start and end spike indices
-        input_neuron_end_spike[:] = np.cumsum(np.bincount(spike_ids, minlength=num_input_neurons))
-        input_neuron_start_spike[:] = np.concatenate(([0], input_neuron_end_spike[:-1]))
+        input_neuron_end_spike[:] = end_spikes
+        input_neuron_start_spike[:] = start_spikes
         input.push_var_to_device("startSpike")
         input.push_var_to_device("endSpike")
 
-        # Copy labels into output
-        output_labels_view[0:len(batch_labels)] = batch_labels
-        output.push_extra_global_param_to_device("labels")
-
-        # Loop through trials in batch
+        # Loop through timesteps
         num_correct = 0
-        for trial, label in enumerate(batch_labels):
-            # Loop through timesteps in each trial
-            classification_output = np.zeros(num_outputs)
-            for i in range(stimuli_timesteps):
-                model.step_time()
-
-                # Pull Pi from device and add to total
-                output.pull_var_from_device("Pi")
+        classification_output = np.zeros((len(batch_labels), num_outputs))
+        for i in range(stimuli_timesteps):
+            model.step_time()
+            
+            # Pull Pi from device and add to total
+            # **TODO** sum Pis on device
+            output.pull_var_from_device("Pi")
+            if args.batch_size == 1:
                 classification_output += output_pi_view[:num_outputs]
+            else:
+                classification_output += output_pi_view[:len(batch_labels), :num_outputs]
+  
+        # If maximum output matches label, increment counter
+        num_correct += np.sum(np.argmax(classification_output[:len(batch_labels),:], axis=1) == batch_labels)
 
-            # If maximum output matches label, increment counter
-            if np.argmax(classification_output) == label:
-                num_correct += 1
-
-        print("\t\t%u / %u correct = %f %%" % (num_correct, len(batch_events), 100.0 * num_correct / len(batch_events)))
-        performance_csv.writerow((epoch, batch_idx, len(batch_events), num_correct))
+        print("\t%u / %u correct = %f %%" % (num_correct, len(batch_labels), 100.0 * num_correct / len(batch_labels)))
+        performance_csv.writerow((epoch, batch_idx, len(batch_labels), num_correct))
         performance_file.flush()
 
         # Calculate the correct scaling for adam optimiser
@@ -516,16 +541,19 @@ for epoch in range(epoch_start, args.num_epochs):
                                                recurrent_output_optimiser, output_bias_optimiser])
         adam_step += 1
 
-        # Now batch is complete, apply gradients
+        # Now batch is complete, reduce and then apply gradients
+        model.custom_update("GradientBatchReduce")
         model.custom_update("GradientLearn")
 
         if args.record:
             # Download recording data
             model.pull_recording_buffers_from_device()
-
+            
             # Write spikes
-            write_spike_file("%s_input_spikes_%s_%u_%u.csv" % (args.dataset, name_suffix, epoch, batch_idx), input.spike_recording_data)
-            write_spike_file("%s_recurrent_spikes_%s_%u_%u.csv" % (args.dataset, name_suffix, epoch, batch_idx), recurrent.spike_recording_data)
+            for i, s in enumerate(input.spike_recording_data):
+                write_spike_file("%s_input_spikes_%s_%u_%u_%u.csv" % (args.dataset, name_suffix, epoch, batch_idx, i), s)
+            for i, s in enumerate(recurrent.spike_recording_data):
+                write_spike_file("%s_recurrent_spikes_%s_%u_%u_%u.csv" % (args.dataset, name_suffix, epoch, batch_idx, i), s)
 
         batch_end_time = perf_counter()
         print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))

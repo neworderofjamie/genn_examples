@@ -2,6 +2,7 @@ import csv
 import numpy as np
 import tonic
 import matplotlib.pyplot as plt
+import random
 
 from argparse import ArgumentParser
 from time import perf_counter
@@ -10,6 +11,7 @@ from pygenn.genn_wrapper import NO_DELAY
 from pygenn.genn_wrapper.Models import VarAccess_READ_ONLY
 
 from dataloader import DataLoader
+from tonic_preprocessor import preprocess_data
 # Eprop imports
 #import eprop
 
@@ -111,7 +113,7 @@ else:
 name_suffix = "%u" % (args.num_recurrent_alif)
 
 # Create loader
-data_loader = DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+data_loader = DataLoader(dataset, batch_size=args.batch_size)
 
 # Calculate number of input neurons from sensor size
 # **NOTE** we add one as we use an additional neuron to 
@@ -208,54 +210,13 @@ performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
 # Read batches of data using data loader
 start_processing_time = perf_counter()
-batch_data = []
-data_iter = iter(data_loader)
-for d in data_iter:
-    # Unzip batch data into events and labels
-    if args.batch_size == 1:
-        batch_events = [d[0]]
-        batch_labels = [d[1]]
-    else:
-        batch_events, batch_labels = zip(*d)
-    
-    # Sort events first by neuron id and then by time and use to order spike times
-    batch_spike_times = [e[np.lexsort((e[:,1], e[:,1])),0]
-                         for e in batch_events]
-    
-    # Convert events ids to integer
-    batch_id_int = [e[:,1].astype(int) for e in batch_events]
-    
-    # Calculate starting index of spikes in each stimuli across the batch
-    # **NOTE** we calculate extra end value for use if padding is required
-    cum_spikes_per_stimuli = np.concatenate(([0], np.cumsum([len(e) for e in batch_id_int])))
-    
-    # Add this cumulative sum onto the cumulative sum of spikes per neuron
-    # **NOTE** zip will stop before extra cum_spikes_per_stimuli value
-    end_spikes = np.vstack([c + np.cumsum(np.bincount(e, minlength=num_input_neurons)) 
-                            for e, c in zip(batch_id_int, cum_spikes_per_stimuli)])
-    
-    # Build start spikes array
-    start_spikes = np.empty((len(batch_events), num_input_neurons), dtype=int)
-    start_spikes[:,0] = cum_spikes_per_stimuli[:-1]
-    start_spikes[:,1:] = end_spikes[:,:-1]
-    
-    # If this isn't a full batch
-    if len(batch_events) != args.batch_size:
-        spike_padding = np.ones((args.batch_size - len(batch_events), num_input_neurons), dtype=int) * cum_spikes_per_stimuli[-1]
-        end_spikes = np.vstack((end_spikes, spike_padding))
-        start_spikes = np.vstack((start_spikes, spike_padding))
-    
-    # Concatenate together all spike times
-    spike_times = np.concatenate(batch_spike_times)
-    
-    # Add tuple of pre-processed data to list
-    batch_data.append((start_spikes, end_spikes, spike_times, batch_labels))
-
+batch_data = preprocess_data(dataloader, args.batch_size)
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
 # If we should warmup the state of the network
 if args.warmup:
+    random.shuffle(batch_data)
     for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerate(batch_data):
         # Reset time
         model.timestep = 0
@@ -277,7 +238,8 @@ if args.warmup:
         # Loop through timesteps
         for i in range(stimuli_timesteps):
             model.step_time()
-        
+
+random.shuffle(batch_data)
 total_num = 0;
 total_num_correct = 0
 start_time = perf_counter()
