@@ -514,6 +514,10 @@ for epoch in range(epoch_start, args.num_epochs):
         input.push_var_to_device("startSpike")
         input.push_var_to_device("endSpike")
 
+         # Copy labels into output
+        output_labels_view[0:len(batch_labels)] = batch_labels
+        output.push_extra_global_param_to_device("labels")
+        
         # Loop through timesteps
         classification_output = np.zeros((len(batch_labels), num_outputs))
         for i in range(stimuli_timesteps):
