@@ -18,6 +18,7 @@ parser = ArgumentParser(description="Train eProp classifier")
 parser.add_argument("--dt", type=float, default=1.0)
 parser.add_argument("--timing", action="store_true")
 parser.add_argument("--record", action="store_true")
+parser.add_argument("--warmup", action="store_true")
 parser.add_argument("--backend")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--num-recurrent-alif", type=int, default=256)
@@ -110,7 +111,7 @@ else:
 name_suffix = "%u" % (args.num_recurrent_alif)
 
 # Create loader
-data_loader = DataLoader(dataset, shuffle=False, batch_size=args.batch_size)
+data_loader = DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
 
 # Calculate number of input neurons from sensor size
 # **NOTE** we add one as we use an additional neuron to 
@@ -132,19 +133,19 @@ recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0}
 
 # Output population
 output_params = {"TauOut": 20.0}
-output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("b_%s_output_%s_%u.npy" % (args.dataset, name_suffix, args.trained_epoch))}
+output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("%s_%s/b_%s_output_%s_%u.npy" % (args.dataset, name_suffix, args.dataset, name_suffix, args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
 # Synapse initialisation
 # ----------------------------------------------------------------------------
 # Input->recurrent synapse parameters
-input_recurrent_vars = {"g": np.load("g_%s_input_recurrent_%s_%u.npy" % (args.dataset, name_suffix, args.trained_epoch))}
+input_recurrent_vars = {"g": np.load("%s_%s/g_%s_input_recurrent_%s_%u.npy" % (args.dataset, name_suffix, args.dataset, name_suffix, args.trained_epoch))}
 
 # Recurrent->recurrent synapse parameters
-recurrent_recurrent_vars = {"g": np.load("g_%s_recurrent_recurrent_%s_%u.npy" % (args.dataset, name_suffix, args.trained_epoch))}
+recurrent_recurrent_vars = {"g": np.load("%s_%s/g_%s_recurrent_recurrent_%s_%u.npy" % (args.dataset, name_suffix, args.dataset, name_suffix, args.trained_epoch))}
 
 # Recurrent->output synapse parameters
-recurrent_output_vars = {"g": np.load("g_%s_recurrent_output_%s_%u.npy" % (args.dataset, name_suffix, args.trained_epoch))}
+recurrent_output_vars = {"g": np.load("%s_%s/g_%s_recurrent_output_%s_%u.npy" % (args.dataset, name_suffix, args.dataset, name_suffix, args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
 # Model description
@@ -201,7 +202,7 @@ input_spike_times_view = input.extra_global_params["spikeTimes"].view
 output_y_sum_view = output.vars["YSum"].view
 
 # Open file
-performance_file = open("%s_performance_evaluate_%s.csv" % (args.dataset, name_suffix), "w")
+performance_file = open("%s_performance_evaluate_%s_%u.csv" % (args.dataset, name_suffix, args.trained_epoch), "w")
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
@@ -253,6 +254,30 @@ for d in data_iter:
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
+# If we should warmup the state of the network
+if args.warmup:
+    for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerate(batch_data):
+        # Reset time
+        model.timestep = 0
+        model.t = 0.0
+        
+        # Check that spike times will fit in view, copy them and push them
+        if len(spike_times) > len(input_spike_times_view):
+            print(len(spike_times), len(input_spike_times_view))
+        assert len(spike_times) <= len(input_spike_times_view)
+        input_spike_times_view[0:len(spike_times)] = spike_times / 1000.0
+        input.push_extra_global_param_to_device("spikeTimes")
+
+        # Calculate start and end spike indices
+        input_neuron_end_spike[:] = end_spikes
+        input_neuron_start_spike[:] = start_spikes
+        input.push_var_to_device("startSpike")
+        input.push_var_to_device("endSpike")
+
+        # Loop through timesteps
+        for i in range(stimuli_timesteps):
+            model.step_time()
+        
 total_num = 0;
 total_num_correct = 0
 start_time = perf_counter()
