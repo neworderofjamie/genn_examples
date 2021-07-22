@@ -578,7 +578,7 @@ if args.timing:
     print("Neuron update: %f" % model.neuron_update_time)
     print("Presynaptic update: %f" % model.presynaptic_update_time)
     print("Synapse dynamics: %f" % model.synapse_dynamics_time)
-    print("Reset custom update: %f" % model.get_custom_update_time("Reset"))
+    print("Gradient batch reduction custom update: %f" % model.get_custom_update_time("GradientBatchReduce"))
     print("Gradient learning custom update: %f" % model.get_custom_update_time("GradientLearn"))
     print("Gradient learning custom update transpose: %f" % model.get_custom_update_transpose_time("GradientLearn"))
    
