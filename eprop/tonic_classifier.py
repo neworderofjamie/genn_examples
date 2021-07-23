@@ -1,5 +1,6 @@
 import csv
 import numpy as np
+import os
 import tonic
 import matplotlib.pyplot as plt
 
@@ -26,6 +27,7 @@ parser.add_argument("--num-recurrent-alif", type=int, default=256)
 parser.add_argument("--num-epochs", type=int, default=50)
 parser.add_argument("--resume-epoch", type=int, default=None)
 parser.add_argument("--dataset", choices=["smnist", "shd"], required=True)
+parser.add_argument("--suffix", default="")
 args = parser.parse_args()
 
 MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
@@ -277,8 +279,11 @@ elif args.dataset == "smnist":
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
-# Build file suffix
-name_suffix = "%u" % (args.num_recurrent_alif)
+# Determine output directory name and create if it doesn't exist
+name_suffix = "%u%s" % (args.num_recurrent_alif, args.suffix)
+output_directory = "%s_%s" % (args.dataset, name_suffix)
+if not os.path.exists(output_directory):
+    os.mkdir(output_directory)
 
 # Create loader
 data_loader = DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
@@ -310,7 +315,7 @@ output_vars = {"Y": 0.0, "Pi": 0.0, "E": 0.0, "DeltaB": 0.0}
 if args.resume_epoch is None:
     output_vars["B"] = 0.0
 else:
-    output_vars["B"] = np.load("b_%s_output_%s_%u.npy" % (args.dataset, args.resume_epoch, name_suffix))
+    output_vars["B"] = np.load(os.path.join(output_directory, "b_output_%u.npy" % args.resume_epoch))
 
 # ----------------------------------------------------------------------------
 # Synapse initialisation
@@ -326,14 +331,14 @@ input_recurrent_vars = {"eFiltered": 0.0, "epsilonA": 0.0, "DeltaG": 0.0}
 if args.resume_epoch is None:
     input_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(num_input_neurons)})
 else:
-    input_recurrent_vars["g"] = np.load("g_%s_input_recurrent_%s_%u.npy" % (args.dataset, args.resume_epoch, name_suffix))
+    input_recurrent_vars["g"] = np.load(os.path.join(output_directory, "g_input_recurrent_%u.npy" % args.resume_epoch))
 
 # Recurrent->recurrent synapse parameters
 recurrent_recurrent_vars = {"eFiltered": 0.0, "epsilonA": 0.0, "DeltaG": 0.0}
 if args.resume_epoch is None:
     recurrent_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(args.num_recurrent_alif)})
 else:
-    recurrent_recurrent_vars["g"] = np.load("g_%s_recurrent_recurrent_%s_%u.npy" % (args.dataset, args.resume_epoch, name_suffix))
+    recurrent_recurrent_vars["g"] = np.load(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % args.resume_epoch))
 
 # Recurrent->output synapse parameters
 recurrent_output_params = {"TauE": 20.0}
@@ -342,7 +347,7 @@ recurrent_output_vars = {"DeltaG": 0.0}
 if args.resume_epoch is None:
     recurrent_output_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(args.num_recurrent_alif)})
 else:
-    recurrent_output_vars["g"] = np.load("g_%s_recurrent_output_%s_%u.npy" % (args.dataset, args.resume_epoch, name_suffix))
+    recurrent_output_vars["g"] = np.load(os.path.join(output_directory, "g_recurrent_output_%u.npy" % args.resume_epoch))
 
 # Optimiser initialisation
 adam_params = {"beta1": ADAM_BETA1, "beta2": ADAM_BETA2, "epsilon": 1E-8}
@@ -466,11 +471,11 @@ recurrent_output_g_view = recurrent_output.vars["g"].view
 
 # Open file
 if args.resume_epoch is None:
-    performance_file = open("%s_performance_%s.csv" % (args.dataset, name_suffix), "w")
+    performance_file = open(os.path.join(output_directory, "performance.csv"), "w")
     performance_csv = csv.writer(performance_file, delimiter=",")
     performance_csv.writerow(("Epoch", "Batch", "Num trials", "Number correct"))
 else:
-    performance_file = open("%s_performance_%s.csv" % (args.dataset, name_suffix), "a")
+    performance_file = open(os.path.join(output_directory, "performance.csv"), "a")
     performance_csv = csv.writer(performance_file, delimiter=",")
 
 # Loop through epochs
@@ -547,9 +552,9 @@ for epoch in range(epoch_start, args.num_epochs):
             
             # Write spikes
             for i, s in enumerate(input.spike_recording_data):
-                write_spike_file("%s_input_spikes_%s_%u_%u_%u.csv" % (args.dataset, name_suffix, epoch, batch_idx, i), s)
+                write_spike_file(os.path.join(output_directory, "input_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
             for i, s in enumerate(recurrent.spike_recording_data):
-                write_spike_file("%s_recurrent_spikes_%s_%u_%u_%u.csv" % (args.dataset, name_suffix, epoch, batch_idx, i), s)
+                write_spike_file(os.path.join(output_directory, "recurrent_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
 
         batch_end_time = perf_counter()
         print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
@@ -561,10 +566,10 @@ for epoch in range(epoch_start, args.num_epochs):
     output.pull_var_from_device("B")
 
     # Save weights and biases to disk
-    np.save("g_%s_input_recurrent_%s_%u.npy" % (args.dataset, name_suffix, epoch), input_recurrent_g_view)
-    np.save("g_%s_recurrent_recurrent_%s_%u.npy" % (args.dataset, name_suffix, epoch), recurrent_recurrent_g_view)
-    np.save("g_%s_recurrent_output_%s_%u.npy" % (args.dataset, name_suffix, epoch), recurrent_output_g_view)
-    np.save("b_%s_output_%s_%u.npy" % (args.dataset, name_suffix, epoch), output_b_view)
+    np.save(os.path.join(output_directory, "g_input_recurrent_%u.npy" % epoch), input_recurrent_g_view)
+    np.save(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % epoch), recurrent_recurrent_g_view)
+    np.save(os.path.join(output_directory, "g_recurrent_output_%u.npy" % epoch), recurrent_output_g_view)
+    np.save(os.path.join(output_directory, "b_output_%u.npy" % epoch), output_b_view)
 end_time = perf_counter()
 print("Time:%f ms" % ((end_time - start_time) * 1000.0))
 
