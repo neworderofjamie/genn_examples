@@ -569,7 +569,8 @@ for epoch in range(epoch_start, args.num_epochs):
 
     # Pull weights and biases from device
     input_recurrent.pull_var_from_device("g")
-    recurrent_recurrent.pull_var_from_device("g")
+    if not args.feedforward:
+        recurrent_recurrent.pull_var_from_device("g")
     recurrent_output.pull_var_from_device("g")
     output.pull_var_from_device("B")
 
