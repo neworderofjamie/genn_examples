@@ -22,6 +22,7 @@ parser = ArgumentParser(description="Train eProp classifier")
 parser.add_argument("--dt", type=float, default=1.0)
 parser.add_argument("--timing", action="store_true")
 parser.add_argument("--record", action="store_true")
+parser.add_argument("--feedforward", action="store_true")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--num-recurrent-alif", type=int, default=256)
 parser.add_argument("--num-epochs", type=int, default=50)
@@ -280,7 +281,7 @@ else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
 # Determine output directory name and create if it doesn't exist
-name_suffix = "%u%s" % (args.num_recurrent_alif, args.suffix)
+name_suffix = "%u%s%s" % (args.num_recurrent_alif, "_feedforward" if args.feedforward else "", args.suffix)
 output_directory = "%s_%s" % (args.dataset, name_suffix)
 if not os.path.exists(output_directory):
     os.mkdir(output_directory)
@@ -334,11 +335,12 @@ else:
     input_recurrent_vars["g"] = np.load(os.path.join(output_directory, "g_input_recurrent_%u.npy" % args.resume_epoch))
 
 # Recurrent->recurrent synapse parameters
-recurrent_recurrent_vars = {"eFiltered": 0.0, "epsilonA": 0.0, "DeltaG": 0.0}
-if args.resume_epoch is None:
-    recurrent_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(args.num_recurrent_alif)})
-else:
-    recurrent_recurrent_vars["g"] = np.load(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % args.resume_epoch))
+if not args.feedforward:
+    recurrent_recurrent_vars = {"eFiltered": 0.0, "epsilonA": 0.0, "DeltaG": 0.0}
+    if args.resume_epoch is None:
+        recurrent_recurrent_vars["g"] = genn_model.init_var("Normal", {"mean": 0.0, "sd": WEIGHT_0 / np.sqrt(args.num_recurrent_alif)})
+    else:
+        recurrent_recurrent_vars["g"] = np.load(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % args.resume_epoch))
 
 # Recurrent->output synapse parameters
 recurrent_output_params = {"TauE": 20.0}
@@ -387,11 +389,12 @@ input_recurrent = model.add_synapse_population(
     eprop_alif_model, eprop_params, input_recurrent_vars, eprop_pre_vars, eprop_post_vars,
     "DeltaCurr", {}, {})
 
-recurrent_recurrent = model.add_synapse_population(
-    "RecurrentRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
-    recurrent, recurrent,
-    eprop_alif_model, eprop_params, recurrent_recurrent_vars, eprop_pre_vars, eprop_post_vars,
-    "DeltaCurr", {}, {})
+if not args.feedforward:
+    recurrent_recurrent = model.add_synapse_population(
+        "RecurrentRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
+        recurrent, recurrent,
+        eprop_alif_model, eprop_params, recurrent_recurrent_vars, eprop_pre_vars, eprop_post_vars,
+        "DeltaCurr", {}, {})
 
 recurrent_output = model.add_synapse_population(
     "RecurrentOutput", "DENSE_INDIVIDUALG", NO_DELAY,
@@ -414,9 +417,10 @@ input_recurrent_reduction_var_refs = {"gradient": genn_model.create_wu_var_ref(i
 input_recurrent_reduction = model.add_custom_update("input_recurrent_reduction", "GradientBatchReduce", gradient_batch_reduce_model, 
                                                     {}, gradient_batch_reduce_vars, input_recurrent_reduction_var_refs)
 
-recurrent_recurrent_reduction_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_recurrent, "DeltaG")}
-recurrent_recurrent_reduction = model.add_custom_update("recurrent_recurrent_reduction", "GradientBatchReduce", gradient_batch_reduce_model, 
-                                                        {}, gradient_batch_reduce_vars, recurrent_recurrent_reduction_var_refs)
+if not args.feedforward:
+    recurrent_recurrent_reduction_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_recurrent, "DeltaG")}
+    recurrent_recurrent_reduction = model.add_custom_update("recurrent_recurrent_reduction", "GradientBatchReduce", gradient_batch_reduce_model,
+                                                            {}, gradient_batch_reduce_vars, recurrent_recurrent_reduction_var_refs)
 
 recurrent_output_reduction_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_output, "DeltaG")}
 recurrent_output_reduction = model.add_custom_update("recurrent_output_reduction", "GradientBatchReduce", gradient_batch_reduce_model, 
@@ -432,10 +436,11 @@ input_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(i
 input_recurrent_optimiser = model.add_custom_update("input_recurrent_optimiser", "GradientLearn", adam_optimizer_model,
                                                     adam_params, adam_vars, input_recurrent_optimiser_var_refs)
 
-recurrent_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_recurrent_reduction, "reducedGradient"),
-                                          "variable": genn_model.create_wu_var_ref(recurrent_recurrent, "g")}
-recurrent_recurrent_optimiser = model.add_custom_update("recurrent_recurrent_optimiser", "GradientLearn", adam_optimizer_model,
-                                                        adam_params, adam_vars, recurrent_recurrent_optimiser_var_refs)
+if not args.feedforward:
+    recurrent_recurrent_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_recurrent_reduction, "reducedGradient"),
+                                            "variable": genn_model.create_wu_var_ref(recurrent_recurrent, "g")}
+    recurrent_recurrent_optimiser = model.add_custom_update("recurrent_recurrent_optimiser", "GradientLearn", adam_optimizer_model,
+                                                            adam_params, adam_vars, recurrent_recurrent_optimiser_var_refs)
 
 recurrent_output_optimiser_var_refs = {"gradient": genn_model.create_wu_var_ref(recurrent_output_reduction, "reducedGradient"),
                                        "variable": genn_model.create_wu_var_ref(recurrent_output, "g" , output_recurrent, "g")}
@@ -466,7 +471,8 @@ output_pi_view = output.vars["Pi"].view
 output_e_view = output.vars["E"].view
 output_b_view = output.vars["B"].view
 input_recurrent_g_view = input_recurrent.vars["g"].view
-recurrent_recurrent_g_view = recurrent_recurrent.vars["g"].view
+if not args.feedforward:
+    recurrent_recurrent_g_view = recurrent_recurrent.vars["g"].view
 recurrent_output_g_view = recurrent_output.vars["g"].view
 
 # Open file
@@ -567,7 +573,8 @@ for epoch in range(epoch_start, args.num_epochs):
 
     # Save weights and biases to disk
     np.save(os.path.join(output_directory, "g_input_recurrent_%u.npy" % epoch), input_recurrent_g_view)
-    np.save(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % epoch), recurrent_recurrent_g_view)
+    if not args.feedforward:
+        np.save(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % epoch), recurrent_recurrent_g_view)
     np.save(os.path.join(output_directory, "g_recurrent_output_%u.npy" % epoch), recurrent_output_g_view)
     np.save(os.path.join(output_directory, "b_output_%u.npy" % epoch), output_b_view)
 end_time = perf_counter()

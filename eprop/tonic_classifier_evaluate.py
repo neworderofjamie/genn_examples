@@ -21,6 +21,7 @@ parser = ArgumentParser(description="Train eProp classifier")
 parser.add_argument("--dt", type=float, default=1.0)
 parser.add_argument("--timing", action="store_true")
 parser.add_argument("--record", action="store_true")
+parser.add_argument("--feedforward", action="store_true")
 parser.add_argument("--warmup", action="store_true")
 parser.add_argument("--backend")
 parser.add_argument("--batch-size", type=int, default=512)
@@ -149,7 +150,8 @@ output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("%s_%s%s/b_%s_output_%s_%u.np
 input_recurrent_vars = {"g": np.load(os.path.join(output_directory, "g_input_recurrent_%u.npy" % args.trained_epoch))}
 
 # Recurrent->recurrent synapse parameters
-recurrent_recurrent_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % args.trained_epoch))}
+if not args.feedforward:
+    recurrent_recurrent_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % args.trained_epoch))}
 
 # Recurrent->output synapse parameters
 recurrent_output_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_output_%u.npy" % args.trained_epoch))}
@@ -184,11 +186,12 @@ input_recurrent = model.add_synapse_population(
     "StaticPulse", {}, input_recurrent_vars, {}, {},
     "DeltaCurr", {}, {})
 
-recurrent_recurrent = model.add_synapse_population(
-    "RecurrentRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
-    recurrent, recurrent,
-    "StaticPulse", {}, recurrent_recurrent_vars, {}, {},
-    "DeltaCurr", {}, {})
+if not args.feedforward:
+    recurrent_recurrent = model.add_synapse_population(
+        "RecurrentRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
+        recurrent, recurrent,
+        "StaticPulse", {}, recurrent_recurrent_vars, {}, {},
+        "DeltaCurr", {}, {})
 
 recurrent_output = model.add_synapse_population(
     "RecurrentOutput", "DENSE_INDIVIDUALG", NO_DELAY,
