@@ -445,7 +445,7 @@ output_bias_optimiser = model.add_custom_update("output_bias_optimiser", "Gradie
 # Build and load model
 stimuli_timesteps = int(np.ceil(MAX_STIMULI_TIMES[args.dataset] / args.dt))
 model.build()
-model.load(num_recording_timesteps=stimuli_timesteps * args.batch_size)
+model.load(num_recording_timesteps=stimuli_timesteps)
 
 # Calculate initial transpose feedback weights
 model.custom_update("CalculateTranspose")
