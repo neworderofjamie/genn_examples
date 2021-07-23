@@ -1,5 +1,6 @@
 import csv
 import numpy as np
+import os
 import tonic
 import matplotlib.pyplot as plt
 import random
@@ -26,6 +27,7 @@ parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--num-recurrent-alif", type=int, default=256)
 parser.add_argument("--dataset", choices=["smnist", "shd"])
 parser.add_argument("--trained-epoch", type=int, default=49)
+parser.add_argument("--suffix", default="")
 args = parser.parse_args()
 
 MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
@@ -109,11 +111,14 @@ elif args.dataset == "smnist":
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
-# Build file suffix
-name_suffix = "%u" % (args.num_recurrent_alif)
+# Determine output directory name and create if it doesn't exist
+name_suffix = "%u%s" % (args.num_recurrent_alif, args.suffix)
+output_directory = "%s_%s" % (args.dataset, name_suffix)
+if not os.path.exists(output_directory):
+    os.mkdir(output_directory)
 
 # Create loader
-data_loader = DataLoader(dataset, batch_size=args.batch_size)
+data_loader = DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
 
 # Calculate number of input neurons from sensor size
 # **NOTE** we add one as we use an additional neuron to 
@@ -135,19 +140,19 @@ recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0}
 
 # Output population
 output_params = {"TauOut": 20.0}
-output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("%s_%s/b_%s_output_%s_%u.npy" % (args.dataset, name_suffix, args.dataset, name_suffix, args.trained_epoch))}
+output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("%s_%s%s/b_%s_output_%s_%u.npy" % (args.dataset, name_suffix, args.suffix, args.dataset, name_suffix, args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
 # Synapse initialisation
 # ----------------------------------------------------------------------------
 # Input->recurrent synapse parameters
-input_recurrent_vars = {"g": np.load("%s_%s/g_%s_input_recurrent_%s_%u.npy" % (args.dataset, name_suffix, args.dataset, name_suffix, args.trained_epoch))}
+input_recurrent_vars = {"g": np.load(os.path.join(output_directory, "g_input_recurrent_%u.npy" % args.trained_epoch))}
 
 # Recurrent->recurrent synapse parameters
-recurrent_recurrent_vars = {"g": np.load("%s_%s/g_%s_recurrent_recurrent_%s_%u.npy" % (args.dataset, name_suffix, args.dataset, name_suffix, args.trained_epoch))}
+recurrent_recurrent_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % args.trained_epoch))}
 
 # Recurrent->output synapse parameters
-recurrent_output_vars = {"g": np.load("%s_%s/g_%s_recurrent_output_%s_%u.npy" % (args.dataset, name_suffix, args.dataset, name_suffix, args.trained_epoch))}
+recurrent_output_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_output_%u.npy" % args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
 # Model description
@@ -204,19 +209,18 @@ input_spike_times_view = input.extra_global_params["spikeTimes"].view
 output_y_sum_view = output.vars["YSum"].view
 
 # Open file
-performance_file = open("%s_performance_evaluate_%s_%u.csv" % (args.dataset, name_suffix, args.trained_epoch), "w")
+performance_file = open(os.path.join(output_directory, "performance_evaluate_%u.csv" % args.trained_epoch), "w")
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
 # Read batches of data using data loader
 start_processing_time = perf_counter()
-batch_data = preprocess_data(dataloader, args.batch_size)
+batch_data = preprocess_data(data_loader, args.batch_size, num_input_neurons)
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
 # If we should warmup the state of the network
 if args.warmup:
-    random.shuffle(batch_data)
     for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerate(batch_data):
         # Reset time
         model.timestep = 0
@@ -239,7 +243,6 @@ if args.warmup:
         for i in range(stimuli_timesteps):
             model.step_time()
 
-random.shuffle(batch_data)
 total_num = 0;
 total_num_correct = 0
 start_time = perf_counter()
@@ -292,9 +295,9 @@ for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerat
 
         # Write spikes
         for i, s in enumerate(input.spike_recording_data):
-            write_spike_file("%s_input_spikes_%s_%u_%u.csv" % (args.dataset, name_suffix, batch_idx, i), s)
+            write_spike_file(os.path.join(output_directory, "input_spikes_%u_%u.csv" % (batch_idx, i)), s)
         for i, s in enumerate(recurrent.spike_recording_data):
-            write_spike_file("%s_recurrent_spikes_%s_%u_%u.csv" % (args.dataset, name_suffix, batch_idx, i), s)
+            write_spike_file(os.path.join(output_directory, "recurrent_spikes_%u_%u.csv" % (batch_idx, i)), s)
     
     batch_end_time = perf_counter()
     print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
