@@ -522,12 +522,12 @@ for epoch in range(epoch_start, args.num_epochs):
          # Copy labels into output
         output_labels_view[0:len(batch_labels)] = batch_labels
         output.push_extra_global_param_to_device("labels")
-        
+
         # Loop through timesteps
         classification_output = np.zeros((len(batch_labels), num_outputs))
         for i in range(stimuli_timesteps):
             model.step_time()
-            
+
             # Pull Pi from device and add to total
             # **TODO** sum Pis on device
             output.pull_var_from_device("Pi")
@@ -535,7 +535,7 @@ for epoch in range(epoch_start, args.num_epochs):
                 classification_output += output_pi_view[:num_outputs]
             else:
                 classification_output += output_pi_view[:len(batch_labels), :num_outputs]
-  
+
         # Calculate number of outputs which match label
         num_correct = np.sum(np.argmax(classification_output[:len(batch_labels),:], axis=1) == batch_labels)
 
@@ -544,8 +544,10 @@ for epoch in range(epoch_start, args.num_epochs):
         performance_file.flush()
 
         # Calculate the correct scaling for adam optimiser
-        update_adam(learning_rate, adam_step, [input_recurrent_optimiser, recurrent_recurrent_optimiser,
-                                               recurrent_output_optimiser, output_bias_optimiser])
+        optimisers = [input_recurrent_optimiser, recurrent_output_optimiser, output_bias_optimiser]
+        if not args.feedforward:
+            optimisers.append(recurrent_recurrent_optimiser)
+        update_adam(learning_rate, adam_step, optimisers)
         adam_step += 1
 
         # Now batch is complete, reduce and then apply gradients
@@ -555,7 +557,7 @@ for epoch in range(epoch_start, args.num_epochs):
         if args.record:
             # Download recording data
             model.pull_recording_buffers_from_device()
-            
+
             # Write spikes
             for i, s in enumerate(input.spike_recording_data):
                 write_spike_file(os.path.join(output_directory, "input_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
