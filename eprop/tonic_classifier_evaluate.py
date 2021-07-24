@@ -113,7 +113,7 @@ else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
 # Determine output directory name and create if it doesn't exist
-name_suffix = "%u%s" % (args.num_recurrent_alif, args.suffix)
+name_suffix = "%u%s%s" % (args.num_recurrent_alif, "_feedforward" if args.feedforward else "", args.suffix)
 output_directory = "%s_%s" % (args.dataset, name_suffix)
 if not os.path.exists(output_directory):
     os.mkdir(output_directory)
@@ -141,7 +141,7 @@ recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0}
 
 # Output population
 output_params = {"TauOut": 20.0}
-output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load("%s_%s%s/b_%s_output_%s_%u.npy" % (args.dataset, name_suffix, args.suffix, args.dataset, name_suffix, args.trained_epoch))}
+output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load(os.path.join(output_directory, "b_output_%u.npy" % args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
 # Synapse initialisation
