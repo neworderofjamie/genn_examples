@@ -239,6 +239,48 @@ eprop_alif_model = genn_model.create_custom_weight_update_class(
     $(eFiltered) = eFiltered;
     """)
 
+eprop_lif_model = genn_model.create_custom_weight_update_class(
+    "eprop_lif",
+    param_names=["TauE", "CReg", "FTarget", "TauFAvg"],
+    derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
+                    ("FTargetTimestep", genn_model.create_dpf_class(lambda pars, dt: (pars[2] * dt) / 1000.0)()),
+                    ("AlphaFAv", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[3]))())],
+    var_name_types=[("g", "scalar"), ("eFiltered", "scalar"), ("DeltaG", "scalar")],
+    pre_var_name_types=[("ZFilter", "scalar")],
+    post_var_name_types=[("Psi", "scalar"), ("FAvg", "scalar")],
+    
+    sim_code="""
+    $(addToInSyn, $(g));
+    """,
+
+    pre_spike_code="""
+    $(ZFilter) += 1.0;
+    """,
+    pre_dynamics_code="""
+    $(ZFilter) *= $(Alpha);
+    """,
+
+    post_spike_code="""
+    $(FAvg) += (1.0 - $(AlphaFAv));
+    """,
+    post_dynamics_code="""
+    $(FAvg) *= $(AlphaFAv);
+    if ($(RefracTime_post) > 0.0) {
+      $(Psi) = 0.0;
+    }
+    else {
+      $(Psi) = (1.0 / $(Vthresh_post)) * 0.3 * fmax(0.0, 1.0 - fabs(($(V_post) - $(Vthresh_post)) / $(Vthresh_post)));
+    }
+    """,
+
+    synapse_dynamics_code="""
+    const scalar e = $(ZFilter) * $(Psi);
+    scalar eFiltered = $(eFiltered);
+    eFiltered = (eFiltered * $(Alpha)) + e;
+    $(DeltaG) += (eFiltered * $(E_post)) + (($(FAvg) - $(FTargetTimestep)) * $(CReg) * e);
+    $(eFiltered) = eFiltered;
+    """)
+
 output_learning_model = genn_model.create_custom_weight_update_class(
     "output_learning",
     param_names=["TauE"],
@@ -271,7 +313,6 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
     $(inSyn) = 0;
     """)
 
-
 # Create dataset
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=True)
@@ -303,8 +344,8 @@ output_neuron_models = {16: output_classification_model_16,
 # Neuron initialisation
 # ----------------------------------------------------------------------------
 # Recurrent population
-recurrent_params = {"TauM": 20.0, "TauAdap": 2000.0, "Vthresh": 0.6, "TauRefrac": 5.0, "Beta": 0.0174}
-recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0, "E": 0.0}
+recurrent_alif_params = {"TauM": 20.0, "TauAdap": 2000.0, "Vthresh": 0.6, "TauRefrac": 5.0, "Beta": 0.0174}
+recurrent_alif_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0, "E": 0.0}
 
 # Output population
 output_params = {"TauOut": 20.0, "TrialTime": MAX_STIMULI_TIMES[args.dataset]}
@@ -318,8 +359,9 @@ else:
 # Synapse initialisation
 # ----------------------------------------------------------------------------
 # eProp parameters common across all populations
-eprop_params = {"TauE": 20.0, "TauA": 2000.0, "CReg": 1.0 / 1000.0,
-                "FTarget": 10.0, "TauFAvg": 500.0, "Beta": 0.0174}
+eprop_lif_params = {"TauE": 20.0, "CReg": 1.0 / 1000.0, "FTarget": 10.0, "TauFAvg": 500.0}
+eprop_alif_params = {"TauE": 20.0, "TauA": 2000.0, "CReg": 1.0 / 1000.0,
+                     "FTarget": 10.0, "TauFAvg": 500.0, "Beta": 0.0174}
 eprop_pre_vars = {"ZFilter": 0.0}
 eprop_post_vars = {"Psi": 0.0, "FAvg": 0.0}
 
@@ -366,7 +408,7 @@ model.batch_size = args.batch_size
 input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArray",
                                     {}, {"startSpike": None, "endSpike": None})
 recurrent = model.add_neuron_population("Recurrent", args.num_recurrent_alif, recurrent_alif_model,
-                                        recurrent_params, recurrent_vars)
+                                        recurrent_alif_params, recurrent_alif_vars)
 output = model.add_neuron_population("Output", num_output_neurons, output_neuron_models[num_output_neurons],
                                      output_params, output_vars)
 
@@ -389,7 +431,7 @@ if not args.feedforward:
     recurrent_recurrent = model.add_synapse_population(
         "RecurrentRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
         recurrent, recurrent,
-        eprop_alif_model, eprop_params, recurrent_recurrent_vars, eprop_pre_vars, eprop_post_vars,
+        eprop_alif_model, eprop_params, eprop_alif_params, eprop_pre_vars, eprop_post_vars,
         "DeltaCurr", {}, {})
 
 recurrent_output = model.add_synapse_population(

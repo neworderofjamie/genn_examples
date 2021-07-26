@@ -44,6 +44,29 @@ def write_spike_file(filename, data):
 #----------------------------------------------------------------------------
 # Neuron models
 #----------------------------------------------------------------------------
+recurrent_lif_model = genn_model.create_custom_neuron_class(
+    "recurrent_lif",
+    param_names=["TauM", "Vthresh", "TauRefrac"],
+    var_name_types=[("V", "scalar"), ("RefracTime", "scalar"), ("E", "scalar")],
+    additional_input_vars=[("ISynFeedback", "scalar", 0.0)],
+    derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
+   
+    sim_code="""
+    $(E) = $(ISynFeedback);
+    $(V) = ($(Alpha) * $(V)) + $(Isyn);
+    if ($(RefracTime) > 0.0) {
+      $(RefracTime) -= DT;
+    }
+    """,
+    reset_code="""
+    $(RefracTime) = $(TauRefrac);
+    $(V) -= $(Vthresh);
+    """,
+    threshold_condition_code="""
+    $(RefracTime) <= 0.0 && $(V) >= $(Vthresh)
+    """,
+    is_auto_refractory_required=False)
+
 recurrent_alif_model = genn_model.create_custom_neuron_class(
     "recurrent_alif",
     param_names=["TauM", "TauAdap", "Vthresh", "TauRefrac", "Beta"],
