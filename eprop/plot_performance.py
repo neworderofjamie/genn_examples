@@ -54,7 +54,7 @@ for e in evaluate_files:
 # Plot
 axis.plot(test_epoch, test_performance, label="Testing")
 
-print("Max training performance: %f %%" % max(test_performance))
+print("Max testing performance: %f %%" % max(test_performance))
 axis.set_xlabel("Epoch")
 axis.set_ylabel("Performance [%]")
 axis.legend()
