@@ -51,10 +51,11 @@ for e in evaluate_files:
     test_performance.append(100.0 * num_correct / num_trials)
     test_epoch.append(epoch)
 
-# Plot
-axis.plot(test_epoch, test_performance, label="Testing")
+if len(test_performance) > 0:
+    # Plot
+    axis.plot(test_epoch, test_performance, label="Testing")
 
-print("Max testing performance: %f %%" % max(test_performance))
+    print("Max testing performance: %f %%" % max(test_performance))
 axis.set_xlabel("Epoch")
 axis.set_ylabel("Performance [%]")
 axis.legend()
