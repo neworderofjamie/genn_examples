@@ -138,7 +138,7 @@ output_classification_model_16 = genn_model.create_custom_neuron_class(
     $(Pi) = expPi / sumExpPi;
 
     // If we should be presenting stimuli
-    if(trialTime < ($(StimuliTime) * 0.5)) {
+    if(trialTime < ($(TrialTime) * 0.5)) {
        $(E) = 0.0;
     }
     else {
@@ -175,7 +175,7 @@ output_classification_model_32 = genn_model.create_custom_neuron_class(
     $(Pi) = expPi / sumExpPi;
 
     // If we should be presenting stimuli
-    if(trialTime < ($(StimuliTime) * 0.5)) {
+    if(trialTime < ($(TrialTime) * 0.5)) {
        $(E) = 0.0;
     }
     else {
