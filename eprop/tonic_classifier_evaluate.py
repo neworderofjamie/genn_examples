@@ -11,25 +11,25 @@ from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 from pygenn.genn_wrapper.Models import VarAccess_READ_ONLY
 
+from tonic_classifier_parser import parse_arguments
 import dataloader
 
 # Eprop imports
 #import eprop
 
 # Build command line parse
-parser = ArgumentParser(description="Train eProp classifier")
+parser = ArgumentParser(add_help=False)
 parser.add_argument("--dt", type=float, default=1.0)
 parser.add_argument("--timing", action="store_true")
 parser.add_argument("--record", action="store_true")
-parser.add_argument("--feedforward", action="store_true")
 parser.add_argument("--warmup", action="store_true")
 parser.add_argument("--backend")
 parser.add_argument("--batch-size", type=int, default=512)
-parser.add_argument("--num-recurrent-alif", type=int, default=256)
-parser.add_argument("--dataset", choices=["smnist", "shd"])
 parser.add_argument("--trained-epoch", type=int, default=49)
-parser.add_argument("--suffix", default="")
-args = parser.parse_args()
+
+name_suffix, output_directory, args = parse_arguments(parser, description="Evaluate eProp classifier")
+if not os.path.exists(output_directory):
+    os.mkdir(output_directory)
 
 MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
 MAX_SPIKES_PER_STIMULI = {"smnist": 10088, "shd": 14917}
@@ -111,12 +111,6 @@ elif args.dataset == "smnist":
     dataset = tonic.datasets.SMNIST(save_to='./data', train=False)
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
-
-# Determine output directory name and create if it doesn't exist
-name_suffix = "%u%s%s" % (args.num_recurrent_alif, "_feedforward" if args.feedforward else "", args.suffix)
-output_directory = "%s_%s" % (args.dataset, name_suffix)
-if not os.path.exists(output_directory):
-    os.mkdir(output_directory)
 
 # Create loader
 start_processing_time = perf_counter()
