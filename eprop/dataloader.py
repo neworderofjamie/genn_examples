@@ -19,7 +19,7 @@ def get_start_spikes(end_spikes):
 
 def concatenate_events(events):
     # Check that all stimuli are for same number of neurons
-    assert all(len(e.spike_times) == len(events[0].spike_times) for e in events)
+    assert all(len(e.end_spikes) == len(events[0].end_spikes) for e in events)
     
     # Extract seperate lists of each stimuli's end spike indices and spike times
     end_spikes, spike_times = zip(*events)
