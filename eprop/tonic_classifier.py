@@ -174,8 +174,14 @@ output_classification_model_32 = genn_model.create_custom_neuron_class(
     sumExpPi +=  __shfl_xor_sync(0xFFFFFFFF, sumExpPi, 0x10);
     $(Pi) = expPi / sumExpPi;
 
-    const scalar piStar = ($(id) == $(labels)[$(batch)]) ? 1.0 : 0.0;
-    $(E) = $(Pi) - piStar;
+    // If we should be presenting stimuli
+    if(trialTime < ($(StimuliTime) * 0.5)) {
+       $(E) = 0.0;
+    }
+    else {
+       const scalar piStar = ($(id) == $(labels)[$(batch)]) ? 1.0 : 0.0;
+       $(E) = $(Pi) - piStar;
+    }
 
     $(DeltaB) += $(E);
     """,
