@@ -31,8 +31,8 @@ name_suffix, output_directory, args = parse_arguments(parser, description="Evalu
 if not os.path.exists(output_directory):
     os.mkdir(output_directory)
 
-MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
-MAX_SPIKES_PER_STIMULI = {"smnist": 10088, "shd": 14917}
+MAX_STIMULI_TIMES = {"smnist": 1568.0 * 2.0, "shd": 1369.140625 * 2.0}
+MAX_SPIKES_PER_STIMULI = {"smnist": 10088 * 2, "shd": 14917 * 2}
 
 # ----------------------------------------------------------------------------
 # Helper functions
@@ -70,7 +70,7 @@ recurrent_alif_model = genn_model.create_custom_neuron_class(
 
 output_classification_model = genn_model.create_custom_neuron_class(
     "output_classification",
-    param_names=["TauOut"],
+    param_names=["TauOut", "TrialTime"],
     var_name_types=[("Y", "scalar"), ("YSum", "scalar"), ("B", "scalar", VarAccess_READ_ONLY)],
     derived_params=[("Kappa", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
 
@@ -82,27 +82,12 @@ output_classification_model = genn_model.create_custom_neuron_class(
 
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
     
-    $(YSum) += $(Y);
+    if($(t) > ($(TrialTime) * 0.5)) {
+        $(YSum) += $(Y);
+    }
     """,
     is_auto_refractory_required=False)
 
-
-recurrent_reset_model = genn_model.create_custom_custom_update_class(
-    "recurrent_reset",
-    var_refs=[("V", "scalar"), ("A", "scalar"), ("RefracTime", "scalar")],
-    update_code="""
-    $(V) = 0.0;
-    $(A) = 0.0;
-    $(RefracTime) = 0.0;
-    """)
-
-output_reset_model = genn_model.create_custom_custom_update_class(
-    "output_reset",
-    var_refs=[("Y", "scalar"), ("YSum", "scalar")],
-    update_code="""
-    $(Y) = 0.0;
-    $(YSum) = 0.0;
-    """)
     
 # Create dataset
 if args.dataset == "shd":
@@ -137,7 +122,7 @@ recurrent_params = {"TauM": 20.0, "TauAdap": 2000.0, "Vthresh": 0.6, "TauRefrac"
 recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0}
 
 # Output population
-output_params = {"TauOut": 20.0}
+output_params = {"TauOut": 20.0, "TrialTime": MAX_STIMULI_TIMES[args.dataset]}
 output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load(os.path.join(output_directory, "b_output_%u.npy" % args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
@@ -206,6 +191,8 @@ input_neuron_start_spike = input.vars["startSpike"].view
 input_neuron_end_spike = input.vars["endSpike"].view
 input_spike_times_view = input.extra_global_params["spikeTimes"].view
 
+recurrent_a_view = recurrent.vars["A"].view
+recurrent_v_view = recurrent.vars["V"].view
 output_y_sum_view = output.vars["YSum"].view
 
 # Open file
@@ -213,14 +200,24 @@ performance_file = open(os.path.join(output_directory, "performance_evaluate_%u.
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
+# Pull arbitrary pre-processed stimuli from data loader
+warmup_events = data_loader._preprocessed_events[0]
+
 # If we should warmup the state of the network
 if args.warmup:
+    assert False
+
     # Loop through batches of (pre-processed) data
     data_iter = iter(data_loader)
     for events, _ in data_iter:
-        # Transform data into batch
-        batched_data = dataloader.batch_events(events, args.batch_size)
+        # Add max stimuli time to events then concatenate with warmup
+        offset_events = [dataloader.PreprocessedEvents(e.end_spikes, e.spike_times + (0.5 * MAX_STIMULI_TIMES[args.dataset]))
+                         for e in events]
+        events_with_warmup = [dataloader.concatenate_events([warmup_events, e]) for e in offset_events]
         
+        # Transform data into batch
+        batched_data = dataloader.batch_events(events_with_warmup, args.batch_size)
+
         # Reset time
         model.timestep = 0
         model.t = 0.0
@@ -249,8 +246,13 @@ for batch_idx, (events, labels) in enumerate(data_iter):
     print("Batch %u" % batch_idx)
     batch_start_time = perf_counter()
 
+     # Add max stimuli time to events then concatenate with warmup
+    offset_events = [dataloader.PreprocessedEvents(e.end_spikes, e.spike_times + (0.5 * MAX_STIMULI_TIMES[args.dataset]))
+                     for e in events]
+    events_with_warmup = [dataloader.concatenate_events([warmup_events, e]) for e in offset_events]
+    
     # Transform data into batch
-    batched_data = dataloader.batch_events(events, args.batch_size)
+    batched_data = dataloader.batch_events(events_with_warmup, args.batch_size)
 
     # Reset time
     model.timestep = 0
@@ -266,7 +268,13 @@ for batch_idx, (events, labels) in enumerate(data_iter):
     input_neuron_start_spike[:] = dataloader.get_start_spikes(batched_data.end_spikes)
     input.push_var_to_device("startSpike")
     input.push_var_to_device("endSpike")
-
+    
+    # Zero adaptation
+    recurrent_a_view[:] = 0.0
+    recurrent_v_view[:] = 0.0
+    recurrent.push_var_to_device("A")
+    recurrent.push_var_to_device("V")
+    
     # Loop through timesteps
     num_correct = 0
     classification_output = np.zeros((len(labels), num_outputs))
