@@ -12,8 +12,8 @@ from pygenn.genn_wrapper import NO_DELAY
 from pygenn.genn_wrapper.Models import (VarAccess_READ_ONLY,
                                         VarAccessMode_READ_ONLY, 
                                         VarAccess_REDUCE_BATCH_SUM)
-from dataloader import DataLoader
-from tonic_preprocessor import preprocess_data
+import dataloader
+
 # Eprop imports
 #import eprop
 
@@ -287,10 +287,12 @@ if not os.path.exists(output_directory):
     os.mkdir(output_directory)
 
 # Create loader
-data_loader = DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+start_processing_time = perf_counter()
+data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+end_process_time = perf_counter()
+print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
 # Calculate number of input neurons from sensor size
-# **NOTE** we add one as we use an additional neuron to 
 num_input_neurons = np.product(dataset.sensor_size) 
 
 # Calculate number of valid outputs from classes
@@ -490,15 +492,10 @@ adam_step = 1
 start_time = perf_counter()
 for epoch in range(epoch_start, args.num_epochs):
     print("Epoch %u" % epoch)
-    
-    # Read batches of data using data loader
-    start_processing_time = perf_counter()
-    batch_data = preprocess_data(data_loader, args.batch_size, num_input_neurons)
-    end_process_time = perf_counter()
-    print("\tData processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
-    
-    # Loop through batch
-    for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerate(batch_data):
+
+    # Loop through batches of (preprocessed) data
+    data_iter = iter(data_loader)
+    for batch_idx, (events, labels) in enumerate(data_iter):
         print("\tBatch %u" % batch_idx)
         batch_start_time = perf_counter()
 
@@ -506,25 +503,26 @@ for epoch in range(epoch_start, args.num_epochs):
         model.timestep = 0
         model.t = 0.0
 
+        # Transform data into batch
+        batched_data = dataloader.batch_events(events, args.batch_size)
+
         # Check that spike times will fit in view, copy them and push them
-        if len(spike_times) > len(input_spike_times_view):
-            print(len(spike_times), len(input_spike_times_view))
-        assert len(spike_times) <= len(input_spike_times_view)
-        input_spike_times_view[0:len(spike_times)] = spike_times / 1000.0
+        assert len(batched_data.spike_times) <= len(input_spike_times_view)
+        input_spike_times_view[0:len(batched_data.spike_times)] = batched_data.spike_times
         input.push_extra_global_param_to_device("spikeTimes")
 
         # Calculate start and end spike indices
-        input_neuron_end_spike[:] = end_spikes
-        input_neuron_start_spike[:] = start_spikes
+        input_neuron_end_spike[:] = batched_data.end_spikes
+        input_neuron_start_spike[:] = dataloader.get_start_spikes(batched_data.end_spikes)
         input.push_var_to_device("startSpike")
         input.push_var_to_device("endSpike")
 
          # Copy labels into output
-        output_labels_view[0:len(batch_labels)] = batch_labels
+        output_labels_view[0:len(labels)] = labels
         output.push_extra_global_param_to_device("labels")
 
         # Loop through timesteps
-        classification_output = np.zeros((len(batch_labels), num_outputs))
+        classification_output = np.zeros((len(labels), num_outputs))
         for i in range(stimuli_timesteps):
             model.step_time()
 
@@ -534,13 +532,13 @@ for epoch in range(epoch_start, args.num_epochs):
             if args.batch_size == 1:
                 classification_output += output_pi_view[:num_outputs]
             else:
-                classification_output += output_pi_view[:len(batch_labels), :num_outputs]
+                classification_output += output_pi_view[:len(labels), :num_outputs]
 
         # Calculate number of outputs which match label
-        num_correct = np.sum(np.argmax(classification_output[:len(batch_labels),:], axis=1) == batch_labels)
+        num_correct = np.sum(np.argmax(classification_output[:len(labels),:], axis=1) == labels)
 
-        print("\t\t%u / %u correct = %f %%" % (num_correct, len(batch_labels), 100.0 * num_correct / len(batch_labels)))
-        performance_csv.writerow((epoch, batch_idx, len(batch_labels), num_correct))
+        print("\t\t%u / %u correct = %f %%" % (num_correct, len(labels), 100.0 * num_correct / len(labels)))
+        performance_csv.writerow((epoch, batch_idx, len(labels), num_correct))
         performance_file.flush()
 
         # Calculate the correct scaling for adam optimiser

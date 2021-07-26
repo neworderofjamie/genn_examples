@@ -11,8 +11,8 @@ from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 from pygenn.genn_wrapper.Models import VarAccess_READ_ONLY
 
-from dataloader import DataLoader
-from tonic_preprocessor import preprocess_data
+import dataloader
+
 # Eprop imports
 #import eprop
 
@@ -119,7 +119,10 @@ if not os.path.exists(output_directory):
     os.mkdir(output_directory)
 
 # Create loader
-data_loader = DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+start_processing_time = perf_counter()
+data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+end_process_time = perf_counter()
+print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
 # Calculate number of input neurons from sensor size
 # **NOTE** we add one as we use an additional neuron to 
@@ -216,29 +219,26 @@ performance_file = open(os.path.join(output_directory, "performance_evaluate_%u.
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
-# Read batches of data using data loader
-start_processing_time = perf_counter()
-batch_data = preprocess_data(data_loader, args.batch_size, num_input_neurons)
-end_process_time = perf_counter()
-print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
-
 # If we should warmup the state of the network
 if args.warmup:
-    for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerate(batch_data):
+    # Loop through batches of (pre-processed) data
+    data_iter = iter(data_loader)
+    for events, _ in data_iter:
+        # Transform data into batch
+        batched_data = dataloader.batch_events(events, args.batch_size)
+        
         # Reset time
         model.timestep = 0
         model.t = 0.0
         
         # Check that spike times will fit in view, copy them and push them
-        if len(spike_times) > len(input_spike_times_view):
-            print(len(spike_times), len(input_spike_times_view))
-        assert len(spike_times) <= len(input_spike_times_view)
-        input_spike_times_view[0:len(spike_times)] = spike_times / 1000.0
+        assert len(batched_data.spike_times) <= len(input_spike_times_view)
+        input_spike_times_view[0:len(batched_data.spike_times)] = batched_data.spike_times
         input.push_extra_global_param_to_device("spikeTimes")
 
         # Calculate start and end spike indices
-        input_neuron_end_spike[:] = end_spikes
-        input_neuron_start_spike[:] = start_spikes
+        input_neuron_end_spike[:] = batched_data.end_spikes
+        input_neuron_start_spike[:] = dataloader.get_start_spikes(batched_data.end_spikes)
         input.push_var_to_device("startSpike")
         input.push_var_to_device("endSpike")
 
@@ -249,30 +249,33 @@ if args.warmup:
 total_num = 0;
 total_num_correct = 0
 start_time = perf_counter()
-for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerate(batch_data):
+# Loop through batches of (pre-processed) data
+data_iter = iter(data_loader)
+for batch_idx, (events, labels) in enumerate(data_iter):
     print("Batch %u" % batch_idx)
     batch_start_time = perf_counter()
+
+    # Transform data into batch
+    batched_data = dataloader.batch_events(events, args.batch_size)
 
     # Reset time
     model.timestep = 0
     model.t = 0.0
 
     # Check that spike times will fit in view, copy them and push them
-    if len(spike_times) > len(input_spike_times_view):
-        print(len(spike_times), len(input_spike_times_view))
-    assert len(spike_times) <= len(input_spike_times_view)
-    input_spike_times_view[0:len(spike_times)] = spike_times / 1000.0
+    assert len(batched_data.spike_times) <= len(input_spike_times_view)
+    input_spike_times_view[0:len(batched_data.spike_times)] = batched_data.spike_times
     input.push_extra_global_param_to_device("spikeTimes")
 
     # Calculate start and end spike indices
-    input_neuron_end_spike[:] = end_spikes
-    input_neuron_start_spike[:] = start_spikes
+    input_neuron_end_spike[:] = batched_data.end_spikes
+    input_neuron_start_spike[:] = dataloader.get_start_spikes(batched_data.end_spikes)
     input.push_var_to_device("startSpike")
     input.push_var_to_device("endSpike")
 
     # Loop through timesteps
     num_correct = 0
-    classification_output = np.zeros((len(batch_labels), num_outputs))
+    classification_output = np.zeros((len(labels), num_outputs))
     for i in range(stimuli_timesteps):
         model.step_time()
 
@@ -281,15 +284,15 @@ for batch_idx, (start_spikes, end_spikes, spike_times, batch_labels) in enumerat
             
     # If maximum output matches label, increment counter
     if args.batch_size == 1:
-        num_correct += np.sum(np.argmax(output_y_sum_view) == batch_labels)
+        num_correct += np.sum(np.argmax(output_y_sum_view) == labels)
     else:
-        num_correct += np.sum(np.argmax(output_y_sum_view[:len(batch_labels),:], axis=1) == batch_labels)
+        num_correct += np.sum(np.argmax(output_y_sum_view[:len(labels),:], axis=1) == labels)
 
-    print("\t%u / %u correct = %f %%" % (num_correct, len(batch_labels), 100.0 * num_correct / len(batch_labels)))
-    total_num += len(batch_labels)
+    print("\t%u / %u correct = %f %%" % (num_correct, len(labels), 100.0 * num_correct / len(labels)))
+    total_num += len(labels)
     total_num_correct += num_correct
     
-    performance_csv.writerow((batch_idx, len(batch_labels), num_correct))
+    performance_csv.writerow((batch_idx, len(labels), num_correct))
     performance_file.flush()
 
     if args.record:
