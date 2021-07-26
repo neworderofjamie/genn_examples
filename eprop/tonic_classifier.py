@@ -515,7 +515,7 @@ for epoch in range(epoch_start, args.num_epochs):
         model.t = 0.0
 
         # Add max stimuli time to events then concatenate with warmup
-        offset_events = [dataloader.PreprocessedEvents(e.end_spikes, e.spike_times + MAX_STIMULI_TIMES[args.dataset])
+        offset_events = [dataloader.PreprocessedEvents(e.end_spikes, e.spike_times + (0.5 * MAX_STIMULI_TIMES[args.dataset]))
                          for e in events]
         events_with_warmup = [dataloader.concatenate_events([warmup_events, e]) for e in offset_events]
         
