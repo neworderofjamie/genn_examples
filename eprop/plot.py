@@ -5,25 +5,16 @@ import numpy as np
 from pandas import read_csv
 from argparse import ArgumentParser
 
-# Build command line parse
-parser = ArgumentParser(description="Train eProp classifier")
-parser.add_argument("--dt", type=float, default=1.0)
-parser.add_argument("--feedforward", action="store_true")
-parser.add_argument("--batch-size", type=int, default=512)
-parser.add_argument("--num-recurrent-alif", type=int, default=256)
-parser.add_argument("--dataset", choices=["smnist", "shd"], required=True)
-parser.add_argument("--epoch", type=int, default=0)
-parser.add_argument("--batch", type=int, default=0)
-parser.add_argument("--trial", type=int, action="append", required=True)
-parser.add_argument("--suffix", default="")
-args = parser.parse_args()
+from tonic_classifier_parser import parse_arguments
 
 MAX_STIMULI_TIMES = {"smnist": 1568.0 * 2.0, "shd": 1369.140625 * 2.0}
 
-# Build file suffix
-name_suffix = "%u%s%s" % (args.num_recurrent_alif, "_feedforward" if args.feedforward else "", args.suffix)
-output_directory = "%s_%s" % (args.dataset, name_suffix)
-
+# Build command line parse
+parser = ArgumentParser(add_help=False)
+parser.add_argument("--epoch", type=int, default=0)
+parser.add_argument("--batch", type=int, default=0)
+parser.add_argument("--trial", type=int, action="append", required=True)
+output_directory = parse_arguments(parser, description="Plot eProp spike trains")[1]
 
 # Create plot
 figure, axes = plt.subplots(2, len(args.trial), sharex="col", sharey="row")
@@ -49,8 +40,6 @@ for i, trial in enumerate(args.trial):
         axes[1, i].set_ylabel("Recurrent\nALIF neuron")
 
     axes[1, i].set_xlabel("Time [ms]")
-    
-
 
 
 # Show plot

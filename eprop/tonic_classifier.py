@@ -12,24 +12,12 @@ from pygenn.genn_wrapper import NO_DELAY
 from pygenn.genn_wrapper.Models import (VarAccess_READ_ONLY,
                                         VarAccessMode_READ_ONLY, 
                                         VarAccess_REDUCE_BATCH_SUM)
+
+from tonic_classifier_parser import parse_arguments
 import dataloader
 
 # Eprop imports
 #import eprop
-
-# Build command line parse
-parser = ArgumentParser(description="Train eProp classifier")
-parser.add_argument("--dt", type=float, default=1.0)
-parser.add_argument("--timing", action="store_true")
-parser.add_argument("--record", action="store_true")
-parser.add_argument("--feedforward", action="store_true")
-parser.add_argument("--batch-size", type=int, default=512)
-parser.add_argument("--num-recurrent-alif", type=int, default=256)
-parser.add_argument("--num-epochs", type=int, default=50)
-parser.add_argument("--resume-epoch", type=int, default=None)
-parser.add_argument("--dataset", choices=["smnist", "shd"], required=True)
-parser.add_argument("--suffix", default="")
-args = parser.parse_args()
 
 MAX_STIMULI_TIMES = {"smnist": 1568.0 * 2.0, "shd": 1369.140625 * 2.0}
 MAX_SPIKES_PER_STIMULI = {"smnist": 10000 * 2, "shd": 14917 * 2}
@@ -39,6 +27,18 @@ ADAM_BETA2 = 0.999
 
 WEIGHT_0 = 1.0
 
+# Build command line parse
+parser = ArgumentParser(add_help=False)
+parser.add_argument("--dt", type=float, default=1.0)
+parser.add_argument("--timing", action="store_true")
+parser.add_argument("--record", action="store_true")
+parser.add_argument("--batch-size", type=int, default=512)
+parser.add_argument("--num-epochs", type=int, default=50)
+parser.add_argument("--resume-epoch", type=int, default=None)
+
+name_suffix, output_directory, args = parse_arguments(parser, description="Train eProp classifier")
+if not os.path.exists(output_directory):
+    os.mkdir(output_directory)
 
 # ----------------------------------------------------------------------------
 # Helper functions
@@ -285,12 +285,6 @@ elif args.dataset == "smnist":
     dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
-
-# Determine output directory name and create if it doesn't exist
-name_suffix = "%u%s%s" % (args.num_recurrent_alif, "_feedforward" if args.feedforward else "", args.suffix)
-output_directory = "%s_%s" % (args.dataset, name_suffix)
-if not os.path.exists(output_directory):
-    os.mkdir(output_directory)
 
 # Create loader
 start_processing_time = perf_counter()
