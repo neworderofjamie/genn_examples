@@ -31,8 +31,8 @@ parser.add_argument("--dataset", choices=["smnist", "shd"], required=True)
 parser.add_argument("--suffix", default="")
 args = parser.parse_args()
 
-MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
-MAX_SPIKES_PER_STIMULI = {"smnist": 10000, "shd": 14917}
+MAX_STIMULI_TIMES = {"smnist": 1568.0 * 2.0, "shd": 1369.140625 * 2.0}
+MAX_SPIKES_PER_STIMULI = {"smnist": 10000 * 2, "shd": 14917 * 2}
 
 ADAM_BETA1 = 0.9
 ADAM_BETA2 = 0.999
@@ -137,8 +137,14 @@ output_classification_model_16 = genn_model.create_custom_neuron_class(
     sumExpPi +=  __shfl_xor_sync(0xFFFF, sumExpPi, 0x8);
     $(Pi) = expPi / sumExpPi;
 
-    const scalar piStar = ($(id) == $(labels)[$(batch)]) ? 1.0 : 0.0;
-    $(E) = $(Pi) - piStar;
+    // If we should be presenting stimuli
+    if(trialTime < ($(StimuliTime) * 0.5)) {
+       $(E) = 0.0;
+    }
+    else {
+       const scalar piStar = ($(id) == $(labels)[$(batch)]) ? 1.0 : 0.0;
+       $(E) = $(Pi) - piStar;
+    }
 
     $(DeltaB) += $(E);
     """,
@@ -468,6 +474,8 @@ learning_rate = 0.001
 input_neuron_start_spike = input.vars["startSpike"].view
 input_neuron_end_spike = input.vars["endSpike"].view
 input_spike_times_view = input.extra_global_params["spikeTimes"].view
+recurrent_a_view = recurrent.vars["A"].view
+recurrent_v_view = recurrent.vars["V"].view
 output_labels_view = output.extra_global_params["labels"].view
 output_pi_view = output.vars["Pi"].view
 output_e_view = output.vars["E"].view
@@ -486,6 +494,9 @@ else:
     performance_file = open(os.path.join(output_directory, "performance.csv"), "a")
     performance_csv = csv.writer(performance_file, delimiter=",")
 
+# Pull arbitrary pre-processed stimuli from data loader
+warmup_events = data_loader._preprocessed_events[0]
+
 # Loop through epochs
 epoch_start = 0 if args.resume_epoch is None else (args.resume_epoch + 1)
 adam_step = 1
@@ -503,8 +514,13 @@ for epoch in range(epoch_start, args.num_epochs):
         model.timestep = 0
         model.t = 0.0
 
+        # Add max stimuli time to events then concatenate with warmup
+        offset_events = [dataloader.PreprocessedEvents(e.end_spikes, e.spike_times + MAX_STIMULI_TIMES[args.dataset])
+                         for e in events]
+        events_with_warmup = [dataloader.concatenate_events([warmup_events, e]) for e in offset_events]
+        
         # Transform data into batch
-        batched_data = dataloader.batch_events(events, args.batch_size)
+        batched_data = dataloader.batch_events(events_with_warmup, args.batch_size)
 
         # Check that spike times will fit in view, copy them and push them
         assert len(batched_data.spike_times) <= len(input_spike_times_view)
@@ -517,10 +533,16 @@ for epoch in range(epoch_start, args.num_epochs):
         input.push_var_to_device("startSpike")
         input.push_var_to_device("endSpike")
 
-         # Copy labels into output
+        # Copy labels into output
         output_labels_view[0:len(labels)] = labels
         output.push_extra_global_param_to_device("labels")
 
+        # Zero adaptation
+        recurrent_a_view[:] = 0.0
+        recurrent_v_view[:] = 0.0
+        recurrent.push_var_to_device("A")
+        recurrent.push_var_to_device("V")
+        
         # Loop through timesteps
         classification_output = np.zeros((len(labels), num_outputs))
         for i in range(stimuli_timesteps):
@@ -528,11 +550,12 @@ for epoch in range(epoch_start, args.num_epochs):
 
             # Pull Pi from device and add to total
             # **TODO** sum Pis on device
-            output.pull_var_from_device("Pi")
-            if args.batch_size == 1:
-                classification_output += output_pi_view[:num_outputs]
-            else:
-                classification_output += output_pi_view[:len(labels), :num_outputs]
+            if i > (stimuli_timesteps / 2):
+                output.pull_var_from_device("Pi")
+                if args.batch_size == 1:
+                    classification_output += output_pi_view[:num_outputs]
+                else:
+                    classification_output += output_pi_view[:len(labels), :num_outputs]
 
         # Calculate number of outputs which match label
         num_correct = np.sum(np.argmax(classification_output[:len(labels),:], axis=1) == labels)
