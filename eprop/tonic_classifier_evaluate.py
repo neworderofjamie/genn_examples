@@ -179,7 +179,7 @@ if not args.feedforward:
 # ----------------------------------------------------------------------------
 kwargs = {"selectGPUByDeviceID": True, "deviceSelectMethod": DeviceSelect_MANUAL} if args.cuda_visible_devices else {}
 model = genn_model.GeNNModel("float", "%s_tonic_classifier_evaluate_%s" % (args.dataset, name_suffix), 
-                             backend=args.backend, *kwargs)
+                             backend=args.backend, **kwargs)
 model.dT = args.dt
 model.timing_enabled = args.timing
 model.batch_size = args.batch_size
