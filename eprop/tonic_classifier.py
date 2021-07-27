@@ -268,7 +268,7 @@ eprop_lif_model = genn_model.create_custom_weight_update_class(
     derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))()),
                     ("FTargetTimestep", genn_model.create_dpf_class(lambda pars, dt: (pars[2] * dt) / 1000.0)()),
                     ("AlphaFAv", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[3]))())],
-    var_name_types=[("g", "scalar"), ("eFiltered", "scalar"), ("DeltaG", "scalar")],
+    var_name_types=[("g", "scalar", VarAccess_READ_ONLY), ("eFiltered", "scalar"), ("DeltaG", "scalar")],
     pre_var_name_types=[("ZFilter", "scalar")],
     post_var_name_types=[("Psi", "scalar"), ("FAvg", "scalar")],
     
