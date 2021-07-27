@@ -47,12 +47,10 @@ def write_spike_file(filename, data):
 recurrent_lif_model = genn_model.create_custom_neuron_class(
     "recurrent_lif",
     param_names=["TauM", "Vthresh", "TauRefrac"],
-    var_name_types=[("V", "scalar"), ("RefracTime", "scalar"), ("E", "scalar")],
-    additional_input_vars=[("ISynFeedback", "scalar", 0.0)],
+    var_name_types=[("V", "scalar"), ("RefracTime", "scalar")],
     derived_params=[("Alpha", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[0]))())],
-   
+
     sim_code="""
-    $(E) = $(ISynFeedback);
     $(V) = ($(Alpha) * $(V)) + $(Isyn);
     if ($(RefracTime) > 0.0) {
       $(RefracTime) -= DT;
@@ -109,24 +107,6 @@ output_classification_model = genn_model.create_custom_neuron_class(
     """,
     is_auto_refractory_required=False)
 
-
-recurrent_reset_model = genn_model.create_custom_custom_update_class(
-    "recurrent_reset",
-    var_refs=[("V", "scalar"), ("A", "scalar"), ("RefracTime", "scalar")],
-    update_code="""
-    $(V) = 0.0;
-    $(A) = 0.0;
-    $(RefracTime) = 0.0;
-    """)
-
-output_reset_model = genn_model.create_custom_custom_update_class(
-    "output_reset",
-    var_refs=[("Y", "scalar"), ("YSum", "scalar")],
-    update_code="""
-    $(Y) = 0.0;
-    $(YSum) = 0.0;
-    """)
-    
 # Create dataset
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=False)
