@@ -156,25 +156,41 @@ num_output_neurons = int(2**(np.ceil(np.log2(num_outputs))))
 # Neuron initialisation
 # ----------------------------------------------------------------------------
 # Recurrent population
-recurrent_params = {"TauM": 20.0, "TauAdap": 2000.0, "Vthresh": 0.6, "TauRefrac": 5.0, "Beta": 0.0174}
-recurrent_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0}
+recurrent_alif_params = {"TauM": 20.0, "TauAdap": 2000.0, "Vthresh": 0.6, "TauRefrac": 5.0, "Beta": 0.0174}
+recurrent_alif_vars = {"V": 0.0, "A": 0.0, "RefracTime": 0.0}
+recurrent_lif_params = {"TauM": 20.0, "Vthresh": 0.6, "TauRefrac": 5.0}
+recurrent_lif_vars = {"V": 0.0, "RefracTime": 0.0}
 
 # Output population
 output_params = {"TauOut": 20.0}
 output_vars = {"Y": 0.0, "YSum": 0.0, "B": np.load(os.path.join(output_directory, "b_output_%u.npy" % args.trained_epoch))}
 
+# (For now) check that there aren't both LIF and ALIF recurrent neurons
+assert not (args.num_recurrent_alif > 0 and args.num_recurrent_lif > 0)
+
 # ----------------------------------------------------------------------------
 # Synapse initialisation
 # ----------------------------------------------------------------------------
-# Input->recurrent synapse parameters
-input_recurrent_vars = {"g": np.load(os.path.join(output_directory, "g_input_recurrent_%u.npy" % args.trained_epoch))}
+if args.num_recurrent_alif > 0:
+    # Input->recurrent synapse parameters
+    input_recurrent_alif_vars = {"g": np.load(os.path.join(output_directory, "g_input_recurrent_%u.npy" % args.trained_epoch))}
+    
+    # Recurrent->output synapse parameters
+    recurrent_alif_output_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_output_%u.npy" % args.trained_epoch))}
+
+if args.num_recurrent_lif > 0:
+    # Input->recurrent synapse parameters
+    input_recurrent_lif_vars = {"g": np.load(os.path.join(output_directory, "g_input_recurrent_lif_%u.npy" % args.trained_epoch))}
+    
+    # Recurrent->output synapse parameters
+    recurrent_lif_output_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_lif_output_%u.npy" % args.trained_epoch))}
 
 # Recurrent->recurrent synapse parameters
 if not args.feedforward:
-    recurrent_recurrent_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % args.trained_epoch))}
-
-# Recurrent->output synapse parameters
-recurrent_output_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_output_%u.npy" % args.trained_epoch))}
+    if args.num_recurrent_alif > 0:
+        recurrent_alif_recurrent_alif_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_recurrent_%u.npy" % args.trained_epoch))}
+    if args.num_recurrent_lif > 0:
+        recurrent_lif_recurrent_lif_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_lif_recurrent_lif_%u.npy" % args.trained_epoch))}
 
 # ----------------------------------------------------------------------------
 # Model description
@@ -187,8 +203,17 @@ model.batch_size = args.batch_size
 # Add neuron populations
 input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArray",
                                     {}, {"startSpike": None, "endSpike": None})
-recurrent = model.add_neuron_population("Recurrent", args.num_recurrent_alif, recurrent_alif_model,
-                                        recurrent_params, recurrent_vars)
+
+if args.num_recurrent_alif > 0:
+    recurrent_alif = model.add_neuron_population("RecurrentALIF", args.num_recurrent_alif, recurrent_alif_model,
+                                                 recurrent_alif_params, recurrent_alif_vars)
+    recurrent_alif.spike_recording_enabled = args.record
+
+if args.num_recurrent_lif > 0:
+    recurrent_lif = model.add_neuron_population("RecurrentLIF", args.num_recurrent_lif, recurrent_lif_model,
+                                                recurrent_lif_params, recurrent_lif_vars)
+    recurrent_lif.spike_recording_enabled = args.record
+
 output = model.add_neuron_population("Output", num_output_neurons, output_classification_model,
                                      output_params, output_vars)
 
@@ -197,27 +222,44 @@ input.set_extra_global_param("spikeTimes", np.zeros(args.batch_size * MAX_SPIKES
 
 # Turn on recording
 input.spike_recording_enabled = args.record
-recurrent.spike_recording_enabled = args.record
 
 # Add synapse populations
-input_recurrent = model.add_synapse_population(
-    "InputRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
-    input, recurrent,
-    "StaticPulse", {}, input_recurrent_vars, {}, {},
-    "DeltaCurr", {}, {})
-
-if not args.feedforward:
-    recurrent_recurrent = model.add_synapse_population(
-        "RecurrentRecurrent", "DENSE_INDIVIDUALG", NO_DELAY,
-        recurrent, recurrent,
-        "StaticPulse", {}, recurrent_recurrent_vars, {}, {},
+if args.num_recurrent_alif > 0:
+    input_recurrent_alif = model.add_synapse_population(
+        "InputRecurrentALIF", "DENSE_INDIVIDUALG", NO_DELAY,
+        input, recurrent_alif,
+        "StaticPulse", {}, input_recurrent_alif_vars, {}, {},
+        "DeltaCurr", {}, {})
+    recurrent_alif_output = model.add_synapse_population(
+        "RecurrentALIFOutput", "DENSE_INDIVIDUALG", NO_DELAY,
+        recurrent_alif, output,
+        "StaticPulse", {}, recurrent_alif_output_vars, {}, {},
+        "DeltaCurr", {}, {})
+if args.num_recurrent_lif > 0:
+    input_recurrent_lif = model.add_synapse_population(
+        "InputRecurrentLIF", "DENSE_INDIVIDUALG", NO_DELAY,
+        input, recurrent_lif,
+        "StaticPulse", {}, input_recurrent_lif_vars, {}, {},
+        "DeltaCurr", {}, {})
+    recurrent_lif_output = model.add_synapse_population(
+        "RecurrentLIFOutput", "DENSE_INDIVIDUALG", NO_DELAY,
+        recurrent_lif, output,
+        "StaticPulse", {}, recurrent_lif_output_vars, {}, {},
         "DeltaCurr", {}, {})
 
-recurrent_output = model.add_synapse_population(
-    "RecurrentOutput", "DENSE_INDIVIDUALG", NO_DELAY,
-    recurrent, output,
-    "StaticPulse", {}, recurrent_output_vars, {}, {},
-    "DeltaCurr", {}, {})
+if not args.feedforward:
+    if args.num_recurrent_alif > 0:
+        recurrent_alif_recurrent_alif = model.add_synapse_population(
+            "RecurrentALIFRecurrentALIF", "DENSE_INDIVIDUALG", NO_DELAY,
+            recurrent_alif, recurrent_alif,
+            "StaticPulse", {}, recurrent_alif_recurrent_alif_vars, {}, {},
+            "DeltaCurr", {}, {})
+    if args.num_recurrent_lif > 0:
+        recurrent_lif_recurrent_lif = model.add_synapse_population(
+            "RecurrentLIFRecurrentLIF", "DENSE_INDIVIDUALG", NO_DELAY,
+            recurrent_lif, recurrent_lif,
+            "StaticPulse", {}, recurrent_lif_recurrent_lif_vars, {}, {},
+            "DeltaCurr", {}, {})
 
 # Build and load model
 stimuli_timesteps = int(np.ceil(MAX_STIMULI_TIMES[args.dataset] / args.dt))
@@ -319,9 +361,14 @@ for batch_idx, (events, labels) in enumerate(data_iter):
         # Write spikes
         for i, s in enumerate(input.spike_recording_data):
             write_spike_file(os.path.join(output_directory, "input_spikes_%u_%u.csv" % (batch_idx, i)), s)
-        for i, s in enumerate(recurrent.spike_recording_data):
-            write_spike_file(os.path.join(output_directory, "recurrent_spikes_%u_%u.csv" % (batch_idx, i)), s)
-    
+
+        if args.num_recurrent_alif > 0:
+            for i, s in enumerate(recurrent_alif.spike_recording_data):
+                write_spike_file(os.path.join(output_directory, "recurrent_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
+        if args.num_recurrent_lif > 0:
+            for i, s in enumerate(recurrent_lif.spike_recording_data):
+                write_spike_file(os.path.join(output_directory, "recurrent_lif_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
+
     batch_end_time = perf_counter()
     print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
 

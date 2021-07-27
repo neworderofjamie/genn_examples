@@ -717,8 +717,12 @@ for epoch in range(epoch_start, args.num_epochs):
             # Write spikes
             for i, s in enumerate(input.spike_recording_data):
                 write_spike_file(os.path.join(output_directory, "input_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
-            for i, s in enumerate(recurrent_alif.spike_recording_data):
-                write_spike_file(os.path.join(output_directory, "recurrent_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
+            if args.num_recurrent_alif > 0:
+                for i, s in enumerate(recurrent_alif.spike_recording_data):
+                    write_spike_file(os.path.join(output_directory, "recurrent_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
+            if args.num_recurrent_lif > 0:
+                for i, s in enumerate(recurrent_lif.spike_recording_data):
+                    write_spike_file(os.path.join(output_directory, "recurrent_lif_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
 
         batch_end_time = perf_counter()
         print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
