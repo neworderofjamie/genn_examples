@@ -92,8 +92,10 @@ output_classification_model = genn_model.create_custom_neuron_class(
 # Create dataset
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=False)
+    train_dataset = tonic.datasets.SHD(save_to='./data', train=True)
 elif args.dataset == "smnist":
     dataset = tonic.datasets.SMNIST(save_to='./data', train=False)
+    train_dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
@@ -201,7 +203,7 @@ performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
 # Pull arbitrary pre-processed stimuli from data loader
-warmup_events = data_loader._preprocessed_events[0]
+warmup_events = data_loader._preprocess(train_dataset[0][0])
 
 # If we should warmup the state of the network
 if args.warmup:
