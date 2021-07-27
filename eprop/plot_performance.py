@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from tonic_classifier_parser import parse_arguments
 
 # Parse command line
-output_directory = parse_arguments(description="Plot eProp classifier performance")[1]
+name_suffix, output_directory, _ = parse_arguments(description="Plot eProp classifier performance")
 
 fig, axis = plt.subplots()
 
@@ -26,8 +26,10 @@ for i, e in enumerate(epochs):
     num_trials[i] = np.sum(training_data[epoch_mask,2])
     num_correct[i] = np.sum(training_data[epoch_mask,3])
 
-print("Max training performance: %f %%" % (100.0 * np.amax(num_correct / num_trials)))
-axis.plot(100.0 * num_correct / num_trials, label="Training")
+max_train_performance = 100.0 * np.amax(num_correct / num_trials)
+print("Max training performance: %f %%" % max_train_performance)
+train_actor = axis.plot(100.0 * num_correct / num_trials, label="Training")[0]
+axis.axhline(max_train_performance, linestyle="--", color=train_actor.get_color())
 
 # Find evaluation files, sorting numerically
 evaluate_files = list(sorted(glob(os.path.join(output_directory, "performance_evaluate_*.csv")),
@@ -53,10 +55,13 @@ for e in evaluate_files:
 
 if len(test_performance) > 0:
     # Plot
-    axis.plot(test_epoch, test_performance, label="Testing")
-
+    test_actor = axis.plot(test_epoch, test_performance, label="Testing")[0]
+    axis.axhline(max(test_performance), linestyle="--", color=test_actor.get_color())
     print("Max testing performance: %f %%" % max(test_performance))
+
+axis.set_title(name_suffix)
 axis.set_xlabel("Epoch")
 axis.set_ylabel("Performance [%]")
+axis.set_ylim((0, 100))
 axis.legend()
 plt.show()
