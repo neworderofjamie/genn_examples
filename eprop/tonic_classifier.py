@@ -9,6 +9,7 @@ from time import perf_counter
 from random import shuffle
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
+from pygenn.genn_wrapper.CUDABackend import DeviceSelect_MANUAL
 from pygenn.genn_wrapper.Models import (VarAccess_READ_ONLY,
                                         VarAccessMode_READ_ONLY, 
                                         VarAccess_REDUCE_BATCH_SUM)
@@ -35,6 +36,7 @@ parser.add_argument("--record", action="store_true")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--num-epochs", type=int, default=50)
 parser.add_argument("--resume-epoch", type=int, default=None)
+parser.add_argument("--cuda-visible-devices", action="store_true")
 
 name_suffix, output_directory, args = parse_arguments(parser, description="Train eProp classifier")
 if not os.path.exists(output_directory):
@@ -445,7 +447,9 @@ gradient_batch_reduce_vars = {"reducedGradient": 0.0}
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-model = genn_model.GeNNModel("float", "%s_tonic_classifier_%s" % (args.dataset, name_suffix))
+kwargs = {"selectGPUByDeviceID": True, "deviceSelectMethod": DeviceSelect_MANUAL} if args.cuda_visible_devices else {}
+model = genn_model.GeNNModel("float", "%s_tonic_classifier_%s" % (args.dataset, name_suffix),
+                             **kwargs)
 model.dT = args.dt
 model.timing_enabled = args.timing
 model.batch_size = args.batch_size
