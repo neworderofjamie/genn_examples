@@ -31,8 +31,8 @@ name_suffix, output_directory, args = parse_arguments(parser, description="Evalu
 if not os.path.exists(output_directory):
     os.mkdir(output_directory)
 
-MAX_STIMULI_TIMES = {"smnist": 1568.0 * 2.0, "shd": 1369.140625 * 2.0}
-MAX_SPIKES_PER_STIMULI = {"smnist": 10088 * 2, "shd": 14917 * 2}
+MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
+MAX_SPIKES_PER_STIMULI = {"smnist": 10088, "shd": 14917}
 
 # ----------------------------------------------------------------------------
 # Helper functions
@@ -82,9 +82,9 @@ output_classification_model = genn_model.create_custom_neuron_class(
 
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
     
-    if($(t) > ($(TrialTime) * 0.5)) {
+    //if($(t) > ($(TrialTime) * 0.5)) {
         $(YSum) += $(Y);
-    }
+    //}
     """,
     is_auto_refractory_required=False)
 
@@ -92,16 +92,17 @@ output_classification_model = genn_model.create_custom_neuron_class(
 # Create dataset
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=False)
-    train_dataset = tonic.datasets.SHD(save_to='./data', train=True)
+    training_dataset = tonic.datasets.SHD(save_to='./data', train=True)
 elif args.dataset == "smnist":
     dataset = tonic.datasets.SMNIST(save_to='./data', train=False)
-    train_dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
+    training_dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
 # Create loader
 start_processing_time = perf_counter()
 data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+training_data_loader = dataloader.DataLoader(training_dataset, shuffle=True, batch_size=args.batch_size)
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
@@ -202,23 +203,17 @@ performance_file = open(os.path.join(output_directory, "performance_evaluate_%u.
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
-# Pull arbitrary pre-processed stimuli from data loader
-warmup_events = data_loader._preprocess(train_dataset[0][0])
+average_a = np.zeros(args.num_recurrent_alif)
 
 # If we should warmup the state of the network
 if args.warmup:
-    assert False
-
-    # Loop through batches of (pre-processed) data
-    data_iter = iter(data_loader)
+    warmup_a = []
+    
+    # Loop through batches of (pre-processed) training data
+    data_iter = iter(training_data_loader)
     for events, _ in data_iter:
-        # Add max stimuli time to events then concatenate with warmup
-        offset_events = [dataloader.PreprocessedEvents(e.end_spikes, e.spike_times + (0.5 * MAX_STIMULI_TIMES[args.dataset]))
-                         for e in events]
-        events_with_warmup = [dataloader.concatenate_events([warmup_events, e]) for e in offset_events]
-        
         # Transform data into batch
-        batched_data = dataloader.batch_events(events_with_warmup, args.batch_size)
+        batched_data = dataloader.batch_events(events, args.batch_size)
 
         # Reset time
         model.timestep = 0
@@ -234,11 +229,27 @@ if args.warmup:
         input_neuron_start_spike[:] = dataloader.get_start_spikes(batched_data.end_spikes)
         input.push_var_to_device("startSpike")
         input.push_var_to_device("endSpike")
-
+        
+        # Reset adaptation to zero
+        recurrent_a_view[:] = average_a
+        recurrent_v_view[:] = 0.0
+        recurrent.push_var_to_device("A")
+        recurrent.push_var_to_device("V")
+        
         # Loop through timesteps
         for i in range(stimuli_timesteps):
             model.step_time()
+        
+        # Add A to list
+        recurrent.pull_var_from_device("A")
+        warmup_a.append(np.copy(recurrent_a_view))
+    
+    # Stack warmup A values and take average
+    warmup_a = np.vstack(warmup_a)
+    average_a = np.average(warmup_a, axis=0)
 
+
+recurrent_a_view[:] = average_a
 total_num = 0;
 total_num_correct = 0
 start_time = perf_counter()
@@ -248,13 +259,8 @@ for batch_idx, (events, labels) in enumerate(data_iter):
     print("Batch %u" % batch_idx)
     batch_start_time = perf_counter()
 
-     # Add max stimuli time to events then concatenate with warmup
-    offset_events = [dataloader.PreprocessedEvents(e.end_spikes, e.spike_times + (0.5 * MAX_STIMULI_TIMES[args.dataset]))
-                     for e in events]
-    events_with_warmup = [dataloader.concatenate_events([warmup_events, e]) for e in offset_events]
-    
     # Transform data into batch
-    batched_data = dataloader.batch_events(events_with_warmup, args.batch_size)
+    batched_data = dataloader.batch_events(events, args.batch_size)
 
     # Reset time
     model.timestep = 0
@@ -271,8 +277,7 @@ for batch_idx, (events, labels) in enumerate(data_iter):
     input.push_var_to_device("startSpike")
     input.push_var_to_device("endSpike")
     
-    # Zero adaptation
-    recurrent_a_view[:] = 0.0
+    # Reset adaptation to mean
     recurrent_v_view[:] = 0.0
     recurrent.push_var_to_device("A")
     recurrent.push_var_to_device("V")
@@ -282,7 +287,7 @@ for batch_idx, (events, labels) in enumerate(data_iter):
     classification_output = np.zeros((len(labels), num_outputs))
     for i in range(stimuli_timesteps):
         model.step_time()
-
+        
     # Pull sum of outputs from device
     output.pull_var_from_device("YSum")
             
