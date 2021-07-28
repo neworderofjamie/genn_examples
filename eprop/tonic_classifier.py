@@ -29,7 +29,6 @@ WEIGHT_0 = 1.0
 
 # Build command line parse
 parser = ArgumentParser(add_help=False)
-parser.add_argument("--dt", type=float, default=1.0)
 parser.add_argument("--timing", action="store_true")
 parser.add_argument("--record", action="store_true")
 parser.add_argument("--batch-size", type=int, default=512)
