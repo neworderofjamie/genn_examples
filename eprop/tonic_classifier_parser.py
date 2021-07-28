@@ -18,7 +18,7 @@ def parse_arguments(parent_parser=None, description=None):
     name_suffix = "%u%s%s%s%s" % (args.num_recurrent_alif, 
                                   "_%u" % args.num_recurrent_lif if args.num_recurrent_lif > 0 else "",
                                   "_feedforward" if args.feedforward else "", 
-                                  "_%f" % args.dt if args.dt != 1.0 else "",
+                                  "_%.1f" % args.dt if args.dt != 1.0 else "",
                                   args.suffix)
     output_directory = "%s_%s" % (args.dataset, name_suffix)
 
