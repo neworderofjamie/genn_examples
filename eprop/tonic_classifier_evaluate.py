@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 from time import perf_counter
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
+from pygenn.genn_wrapper.CUDABackend import DeviceSelect_MANUAL
 from pygenn.genn_wrapper.Models import VarAccess_READ_ONLY
 
 from tonic_classifier_parser import parse_arguments
@@ -25,6 +26,7 @@ parser.add_argument("--warmup", action="store_true")
 parser.add_argument("--backend")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--trained-epoch", type=int, default=49)
+parser.add_argument("--cuda-visible-devices", action="store_true")
 
 name_suffix, output_directory, args = parse_arguments(parser, description="Evaluate eProp classifier")
 if not os.path.exists(output_directory):
@@ -174,7 +176,9 @@ if not args.feedforward:
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-model = genn_model.GeNNModel("float", "%s_tonic_classifier_evaluate_%s" % (args.dataset, name_suffix), backend=args.backend)
+kwargs = {"selectGPUByDeviceID": True, "deviceSelectMethod": DeviceSelect_MANUAL} if args.cuda_visible_devices else {}
+model = genn_model.GeNNModel("float", "%s_tonic_classifier_evaluate_%s" % (args.dataset, name_suffix), 
+                             backend=args.backend, **kwargs)
 model.dT = args.dt
 model.timing_enabled = args.timing
 model.batch_size = args.batch_size
