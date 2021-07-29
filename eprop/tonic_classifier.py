@@ -341,7 +341,7 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=True)
 elif args.dataset == "smnist":
-    dataset = tonic.datasets.SMNIST(save_to='./data', train=True)
+    dataset = tonic.datasets.SMNIST(save_to='./data', train=True, num_neurons=79)
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
