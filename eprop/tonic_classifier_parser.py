@@ -10,7 +10,7 @@ def parse_arguments(parent_parser=None, description=None):
     parser.add_argument("--feedforward", action="store_true")
     parser.add_argument("--num-recurrent-alif", type=int, default=256)
     parser.add_argument("--num-recurrent-lif", type=int, default=0)
-    parser.add_argument("--dataset", choices=["smnist", "shd"], required=True)
+    parser.add_argument("--dataset", choices=["smnist", "shd", "dvs_gesture"], required=True)
     parser.add_argument("--suffix", default="")
     args = parser.parse_args()
 

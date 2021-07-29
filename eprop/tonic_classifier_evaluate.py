@@ -32,9 +32,6 @@ name_suffix, output_directory, args = parse_arguments(parser, description="Evalu
 if not os.path.exists(output_directory):
     os.mkdir(output_directory)
 
-MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
-MAX_SPIKES_PER_STIMULI = {"smnist": 10088, "shd": 14917}
-
 # ----------------------------------------------------------------------------
 # Helper functions
 # ----------------------------------------------------------------------------
@@ -109,16 +106,26 @@ output_classification_model = genn_model.create_custom_neuron_class(
     is_auto_refractory_required=False)
 
 # Create dataset
+sensor_size = None
+polarity = False
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=False)
 elif args.dataset == "smnist":
     dataset = tonic.datasets.SMNIST(save_to='./data', train=False)
+elif args.dataset == "dvs_gesture":
+    transform = tonic.transforms.Compose([
+        tonic.transforms.Downsample(spatial_factor=0.25)])
+    dataset = tonic.datasets.DVSGesture(save_to='./data', train=False, 
+                                        transform=transform)
+    sensor_size = (32, 32)
+    polarity = True
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
 # Create loader
 start_processing_time = perf_counter()
-data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size,
+                                    sensor_size=sensor_size, polarity=polarity)
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
@@ -201,7 +208,7 @@ output = model.add_neuron_population("Output", num_output_neurons, output_classi
                                      output_params, output_vars)
 
 # Allocate memory for input spikes and labels
-input.set_extra_global_param("spikeTimes", np.zeros(args.batch_size * MAX_SPIKES_PER_STIMULI[args.dataset], dtype=np.float32))
+input.set_extra_global_param("spikeTimes", np.zeros(args.batch_size * data_loader.max_spikes_per_stimuli, dtype=np.float32))
 
 # Turn on recording
 input.spike_recording_enabled = args.record
@@ -245,7 +252,7 @@ if not args.feedforward:
             "DeltaCurr", {}, {})
 
 # Build and load model
-stimuli_timesteps = int(np.ceil(MAX_STIMULI_TIMES[args.dataset] / args.dt))
+stimuli_timesteps = int(np.ceil(data_loader.max_stimuli_time / args.dt))
 model.build()
 model.load(num_recording_timesteps=stimuli_timesteps)
 

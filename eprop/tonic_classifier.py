@@ -20,9 +20,6 @@ import dataloader
 # Eprop imports
 #import eprop
 
-MAX_STIMULI_TIMES = {"smnist": 1568.0, "shd": 1369.140625}
-MAX_SPIKES_PER_STIMULI = {"smnist": 10000, "shd": 14917}
-
 ADAM_BETA1 = 0.9
 ADAM_BETA2 = 0.999
 
@@ -338,16 +335,26 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
     """)
 
 # Create dataset
+sensor_size = None
+polarity = False
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=True)
 elif args.dataset == "smnist":
     dataset = tonic.datasets.SMNIST(save_to='./data', train=True, num_neurons=79)
+elif args.dataset == "dvs_gesture":
+    transform = tonic.transforms.Compose([
+        tonic.transforms.Downsample(spatial_factor=0.25)])
+    dataset = tonic.datasets.DVSGesture(save_to='./data', train=True, 
+                                        transform=transform)
+    sensor_size = (32, 32)
+    polarity = True
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
 # Create loader
 start_processing_time = perf_counter()
-data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size)
+data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size,
+                                    sensor_size=sensor_size, polarity=polarity)
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
@@ -374,7 +381,7 @@ recurrent_lif_params = {"TauM": 20.0, "Vthresh": 0.6, "TauRefrac": 5.0}
 recurrent_lif_vars = {"V": 0.0, "RefracTime": 0.0, "E": 0.0}
 
 # Output population
-output_params = {"TauOut": 20.0, "TrialTime": MAX_STIMULI_TIMES[args.dataset]}
+output_params = {"TauOut": 20.0, "TrialTime": data_loader.max_stimuli_time}
 output_vars = {"Y": 0.0, "Pi": 0.0, "E": 0.0, "DeltaB": 0.0}
 if args.resume_epoch is None:
     output_vars["B"] = 0.0
@@ -469,7 +476,7 @@ output = model.add_neuron_population("Output", num_output_neurons, output_neuron
                                      output_params, output_vars)
 
 # Allocate memory for input spikes and labels
-input.set_extra_global_param("spikeTimes", np.zeros(args.batch_size * MAX_SPIKES_PER_STIMULI[args.dataset], dtype=np.float32))
+input.set_extra_global_param("spikeTimes", np.zeros(args.batch_size * data_loader.max_spikes_per_stimuli, dtype=np.float32))
 output.set_extra_global_param("labels", np.zeros(args.batch_size, dtype=np.uint8))
 
 # Turn on recording
@@ -610,7 +617,7 @@ output_bias_optimiser = model.add_custom_update("output_bias_optimiser", "Gradie
 optimisers.append(output_bias_optimiser)
 
 # Build and load model
-stimuli_timesteps = int(np.ceil(MAX_STIMULI_TIMES[args.dataset] / args.dt))
+stimuli_timesteps = int(np.ceil(data_loader.max_stimuli_time / args.dt))
 model.build()
 model.load(num_recording_timesteps=stimuli_timesteps)
 

@@ -79,25 +79,43 @@ def batch_events(events, batch_size):
 
 
 class DataLoader:
-    def __init__(self, dataset, shuffle=False, batch_size=1):
-        self.dataset = dataset
+    def __init__(self, dataset, shuffle=False, batch_size=1, sensor_size=None, polarity=False):
         self.length = len(dataset)
         self.batch_size = batch_size
         self.shuffle = shuffle
-        
+
+        # Zero maximums
+        self.max_stimuli_time = 0.0
+        self.max_spikes_per_stimuli = 0
+
         # Allocate numpy array for labels
         self._labels = np.empty(self.length, dtype=int)
         self._preprocessed_events = []
 
+        # Override sensor size if required
+        sensor_size = (sensor_size if sensor_size is not None 
+                       else dataset.sensor_size)
+
         # Loop through dataset
         for i in range(self.length):
-            events, label = self.dataset[i]
+            events, label = dataset[i]
             
             # Store label
             self._labels[i] = label
             
-            # Preprocess events and add to list
-            self._preprocessed_events.append(self._preprocess(events))
+            # Preprocess events 
+            preproc_events = self._preprocess(events, dataset.ordering, 
+                                              sensor_size, polarity)
+            
+            # Update max spike times and max spikes per stimuli
+            self.max_stimuli_time = max(self.max_stimuli_time, 
+                                        np.amax(preproc_events.spike_times))
+            self.max_spikes_per_stimuli = max(self.max_spikes_per_stimuli,
+                                              len(preproc_events.spike_times))
+            
+            # Add events to list
+            self._preprocessed_events.append(preproc_events)
+
     def __iter__(self):
         class DataIter:
             def __init__(self, data_loader):
@@ -139,14 +157,49 @@ class DataLoader:
     def __len__(self):
         return int(np.ceil(self.length / float(self.batch_size)))
     
-    def _preprocess(self, events):
+    def _preprocess(self, events, ordering, sensor_size, polarity):
         # Calculate cumulative sum of each neuron's spike count
-        num_input_neurons = np.product(self.dataset.sensor_size) 
-        end_spikes = np.cumsum(np.bincount(events[:,1].astype(int), 
+        num_input_neurons = np.product(sensor_size) 
+        
+        # Find indices of t and x
+        t_index = ordering.find("t")
+        x_index = ordering.find("x")
+        y_index = ordering.find("y")
+        p_index = ordering.find("p")
+
+        assert t_index != -1
+
+        # If sensor is 1D, 
+        if len(sensor_size) == 1:
+            assert x_index != -1
+
+            # Event IDs are simply x
+            spike_event_ids = events[:,x_index]
+        # Otherwise, if it's 2D
+        elif len(sensor_size) == 2:
+            assert x_index != -1
+            assert y_index != -1
+
+            # 'Flatten' event IDs
+            spike_event_ids = events[:,x_index] + (events[:,y_index] * sensor_size[1])
+        else:
+            raise "Only 1D and 2D sensors supported"
+
+        # If dataset has polarity
+        if polarity:
+            assert p_index != -1
+            
+            # Add polarity to event IDs
+            spike_event_ids += (events[:,p_index] * num_input_neurons)
+            
+            # Double number of input neurons
+            num_input_neurons *= 2
+        
+        end_spikes = np.cumsum(np.bincount(spike_event_ids.astype(int), 
                                            minlength=num_input_neurons))
         
         # Sort events first by neuron id and then by time and use to order spike times
-        spike_times = events[np.lexsort((events[:,0], events[:,1])),0]
-       
+        spike_times = events[np.lexsort((events[:,t_index], spike_event_ids)),0]
+
         # Return end spike indices and spike times (converted to ms)
         return PreprocessedEvents(end_spikes, (spike_times / 1000.0))
