@@ -99,20 +99,19 @@ class DataLoader:
         # Loop through dataset
         for i in range(self.length):
             events, label = dataset[i]
-            
+
             # Store label
             self._labels[i] = label
-            
+
             # Preprocess events 
             preproc_events = self._preprocess(events, dataset.ordering, 
                                               sensor_size, polarity)
-            
+
             # Update max spike times and max spikes per stimuli
             self.max_stimuli_time = max(self.max_stimuli_time, 
                                         np.amax(preproc_events.spike_times))
             self.max_spikes_per_stimuli = max(self.max_spikes_per_stimuli,
                                               len(preproc_events.spike_times))
-            
             # Add events to list
             self._preprocessed_events.append(preproc_events)
 
@@ -188,7 +187,6 @@ class DataLoader:
         # If dataset has polarity
         if polarity:
             assert p_index != -1
-            
             # Add polarity to event IDs
             spike_event_ids += (events[:,p_index] * num_input_neurons)
             
@@ -197,9 +195,9 @@ class DataLoader:
         
         end_spikes = np.cumsum(np.bincount(spike_event_ids.astype(int), 
                                            minlength=num_input_neurons))
-        
+        assert len(end_spikes) == num_input_neurons
         # Sort events first by neuron id and then by time and use to order spike times
-        spike_times = events[np.lexsort((events[:,t_index], spike_event_ids)),0]
+        spike_times = events[np.lexsort((events[:,t_index], spike_event_ids)),t_index]
 
         # Return end spike indices and spike times (converted to ms)
         return PreprocessedEvents(end_spikes, (spike_times / 1000.0))

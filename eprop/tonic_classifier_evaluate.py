@@ -100,7 +100,7 @@ output_classification_model = genn_model.create_custom_neuron_class(
     }
 
     $(Y) = ($(Kappa) * $(Y)) + $(Isyn) + $(B);
-    
+
     $(YSum) += $(Y);
     """,
     is_auto_refractory_required=False)
@@ -110,8 +110,10 @@ sensor_size = None
 polarity = False
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=False)
+    sensor_size = dataset.sensor_size
 elif args.dataset == "smnist":
-    dataset = tonic.datasets.SMNIST(save_to='./data', train=False)
+    dataset = tonic.datasets.SMNIST(save_to='./data', duplicate=False, num_neurons=79, train=False)
+    sensor_size = dataset.sensor_size
 elif args.dataset == "dvs_gesture":
     transform = tonic.transforms.Compose([
         tonic.transforms.Downsample(spatial_factor=0.25)])

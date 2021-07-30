@@ -339,8 +339,10 @@ sensor_size = None
 polarity = False
 if args.dataset == "shd":
     dataset = tonic.datasets.SHD(save_to='./data', train=True)
+    sensor_size = dataset.sensor_size
 elif args.dataset == "smnist":
-    dataset = tonic.datasets.SMNIST(save_to='./data', train=True, num_neurons=79)
+    dataset = tonic.datasets.SMNIST(save_to='./data', train=True, duplicate=False, num_neurons=79)
+    sensor_size = dataset.sensor_size
 elif args.dataset == "dvs_gesture":
     transform = tonic.transforms.Compose([
         tonic.transforms.Downsample(spatial_factor=0.25)])
@@ -359,7 +361,9 @@ end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
 # Calculate number of input neurons from sensor size
-num_input_neurons = np.product(dataset.sensor_size) 
+num_input_neurons = np.product(sensor_size) 
+if polarity:
+    num_input_neurons *= 2
 
 # Calculate number of valid outputs from classes
 num_outputs = len(dataset.classes)
