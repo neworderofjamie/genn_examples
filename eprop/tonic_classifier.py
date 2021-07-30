@@ -31,6 +31,9 @@ parser.add_argument("--timing", action="store_true")
 parser.add_argument("--record", action="store_true")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--num-epochs", type=int, default=50)
+parser.add_argument("--learning-rate", type=float, default=0.001)
+parser.add_argument("--learning-rate-decay", type=float, default=1.0)
+parser.add_argument("--learning-rate-decay-epochs", type=int, default=0)
 parser.add_argument("--resume-epoch", type=int, default=None)
 parser.add_argument("--cuda-visible-devices", action="store_true")
 
@@ -628,7 +631,7 @@ model.load(num_recording_timesteps=stimuli_timesteps)
 # Calculate initial transpose feedback weights
 model.custom_update("CalculateTranspose")
 
-learning_rate = 0.001
+learning_rate = args.learning_rate
 
 # Get views
 input_neuron_start_spike = input.vars["startSpike"].view
@@ -666,7 +669,13 @@ epoch_start = 0 if args.resume_epoch is None else (args.resume_epoch + 1)
 adam_step = 1
 start_time = perf_counter()
 for epoch in range(epoch_start, args.num_epochs):
-    print("Epoch %u" % epoch)
+    # If learning rate decay is on
+    if args.learning_rate_decay_epochs != 0:
+        # If we should decay learning rate this epoch
+        if epoch != 0 and (epoch % args.learning_rate_decay_epochs) == 0:
+            learning_rate *= args.learning_rate_decay
+
+    print("Epoch %u - Learning rate %f" % (epoch, learning_rate))
 
     # Loop through batches of (preprocessed) data
     data_iter = iter(data_loader)
