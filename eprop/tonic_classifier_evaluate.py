@@ -27,6 +27,7 @@ parser.add_argument("--backend")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--trained-epoch", type=int, default=49)
 parser.add_argument("--cuda-visible-devices", action="store_true")
+parser.add_argument("--no-download-dataset", action="store_true")
 
 name_suffix, output_directory, args = parse_arguments(parser, description="Evaluate eProp classifier")
 if not os.path.exists(output_directory):
@@ -109,16 +110,18 @@ output_classification_model = genn_model.create_custom_neuron_class(
 sensor_size = None
 polarity = False
 if args.dataset == "shd":
-    dataset = tonic.datasets.SHD(save_to='./data', train=False)
+    dataset = tonic.datasets.SHD(save_to='./data', train=False, 
+                                 download=not args.no_download_dataset)
     sensor_size = dataset.sensor_size
 elif args.dataset == "smnist":
-    dataset = tonic.datasets.SMNIST(save_to='./data', duplicate=False, num_neurons=79, train=False)
+    dataset = tonic.datasets.SMNIST(save_to='./data', duplicate=False, num_neurons=79, 
+                                    train=False, download=not args.no_download_dataset)
     sensor_size = dataset.sensor_size
 elif args.dataset == "dvs_gesture":
     transform = tonic.transforms.Compose([
         tonic.transforms.Downsample(spatial_factor=0.25)])
     dataset = tonic.datasets.DVSGesture(save_to='./data', train=False, 
-                                        transform=transform)
+                                        transform=transform, download=not args.no_download_dataset)
     sensor_size = (32, 32)
     polarity = True
 else:
