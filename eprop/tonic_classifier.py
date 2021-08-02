@@ -34,6 +34,7 @@ parser.add_argument("--num-epochs", type=int, default=50)
 parser.add_argument("--learning-rate", type=float, default=0.001)
 parser.add_argument("--learning-rate-decay", type=float, default=1.0)
 parser.add_argument("--learning-rate-decay-epochs", type=int, default=0)
+parser.add_argument("--regularizer-strength", default=0.001)
 parser.add_argument("--resume-epoch", type=int, default=None)
 parser.add_argument("--cuda-visible-devices", action="store_true")
 
@@ -399,8 +400,8 @@ else:
 # Synapse initialisation
 # ----------------------------------------------------------------------------
 # eProp parameters common across all populations
-eprop_lif_params = {"TauE": 20.0, "CReg": 1.0 / 1000.0, "FTarget": 10.0, "TauFAvg": 500.0}
-eprop_alif_params = {"TauE": 20.0, "TauA": 2000.0, "CReg": 1.0 / 1000.0,
+eprop_lif_params = {"TauE": 20.0, "CReg": args.regularizer_strength, "FTarget": 10.0, "TauFAvg": 500.0}
+eprop_alif_params = {"TauE": 20.0, "TauA": 2000.0, "CReg": args.regularizer_strength,
                      "FTarget": 10.0, "TauFAvg": 500.0, "Beta": 0.0174}
 eprop_pre_vars = {"ZFilter": 0.0}
 eprop_post_vars = {"Psi": 0.0, "FAvg": 0.0}
