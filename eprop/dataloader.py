@@ -79,8 +79,13 @@ def batch_events(events, batch_size):
 
 
 class DataLoader:
-    def __init__(self, dataset, shuffle=False, batch_size=1, sensor_size=None, polarity=False):
-        self.length = len(dataset)
+    def __init__(self, dataset, shuffle=False, batch_size=1, 
+                 sensor_size=None, polarity=False, dataset_slice=slice(0,None)):
+        # Build list of dataset indices in our slice
+        full_length = len(dataset)
+        slice_indices = list(range(full_length)[dataset_slice])
+        
+        self.length = len(slice_indices)
         self.batch_size = batch_size
         self.shuffle = shuffle
 
@@ -96,10 +101,10 @@ class DataLoader:
         sensor_size = (sensor_size if sensor_size is not None 
                        else dataset.sensor_size)
 
-        # Loop through dataset
-        for i in range(self.length):
-            events, label = dataset[i]
-
+        # Loop through slice of dataset
+        for i, s in enumerate(slice_indices):
+            events, label = dataset[s]
+            
             # Store label
             self._labels[i] = label
 

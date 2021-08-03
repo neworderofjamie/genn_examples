@@ -351,10 +351,16 @@ if args.use_nccl:
     num_ranks = comm.Get_size()
     
     print("Rank %u/%u" % (rank, num_ranks))
+    
+    # Distribute desired total batch size amongst ranks
     assert (args.batch_size % num_ranks) == 0
     batch_size = args.batch_size // num_ranks
+    
+    # Slice dataset between ranks
+    dataset_slice = slice(rank, None, num_ranks)
 else:
     batch_size = args.batch_size
+    dataset_slice = slice(0, None)
 
 # Create dataset
 sensor_size = None
@@ -379,7 +385,8 @@ else:
 # Create loader
 start_processing_time = perf_counter()
 data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=batch_size,
-                                    sensor_size=sensor_size, polarity=polarity)
+                                    sensor_size=sensor_size, polarity=polarity,
+                                    dataset_slice=dataset_slice)
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
