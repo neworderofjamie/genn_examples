@@ -339,6 +339,18 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
     $(inSyn) = 0;
     """)
 
+# If we're using NCCL
+if args.use_nccl:
+    from mpi4py import MPI
+    
+    # Get communicator
+    comm = MPI.COMM_WORLD
+    
+    # Get our rank and number of ranks
+    rank = comm.Get_rank()
+    num_ranks = comm.Get_size()
+    
+    print("Rank %u/%u" % (rank, num_ranks))
 # Create dataset
 sensor_size = None
 polarity = False
@@ -644,15 +656,6 @@ model.load(num_recording_timesteps=stimuli_timesteps)
 
 # If we're using NCCL
 if args.use_nccl:
-    from mpi4py import MPI
-    
-    # Get communicator
-    comm = MPI.COMM_WORLD
-    
-    # Get our rank and number of ranks
-    rank = comm.Get_rank()
-    num_ranks = comm.Get_size()
-    
     # Generate unique ID for our NCCL 'clique' on first rank
     if rank == 0:
         model._slm.nccl_generate_unique_id()
