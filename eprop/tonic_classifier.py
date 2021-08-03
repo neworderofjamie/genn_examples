@@ -351,6 +351,11 @@ if args.use_nccl:
     num_ranks = comm.Get_size()
     
     print("Rank %u/%u" % (rank, num_ranks))
+    assert (args.batch_size % num_ranks) == 0
+    batch_size = args.batch_size // num_ranks
+else:
+    batch_size = args.batch_size
+
 # Create dataset
 sensor_size = None
 polarity = False
@@ -373,7 +378,7 @@ else:
 
 # Create loader
 start_processing_time = perf_counter()
-data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size,
+data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=batch_size,
                                     sensor_size=sensor_size, polarity=polarity)
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
@@ -490,7 +495,7 @@ model = genn_model.GeNNModel("float", "%s_tonic_classifier_%s" % (args.dataset, 
                              **kwargs)
 model.dT = args.dt
 model.timing_enabled = args.timing
-model.batch_size = args.batch_size
+model.batch_size = batch_size
 model._model.set_seed(args.seed)
 
 # Add neuron populations
@@ -509,8 +514,8 @@ output = model.add_neuron_population("Output", num_output_neurons, output_neuron
                                      output_params, output_vars)
 
 # Allocate memory for input spikes and labels
-input.set_extra_global_param("spikeTimes", np.zeros(args.batch_size * data_loader.max_spikes_per_stimuli, dtype=np.float32))
-output.set_extra_global_param("labels", np.zeros(args.batch_size, dtype=np.uint8))
+input.set_extra_global_param("spikeTimes", np.zeros(batch_size * data_loader.max_spikes_per_stimuli, dtype=np.float32))
+output.set_extra_global_param("labels", np.zeros(batch_size, dtype=np.uint8))
 
 # Turn on recording
 input.spike_recording_enabled = args.record
@@ -651,7 +656,15 @@ optimisers.append(output_bias_optimiser)
 
 # Build and load model
 stimuli_timesteps = int(np.ceil(data_loader.max_stimuli_time / args.dt))
-model.build()
+
+# Build model (only on first rank if using NCCL)
+if not args.use_nccl or rank == 0:
+    model.build()
+
+# If we're using NCCL, wait for all ranks to reach this point
+if args.use_nccl:
+    comm.Barrier()
+
 model.load(num_recording_timesteps=stimuli_timesteps)
 
 # If we're using NCCL
@@ -663,7 +676,7 @@ if args.use_nccl:
     # Broadcast our  NCCL clique ID across all ranks
     nccl_unique_id_view = model._slm.nccl_assign_external_unique_id()
     comm.Bcast(nccl_unique_id_view, root=0)
-    
+    print(rank,nccl_unique_id_view)
     # Initialise NCCL communicator
     model._slm.nccl_init_communicator(rank, num_ranks)
 
@@ -727,7 +740,7 @@ for epoch in range(epoch_start, args.num_epochs):
         model.t = 0.0
 
         # Transform data into batch
-        batched_data = dataloader.batch_events(events, args.batch_size)
+        batched_data = dataloader.batch_events(events, batch_size)
 
         # Check that spike times will fit in view, copy them and push them
         assert len(batched_data.spike_times) <= len(input_spike_times_view)
@@ -752,7 +765,7 @@ for epoch in range(epoch_start, args.num_epochs):
             # Pull Pi from device and add to total
             # **TODO** sum Pis on device
             output.pull_var_from_device("Pi")
-            if args.batch_size == 1:
+            if batch_size == 1:
                 classification_output += output_pi_view[:num_outputs]
             else:
                 classification_output += output_pi_view[:len(labels), :num_outputs]
