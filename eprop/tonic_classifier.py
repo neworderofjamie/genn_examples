@@ -34,10 +34,14 @@ parser.add_argument("--num-epochs", type=int, default=50)
 parser.add_argument("--resume-epoch", type=int, default=None)
 parser.add_argument("--cuda-visible-devices", action="store_true")
 parser.add_argument("--no-download-dataset", action="store_true")
+parser.add_argument("--use-nccl", action="store_true")
 
 name_suffix, output_directory, args = parse_arguments(parser, description="Train eProp classifier")
 if not os.path.exists(output_directory):
     os.mkdir(output_directory)
+
+# Seed RNG, leaving random to match GeNN behaviour if seed is zero
+np.random.seed(None if args.seed == 0 else args.seed)
 
 # ----------------------------------------------------------------------------
 # Helper functions
@@ -459,12 +463,23 @@ gradient_batch_reduce_vars = {"reducedGradient": 0.0}
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-kwargs = {"selectGPUByDeviceID": True, "deviceSelectMethod": DeviceSelect_MANUAL} if args.cuda_visible_devices else {}
+# If we should respect CUDA_VISIBLE_DEVICES, 
+# use manual device ID-based device selection (note default is 0)
+kwargs = {}
+if args.cuda_visible_devices:
+    kwargs["selectGPUByDeviceID"] = True
+    kwargs["deviceSelectMethod"] = DeviceSelect_MANUAL
+
+# If we should use NCCL, turn on flag to generate NCCL reductions
+if args.use_nccl:
+    kwargs["enableNCCLReductions"] = True
+
 model = genn_model.GeNNModel("float", "%s_tonic_classifier_%s" % (args.dataset, name_suffix),
                              **kwargs)
 model.dT = args.dt
 model.timing_enabled = args.timing
 model.batch_size = args.batch_size
+model._model.set_seed(args.seed)
 
 # Add neuron populations
 input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArray",
@@ -626,6 +641,28 @@ optimisers.append(output_bias_optimiser)
 stimuli_timesteps = int(np.ceil(data_loader.max_stimuli_time / args.dt))
 model.build()
 model.load(num_recording_timesteps=stimuli_timesteps)
+
+# If we're using NCCL
+if args.use_nccl:
+    from mpi4py import MPI
+    
+    # Get communicator
+    comm = MPI.COMM_WORLD
+    
+    # Get our rank and number of ranks
+    rank = comm.Get_rank()
+    num_ranks = comm.Get_size()
+    
+    # Generate unique ID for our NCCL 'clique' on first rank
+    if rank == 0:
+        model._slm.nccl_generate_unique_id()
+
+    # Broadcast our  NCCL clique ID across all ranks
+    nccl_unique_id_view = model._slm.nccl_assign_external_unique_id()
+    comm.Bcast(nccl_unique_id_view, root=0)
+    
+    # Initialise NCCL communicator
+    model._slm.nccl_init_communicator(rank, num_ranks)
 
 # Calculate initial transpose feedback weights
 model.custom_update("CalculateTranspose")

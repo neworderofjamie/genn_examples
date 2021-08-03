@@ -16,6 +16,7 @@ def parse_arguments(parent_parser=None, description=None):
     parser.add_argument("--regularizer-strength", type=float, default=0.001)
     parser.add_argument("--dataset", choices=["smnist", "shd", "dvs_gesture"], required=True)
     parser.add_argument("--suffix", default="")
+    parser.add_argument("--seed", type=int, default=1234)
     args = parser.parse_args()
 
     # Determine output directory name and create if it doesn't exist
