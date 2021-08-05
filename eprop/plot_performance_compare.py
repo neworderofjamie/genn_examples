@@ -9,9 +9,11 @@ num_axis = int(math.ceil(math.sqrt(len(directories))))
 
 fig, axes = plt.subplots(num_axis, num_axis, sharex="col", sharey="row")
 
-for a, d in zip(axes.flatten(), directories):
+for i, (a, d) in enumerate(zip(axes.flatten(), directories)):
     a.set_title(d)
     plot(d, a)
+    if i == 0:
+        a.legend()
 
 for i in range(num_axis):
     axes[-1, i].set_xlabel("Epoch")

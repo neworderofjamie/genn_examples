@@ -18,14 +18,16 @@ def plot(output_directory, axis):
 
     for i, e in enumerate(epochs):
         epoch_mask = (training_data[:,0] == e)
-    
+
         num_trials[i] = np.sum(training_data[epoch_mask,2])
         num_correct[i] = np.sum(training_data[epoch_mask,3])
 
     max_train_performance = 100.0 * np.amax(num_correct / num_trials)
-    print("Max training performance: %f %%" % max_train_performance)
+
     train_actor = axis.plot(100.0 * num_correct / num_trials, label="Training")[0]
     axis.axhline(max_train_performance, linestyle="--", color=train_actor.get_color())
+    axis.annotate("%0.2f%%" % max_train_performance, (0.0, max_train_performance), 
+                  ha="right", va="center", color=train_actor.get_color())
 
     # Find evaluation files, sorting numerically
     evaluate_files = list(sorted(glob(os.path.join(output_directory, "performance_evaluate_*.csv")),
@@ -40,32 +42,39 @@ def plot(output_directory, axis):
 
         # Load file
         test_data = np.loadtxt(e, delimiter=",", skiprows=1)
-        
+
         # Calculate performance
         num_trials = np.sum(test_data[:,1])
         num_correct = np.sum(test_data[:,2])
-        
+
         # Add to list
         test_performance.append(100.0 * num_correct / num_trials)
         test_epoch.append(epoch)
 
+    max_epoch = max(max(test_epoch), np.amax(epochs))
+    axis.set_xlim((0, max_epoch))
+    axis.set_ylim((0, 100))
+
     if len(test_performance) > 0:
         # Plot
         test_actor = axis.plot(test_epoch, test_performance, label="Testing")[0]
-        axis.axhline(max(test_performance), linestyle="--", color=test_actor.get_color())
-        print("Max testing performance: %f %%" % max(test_performance))
+
+        max_test_performance = max(test_performance)
+        axis.axhline(max_test_performance, linestyle="--", color=test_actor.get_color())
+        axis.annotate("%0.2f%%" % max_test_performance, (max_epoch, max_test_performance), 
+                      ha="left", va="center", color=test_actor.get_color())
+        return max_train_performance, max_test_performance
     else:
-        test_actor = None
-    
-    axis.set_ylim((0, 100))
-    return train_actor, test_actor
+        return max_train_performance, 0.0
 
 if __name__ == "__main__":
     # Parse command line
     name_suffix, output_directory, _ = parse_arguments(description="Plot eProp classifier performance")
     
     fig, axis = plt.subplots()
-    plot(output_directory, axis)
+    max_train_performance, max_test_performance = plot(output_directory, axis)
+    print("Max training performance: %f%%" % max_train_performance)
+    print("Max testing performance: %f%%" % max_test_performance)
     axis.legend()
     axis.set_xlabel("Epoch")
     axis.set_ylabel("Performance [%]")
