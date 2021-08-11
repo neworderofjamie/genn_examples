@@ -37,8 +37,6 @@ parser.add_argument("--no-download-dataset", action="store_true")
 parser.add_argument("--use-nccl", action="store_true")
 
 name_suffix, output_directory, args = parse_arguments(parser, description="Train eProp classifier")
-if not os.path.exists(output_directory):
-    os.mkdir(output_directory)
 
 # Seed RNG, leaving random to match GeNN behaviour if seed is zero
 np.random.seed(None if args.seed == 0 else args.seed)
@@ -362,6 +360,11 @@ else:
     batch_size = args.batch_size
     dataset_slice = slice(0, None)
 
+# Create output directory if it doesn't exist (only on first rank if NCCL)
+first_rank = (not args.use_nccl or rank == 0)
+if first_rank and not os.path.exists(output_directory):
+    os.mkdir(output_directory)
+
 # Create dataset
 sensor_size = None
 polarity = False
@@ -665,7 +668,6 @@ optimisers.append(output_bias_optimiser)
 stimuli_timesteps = int(np.ceil(data_loader.max_stimuli_time / args.dt))
 
 # Build model (only on first rank if using NCCL)
-first_rank = (not args.use_nccl or rank == 0)
 if first_rank:
     model.build()
 
@@ -783,14 +785,16 @@ for epoch in range(epoch_start, args.num_epochs):
 
         # Calculate number of outputs which match label
         num_correct = np.sum(np.argmax(classification_output[:len(labels),:], axis=1) == labels)
-
+        num_total = len(labels)
+        
         # If we're using NCCL, sum up correct across batch
         if args.use_nccl:
-            num_correct = comm.Allreduce(num_correct, MPI.SUM)
+            num_correct = comm.allreduce(sendobj=num_correct, op=MPI.SUM)
+            num_total = comm.allreduce(sendobj=num_total, op=MPI.SUM)
 
         if first_rank:
-            print("\t\t%u / %u correct = %f %%" % (num_correct, len(labels), 100.0 * num_correct / len(labels)))
-            performance_csv.writerow((epoch, batch_idx, len(labels), num_correct))
+            print("\t\t%u / %u correct = %f %%" % (num_correct, num_total, 100.0 * num_correct / num_total))
+            performance_csv.writerow((epoch, batch_idx, num_total, num_correct))
             performance_file.flush()
 
         # Update Adam optimiser scaling factors
