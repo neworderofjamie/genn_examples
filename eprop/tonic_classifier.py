@@ -35,6 +35,7 @@ parser.add_argument("--resume-epoch", type=int, default=None)
 parser.add_argument("--cuda-visible-devices", action="store_true")
 parser.add_argument("--no-download-dataset", action="store_true")
 parser.add_argument("--use-nccl", action="store_true")
+parser.add_argument("--hold-back-validate", type=int, default=None)
 
 name_suffix, output_directory, args = parse_arguments(parser, description="Train eProp classifier")
 
@@ -338,6 +339,7 @@ feedback_psm_model = genn_model.create_custom_postsynaptic_class(
     """)
 
 # If we're using NCCL
+dataset_slice_end = None if args.hold_back_validate is None else -args.hold_back_validate
 if args.use_nccl:
     from mpi4py import MPI
 
@@ -355,10 +357,10 @@ if args.use_nccl:
     batch_size = args.batch_size // num_ranks
 
     # Slice dataset between ranks
-    dataset_slice = slice(rank, None, num_ranks)
+    dataset_slice = slice(rank, dataset_slice_end, num_ranks)
 else:
     batch_size = args.batch_size
-    dataset_slice = slice(0, None)
+    dataset_slice = slice(0, dataset_slice_end)
 
 # Create output directory if it doesn't exist (only on first rank if NCCL)
 first_rank = (not args.use_nccl or rank == 0)

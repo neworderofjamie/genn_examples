@@ -28,6 +28,7 @@ parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--trained-epoch", type=int, default=49)
 parser.add_argument("--cuda-visible-devices", action="store_true")
 parser.add_argument("--no-download-dataset", action="store_true")
+parser.add_argument("--hold-back-validate", type=int, default=None)
 
 name_suffix, output_directory, args = parse_arguments(parser, description="Evaluate eProp classifier")
 if not os.path.exists(output_directory):
@@ -113,27 +114,31 @@ output_classification_model = genn_model.create_custom_neuron_class(
 sensor_size = None
 polarity = False
 if args.dataset == "shd":
-    dataset = tonic.datasets.SHD(save_to='./data', train=False, 
+    dataset = tonic.datasets.SHD(save_to='./data', train=args.hold_back_validate is not None,
                                  download=not args.no_download_dataset)
     sensor_size = dataset.sensor_size
 elif args.dataset == "smnist":
     dataset = tonic.datasets.SMNIST(save_to='./data', duplicate=False, num_neurons=79, 
-                                    train=False, download=not args.no_download_dataset)
+                                    train=args.hold_back_validate is not None, download=not args.no_download_dataset)
     sensor_size = dataset.sensor_size
 elif args.dataset == "dvs_gesture":
     transform = tonic.transforms.Compose([
         tonic.transforms.Downsample(spatial_factor=0.25)])
-    dataset = tonic.datasets.DVSGesture(save_to='./data', train=False, 
+    dataset = tonic.datasets.DVSGesture(save_to='./data', train=args.hold_back_validate is not None,
                                         transform=transform, download=not args.no_download_dataset)
     sensor_size = (32, 32)
     polarity = True
 else:
     raise RuntimeError("Unknown dataset '%s'" % args.dataset)
 
+# If we're using held back training set data, only use this part of dataset
+dataset_slice = slice(None) if args.hold_back_validate is None else slice(-args.hold_back_validate, None)
+
 # Create loader
 start_processing_time = perf_counter()
 data_loader = dataloader.DataLoader(dataset, shuffle=True, batch_size=args.batch_size,
-                                    sensor_size=sensor_size, polarity=polarity)
+                                    sensor_size=sensor_size, polarity=polarity,
+                                    dataset_slice=dataset_slice)
 end_process_time = perf_counter()
 print("Data processing time:%f ms" % ((end_process_time - start_processing_time) * 1000.0))
 
