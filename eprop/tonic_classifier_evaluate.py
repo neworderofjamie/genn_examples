@@ -33,6 +33,9 @@ name_suffix, output_directory, args = parse_arguments(parser, description="Evalu
 if not os.path.exists(output_directory):
     os.mkdir(output_directory)
 
+# Seed RNG, leaving random to match GeNN behaviour if seed is zero
+np.random.seed(None if args.seed == 0 else args.seed)
+
 # ----------------------------------------------------------------------------
 # Helper functions
 # ----------------------------------------------------------------------------
@@ -194,6 +197,7 @@ model = genn_model.GeNNModel("float", "%s_tonic_classifier_evaluate_%s" % (args.
 model.dT = args.dt
 model.timing_enabled = args.timing
 model.batch_size = args.batch_size
+model._model.set_seed(args.seed)
 
 # Add neuron populations
 input = model.add_neuron_population("Input", num_input_neurons, "SpikeSourceArray",
