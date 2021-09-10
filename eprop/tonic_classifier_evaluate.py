@@ -4,9 +4,10 @@ import os
 import tonic
 import matplotlib.pyplot as plt
 import random
+import subprocess
 
 from argparse import ArgumentParser
-from time import perf_counter
+from time import perf_counter, sleep
 from pygenn import genn_model
 from pygenn.genn_wrapper import NO_DELAY
 from pygenn.genn_wrapper.CUDABackend import DeviceSelect_MANUAL
@@ -23,6 +24,7 @@ parser = ArgumentParser(add_help=False)
 parser.add_argument("--timing", action="store_true")
 parser.add_argument("--record", action="store_true")
 parser.add_argument("--warmup", action="store_true")
+parser.add_argument("--record-power", action="store_true")
 parser.add_argument("--backend")
 parser.add_argument("--batch-size", type=int, default=512)
 parser.add_argument("--trained-epoch", type=int, default=49)
@@ -282,6 +284,13 @@ performance_file = open(os.path.join(output_directory, "performance_evaluate_%u.
 performance_csv = csv.writer(performance_file, delimiter=",")
 performance_csv.writerow(("Batch", "Num trials", "Number correct"))
 
+# If we should record power, launch nvidia-smi process
+if args.record_power:
+    power_trace_filename = os.path.join(output_directory, "power_trace.txt")
+    call = "nvidia-smi -i 0 -lms 10 --format=csv,noheader --query-gpu=timestamp,power.draw -f %s" % power_trace_filename
+    process = subprocess.Popen(call.split())
+    time.sleep(5)
+
 # If we should warmup the state of the network
 if args.warmup:
     # Loop through batches of (pre-processed) data
@@ -386,4 +395,7 @@ if args.timing:
     print("Init sparse: %f" % model.init_sparse_time)
     print("Neuron update: %f" % model.neuron_update_time)
     print("Presynaptic update: %f" % model.presynaptic_update_time)
-   
+
+if args.record_power:
+    time.sleep(5)
+    process.terminate()
