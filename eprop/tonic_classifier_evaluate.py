@@ -321,6 +321,7 @@ if args.warmup:
 total_num = 0;
 total_num_correct = 0
 start_time = perf_counter()
+batch_times = []
 # Loop through batches of (pre-processed) data
 data_iter = iter(data_loader)
 for batch_idx, (events, labels) in enumerate(data_iter):
@@ -383,11 +384,14 @@ for batch_idx, (events, labels) in enumerate(data_iter):
                 write_spike_file(os.path.join(output_directory, "recurrent_lif_spikes_%u_%u_%u.csv" % (epoch, batch_idx, i)), s)
 
     batch_end_time = perf_counter()
-    print("\t\tTime:%f ms" % ((batch_end_time - batch_start_time) * 1000.0))
+    batch_times.append((batch_end_time - batch_start_time) * 1000.0)
+    print("\t\tTime:%f ms" % batch_times[-1])
+    
 
 end_time = perf_counter()
 print("%u / %u correct = %f %%" % (total_num_correct, total_num, 100.0 * total_num_correct / total_num))
 print("Time:%f ms" % ((end_time - start_time) * 1000.0))
+print("Average batch time: %f ms" % np.average(batch_times))
 
 performance_file.close()
 if args.timing:
