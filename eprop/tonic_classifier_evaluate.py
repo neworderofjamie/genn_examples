@@ -289,7 +289,7 @@ if args.record_power:
     power_trace_filename = os.path.join(output_directory, "power_trace.txt")
     call = "nvidia-smi -i 0 -lms 10 --format=csv,noheader --query-gpu=timestamp,power.draw -f %s" % power_trace_filename
     process = subprocess.Popen(call.split())
-    time.sleep(5)
+    sleep(5)
 
 # If we should warmup the state of the network
 if args.warmup:
@@ -401,5 +401,5 @@ if args.timing:
     print("Presynaptic update: %f" % model.presynaptic_update_time)
 
 if args.record_power:
-    time.sleep(5)
+    sleep(5)
     process.terminate()
