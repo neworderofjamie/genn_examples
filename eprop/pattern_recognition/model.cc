@@ -95,6 +95,7 @@ void modelDefinition(ModelSpec &model)
     model.setDT(1.0);
     model.setName("pattern_recognition");
     model.setMergePostsynapticModels(true);
+    model.setMergePrePostWeightUpdateModels(true);
     model.setTiming(Parameters::timingEnabled);
 
     //---------------------------------------------------------------------------
@@ -117,7 +118,7 @@ void modelDefinition(ModelSpec &model)
         5.0);   // Refractory time constant [ms]
 
     Recurrent::VarValues recurrentInitVals(
-        0.0,    // V
+        0.0,    // VsetMergePostsynapticModels
         0.0,    // RefracTime
         0.0);   // E
 
@@ -161,18 +162,14 @@ void modelDefinition(ModelSpec &model)
     EProp::VarValues inputRecurrentInitVals(
         initVar<InitVarSnippet::Normal>(inputRecurrentWeightDist),  // g
         0.0,                                                        // eFiltered
-        0.0,                                                        // DeltaG
-        0.0,                                                        // M
-        0.0);                                                       // V
-
+        0.0);                                                       // DeltaG
+        
     // Recurrent connections
     InitVarSnippet::Normal::ParamValues recurrentRecurrentWeightDist(0.0, weight0 / sqrt(Parameters::numRecurrentNeurons));
     EProp::VarValues recurrentRecurrentInitVals(
         initVar<InitVarSnippet::Normal>(recurrentRecurrentWeightDist),  // g
         0.0,                                                            // eFiltered
-        0.0,                                                            // DeltaG
-        0.0,                                                            // M
-        0.0);                                                           // V
+        0.0);                                                           // DeltaG
 
     // Feedforward recurrent->output connections
     OutputLearning::ParamValues recurrentOutputParamVals(
@@ -188,10 +185,8 @@ void modelDefinition(ModelSpec &model)
 #endif
     OutputLearning::VarValues recurrentOutputInitVals(
         initVar<InitVarSnippet::Normal>(recurrentOutputWeightDist), // g
-        0.0,                                                        // DeltaG
-        0.0,                                                        // M
-        0.0);                                                       // V
-
+        0.0);                                                       // DeltaG
+        
     // Feedback connections
     // **HACK** this is actually a nasty corner case for the initialisation rules
     // We really want this uninitialised as we are going to copy over transpose 
@@ -271,4 +266,9 @@ void modelDefinition(ModelSpec &model)
     model.addCustomUpdate<AdamOptimizer>("RecurrentRecurrentWeightOptimiser", "GradientLearn",
                                          adamParams, adamVarValues, adamRecurrentRecurrentVarReferences);                                  
 #endif                                             
+    
+    CustomUpdateModels::Transpose::WUVarReferences transposeRecurrentOutputVarReferences(
+        createWUVarRef(recurrentOutput, "g", outputRecurrent, "g"));    // Variable
+    model.addCustomUpdate<CustomUpdateModels::Transpose>("RecurrentOutputWeightTranspose", "CalculateTranspose",
+                                                         {}, {}, transposeRecurrentOutputVarReferences);
 }

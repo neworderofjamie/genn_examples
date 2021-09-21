@@ -26,10 +26,6 @@ int main()
         allocateRecordingBuffers(1000);
         initialize();
 
-        // Use CUDA to calculate initial transpose of feedforward recurrent->output weights
-        BatchLearning::transposeCUDA(d_gRecurrentOutput, d_gOutputRecurrent, 
-                                     Parameters::numRecurrentNeurons, Parameters::numOutputNeurons);
-
         initializeSparse();
 
 #ifdef USE_DEEP_R
@@ -39,6 +35,10 @@ int main()
                                                      d_DeltaGRecurrentRecurrent, d_MRecurrentRecurrent, d_VRecurrentRecurrent, 
                                                      d_gRecurrentRecurrent, d_eFilteredRecurrentRecurrent);
 #endif
+        
+        // Calculate initial transpose
+        updateCalculateTranspose();
+        
         AnalogueRecorder<float> outputRecorder("output.csv", {YOutput, YStarOutput}, Parameters::numOutputNeurons, ",");
         float learningRate = 0.003f;
         {
@@ -106,7 +106,7 @@ int main()
             std::cout << "\tNeuron update:" << neuronUpdateTime << std::endl;
             std::cout << "\tPresynaptic update:" << presynapticUpdateTime << std::endl;
             std::cout << "\tSynapse dynamics:" << synapseDynamicsTime << std::endl;
-            std::cout << "\tGradient learning custom update:" << updateGradientLearnTime << std::endl;
+            std::cout << "\tGradient learning custom update:" << customUpdateGradientLearnTime << std::endl;
 #ifdef USE_DEEP_R
             std::cout << "\tRecurrent->recurrent Deep-R learning:" << std::endl;
             std::cout << "\t\tTotal:" << recurrentRecurrentdeepR.getHostUpdateTime() << std::endl;
