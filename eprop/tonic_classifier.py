@@ -272,7 +272,8 @@ if args.num_recurrent_alif > 0:
         "OutputRecurrentALIF", "DENSE_INDIVIDUALG", NO_DELAY,
         output, recurrent_alif,
         eprop.feedback_model, {}, {"g": 0.0}, {}, {},
-        eprop.feedback_psm_model, {}, {})
+        "DeltaCurr", {}, {})
+    output_recurrent_alif.ps_target_var = "ISynFeedback"
 
 if args.num_recurrent_lif > 0:
     input_recurrent_lif = model.add_synapse_population(
@@ -289,7 +290,8 @@ if args.num_recurrent_lif > 0:
         "OutputRecurrentLIF", "DENSE_INDIVIDUALG", NO_DELAY,
         output, recurrent_lif,
         eprop.feedback_model, {}, {"g": 0.0}, {}, {},
-        eprop.feedback_psm_model, {}, {})
+        "DeltaCurr", {}, {})
+    output_recurrent_lif.ps_target_var = "ISynFeedback"
 
 if not args.feedforward:
     if args.num_recurrent_alif > 0:

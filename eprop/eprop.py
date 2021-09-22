@@ -273,13 +273,3 @@ output_learning_model = genn_model.create_custom_weight_update_class(
     synapse_dynamics_code="""
     $(DeltaG) += $(ZFilter) * $(E_post);
     """)
-
-#----------------------------------------------------------------------------
-# Postsynaptic models
-#----------------------------------------------------------------------------
-feedback_psm_model = genn_model.create_custom_postsynaptic_class(
-    "feedback_psm",
-    apply_input_code="""
-    $(ISynFeedback) += $(inSyn);
-    $(inSyn) = 0;
-    """)
