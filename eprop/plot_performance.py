@@ -22,7 +22,7 @@ def plot(output_directory, axis):
         num_trials[i] = np.sum(training_data[epoch_mask,2])
         num_correct[i] = np.sum(training_data[epoch_mask,3])
 
-    max_train_performance = 100.0 * np.amax(num_correct / num_trials)
+    max_train_performance = 100.0 * (num_correct[-1] / num_trials[-1])
 
     train_actor = axis.plot(100.0 * num_correct / num_trials, label="Training")[0]
     axis.axhline(max_train_performance, linestyle="--", color=train_actor.get_color())
@@ -59,7 +59,7 @@ def plot(output_directory, axis):
         # Plot
         test_actor = axis.plot(test_epoch, test_performance, label="Testing")[0]
 
-        max_test_performance = max(test_performance)
+        max_test_performance = test_performance[max_epoch]
         axis.axhline(max_test_performance, linestyle="--", color=test_actor.get_color())
         axis.annotate("%0.2f%%" % max_test_performance, (max_epoch, max_test_performance), 
                       ha="left", va="center", color=test_actor.get_color())
