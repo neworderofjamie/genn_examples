@@ -5,9 +5,12 @@ from plot_performance import plot
 
 directories = sys.argv[1:]
 
-num_axis = int(math.ceil(math.sqrt(len(directories))))
+num_results = len(directories)
+num_cols = int(math.ceil(math.sqrt(num_results)))
+num_rows = int(math.ceil(float(num_results) / num_cols))
 
-fig, axes = plt.subplots(num_axis, num_axis, sharex="col", sharey="row")
+print(num_cols, num_rows, num_results)
+fig, axes = plt.subplots(num_rows, num_cols, sharex="col", sharey="row")
 
 for i, (a, d) in enumerate(zip(axes.flatten(), directories)):
     a.set_title(d)
@@ -15,7 +18,10 @@ for i, (a, d) in enumerate(zip(axes.flatten(), directories)):
     if i == 0:
         a.legend()
 
-for i in range(num_axis):
-    axes[-1, i].set_xlabel("Epoch")
+for i in range(num_rows):
     axes[i, 0].set_ylabel("Performance [%]")
+
+for i in range(num_cols):
+    axes[-1, i].set_xlabel("Epoch")
+
 plt.show()
