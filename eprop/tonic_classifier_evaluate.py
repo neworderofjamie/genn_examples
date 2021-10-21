@@ -198,9 +198,9 @@ if not args.feedforward:
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-if args.backend == "CUDA"
+if args.backend == "CUDA":
     kwargs = {"selectGPUByDeviceID": True, "deviceSelectMethod": DeviceSelect_MANUAL} if args.cuda_visible_devices else {}
-elif args.backend = "SingleThreadedCPU":
+elif args.backend == "SingleThreadedCPU":
     kwargs = {"userCxxFlagsGNU": "-march=native"}
 else:
     kwargs = {}
