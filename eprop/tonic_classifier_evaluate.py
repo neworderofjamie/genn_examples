@@ -177,14 +177,14 @@ assert not (args.num_recurrent_alif > 0 and args.num_recurrent_lif > 0)
 if args.num_recurrent_alif > 0:
     # Input->recurrent synapse parameters
     input_recurrent_alif_vars = {"g": np.load(os.path.join(output_directory, "g_input_recurrent_%u.npy" % args.trained_epoch))}
-    
+
     # Recurrent->output synapse parameters
     recurrent_alif_output_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_output_%u.npy" % args.trained_epoch))}
 
 if args.num_recurrent_lif > 0:
     # Input->recurrent synapse parameters
     input_recurrent_lif_vars = {"g": np.load(os.path.join(output_directory, "g_input_recurrent_lif_%u.npy" % args.trained_epoch))}
-    
+
     # Recurrent->output synapse parameters
     recurrent_lif_output_vars = {"g": np.load(os.path.join(output_directory, "g_recurrent_lif_output_%u.npy" % args.trained_epoch))}
 
@@ -198,7 +198,12 @@ if not args.feedforward:
 # ----------------------------------------------------------------------------
 # Model description
 # ----------------------------------------------------------------------------
-kwargs = {"selectGPUByDeviceID": True, "deviceSelectMethod": DeviceSelect_MANUAL} if args.cuda_visible_devices else {}
+if args.backend == "CUDA"
+    kwargs = {"selectGPUByDeviceID": True, "deviceSelectMethod": DeviceSelect_MANUAL} if args.cuda_visible_devices else {}
+elif args.backend = "SingleThreadedCPU":
+    kwargs = {"userCxxFlagsGNU": "-march=native"}
+else:
+    kwargs = {}
 model = genn_model.GeNNModel("float", "%s_tonic_classifier_evaluate_%s" % (args.dataset, name_suffix), 
                              backend=args.backend, **kwargs)
 model.dT = args.dt
@@ -298,11 +303,11 @@ if args.warmup:
     for events, _ in data_iter:
         # Transform data into batch
         batched_data = dataloader.batch_events(events, args.batch_size)
-        
+
         # Reset time
         model.timestep = 0
         model.t = 0.0
-        
+
         # Check that spike times will fit in view, copy them and push them
         assert len(batched_data.spike_times) <= len(input_spike_times_view)
         input_spike_times_view[0:len(batched_data.spike_times)] = batched_data.spike_times
@@ -354,7 +359,7 @@ for batch_idx, (events, labels) in enumerate(data_iter):
 
     # Pull sum of outputs from device
     output.pull_var_from_device("YSum")
-            
+
     # If maximum output matches label, increment counter
     if args.batch_size == 1:
         num_correct += np.sum(np.argmax(output_y_sum_view) == labels)
@@ -364,7 +369,7 @@ for batch_idx, (events, labels) in enumerate(data_iter):
     print("\t%u / %u correct = %f %%" % (num_correct, len(labels), 100.0 * num_correct / len(labels)))
     total_num += len(labels)
     total_num_correct += num_correct
-    
+
     performance_csv.writerow((batch_idx, len(labels), num_correct))
     performance_file.flush()
 
