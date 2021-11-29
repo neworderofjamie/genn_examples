@@ -18,7 +18,7 @@
 // Auto-generated model code
 #include "superspike_demo_CODE/definitions.h"
 
-//#define JETSON_POWER
+#define JETSON_POWER
 
 namespace
 {
@@ -197,17 +197,22 @@ void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::at
                           cv::Point(1920, 990),
                           CV_RGB(255, 255, 255), cv::FILLED);
             
-            // Read power from device
-            std::ifstream powerStream("/sys/devices/3160000.i2c/i2c-0/0-0041/iio_device/in_power0_input");
-            unsigned int power;
-            powerStream >> power;
-            
             // Write current power usage to top-right corner
             char status[255];
             sprintf(status, "Trial time:%.1fs (%.1fx real-time)", trialTime, (Parameters::trialMs / 1000.0) / trialTime);
             cv::putText(outputImage, status, cv::Point(1304, 940),
                         cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0x97, 0xA7));
-#ifdef JETSON_POWER
+#if ((TEGRA_CHIP_ID == 25) || (TEGRA_CHIP_ID == 24))
+            // Read power from device
+#if TEGRA_CHIP_ID == 24
+            std::ifstream powerStream("/sys/devices/3160000.i2c/i2c-0/0-0041/iio_device/in_power0_input");
+#else
+            std::ifstream powerStream("/sys/bus/i2c/drivers/ina3221x/7-0040/iio:device0/in_power0_input");
+#endif
+            
+            unsigned int power;
+            powerStream >> power;
+            
             sprintf(status, "Power:%.1fW", (float)power / 1000.0f);
             cv::putText(outputImage, status, cv::Point(1304, 975),
                         cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0x97, 0xA7));
