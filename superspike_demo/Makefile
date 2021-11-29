@@ -2,7 +2,12 @@ OPENCV_PACKAGE                  :=opencv4
 GENERATED_CODE_DIR		:=superspike_demo_CODE
 GENN_USERPROJECT_INCLUDE	:=$(abspath $(dir $(shell which genn-buildmodel.sh))../userproject/include)
 CXXFLAGS 			+=-std=c++11 -Wall -Wpedantic -Wextra
-TEGRA_CHIP_ID			:=$(shell [-f /sys/module/tegra_fuse/parameters/tegra_chip_id] && cat /sys/module/tegra_fuse/parameters/tegra_chip_id || echo -1)
+
+ifneq ("$(wildcard /sys/module/tegra_fuse/parameters/tegra_chip_id)","")
+    TEGRA_CHIP_ID		:=$(shell cat /sys/module/tegra_fuse/parameters/tegra_chip_id)
+else
+    TEGRA_CHIP_ID		:=-1
+endif
 
 .PHONY: all clean generated_code
 
