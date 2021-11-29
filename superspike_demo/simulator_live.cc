@@ -17,7 +17,7 @@
 // Auto-generated model code
 #include "superspike_demo_CODE/definitions.h"
 
-#define JETSON_POWER
+//#define JETSON_POWER
 
 namespace
 {
@@ -170,8 +170,9 @@ void writeSpikeImage(cv::Mat &image, const uint32_t *spikes, unsigned int numNeu
                 neuronID -= numLZ;
                 
                 // Set pixel in image
+                // **NOTE** we flip so output is right way up
                 for(unsigned int i = 0; i < neuronScale; i++) {
-                    image.at<cv::Vec3b>((neuronID * neuronScale) + i, t / timestepsPerPixel) = spikeColour;
+                    image.at<cv::Vec3b>(((numNeurons - neuronID - 1) * neuronScale) + i, t / timestepsPerPixel) = spikeColour;
                 }
                 
                 // New neuron id of the highest bit of this word
@@ -192,8 +193,8 @@ void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::at
             
 #ifdef JETSON_POWER
             // Clear background behind text
-            cv::rectangle(outputImage, cv::Point(1700, 20),
-                         cv::Point(1920, 40),
+            cv::rectangle(outputImage, cv::Point(1700, 0),
+                         cv::Point(1920, 200),
                          CV_RGB(255, 255, 255), cv::FILLED);
             
             // Read power from device
@@ -204,7 +205,7 @@ void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::at
             // Write current power usage to top-right corner
             char status[255];
             sprintf(status, "Power:%.1fW", (float)power / 1000.0f);
-            cv::putText(outputImage, status, cv::Point(1700, 20),
+            cv::putText(outputImage, status, cv::Point(1700, 40),
                         cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0x97, 0xA7));
 #endif
             // Display image
@@ -240,26 +241,24 @@ int main()
         const unsigned int timestepsPerPixel = 40;
         
         // Create output image
-        cv::Mat outputImage(1080, 1920, CV_8UC3);
+        //cv::Mat outputImage(1080, 1920, CV_8UC3);
         
-        // Clear background
-        // **TODO** load background image
-        outputImage = cv::Vec3b(255, 255, 255);
+        cv::Mat outputImage = cv::imread("background.png");
+        assert(outputImage.size().width == 1920 && outputImage.size().height == 1080);
         
         // Create ROIs within background for spikes
-        cv::Mat inputSpikeROI(outputImage, cv::Rect(120, 500, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numInput * neuronScale));
-        cv::Mat hiddenSpikeROI(outputImage, cv::Rect(712, 500, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numHidden * neuronScale));
-        cv::Mat outputSpikeROI(outputImage, cv::Rect(1304, 500, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numOutput * neuronScale));
+        cv::Mat inputSpikeROI(outputImage, cv::Rect(120, 475, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numInput * neuronScale));
+        cv::Mat hiddenSpikeROI(outputImage, cv::Rect(712, 475, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numHidden * neuronScale));
+        cv::Mat outputSpikeROI(outputImage, cv::Rect(1304, 475, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numOutput * neuronScale));
         
         allocateMem();
         allocateRecordingBuffers(Parameters::trialTimesteps);
         initialize();
-
-        initializeSparse();
         
         // Load target spikes
         loadTargetSpikes("oxford-target.ras");
     
+        initializeSparse();
         
         // Mutex for exchanging data at end of each trial
         std::mutex outputMutex;
@@ -282,6 +281,7 @@ int main()
 
             // Loop through trials
             unsigned int timestep = 0;
+            float error = 0.0f;
             r0HiddenOutputWeightOptimiser = Parameters::r0;
             r0InputHiddenWeightOptimiser = Parameters::r0;
             for(unsigned int trial = 0; trial < Parameters::numTrials && run; trial++) {
@@ -291,6 +291,10 @@ int main()
                     r0InputHiddenWeightOptimiser *= 0.1;
                 }
 
+                // Calculate error
+                pullavgSqrErrOutputFromDevice();
+                error = calculateError(timestep);
+                
                 // Reset model timestep
                 // **NOTE** this a bit gross but means we can simplify a lot of logic
                 t = 0.0f;
@@ -317,7 +321,6 @@ int main()
                 
                 // Pull recording data and error from device
                 pullRecordingBuffersFromDevice();
-                pullavgSqrErrOutputFromDevice();
                 
                 {
                     // Lock mutex
@@ -329,14 +332,17 @@ int main()
                     writeSpikeImage(outputSpikeROI, recordSpkOutput, Parameters::numOutput, neuronScale, timestepsPerPixel, spikeColour);
                     
                     // Clear background behind text
-                    cv::rectangle(outputImage, cv::Point(0, 20),
-                                  cv::Point(1000, 40),
+                    cv::rectangle(outputImage, cv::Point(20, 880),
+                                  cv::Point(690, 990),
                                   CV_RGB(255, 255, 255), cv::FILLED);
                 
                     // Display trial and error in top-right
                     char status[255];
-                    sprintf(status, "Trial %u/%u (error = %f)", trial, Parameters::numTrials, calculateError(timestep));
-                    cv::putText(outputImage, status, cv::Point(20, 20),
+                    sprintf(status, "Trial %u/%u", trial, Parameters::numTrials);
+                    cv::putText(outputImage, status, cv::Point(20, 940),
+                                cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0x97, 0xA7));
+                    sprintf(status, "Error = %.0f", error);
+                    cv::putText(outputImage, status, cv::Point(20, 975),
                                 cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0x97, 0xA7));
                 }
 
