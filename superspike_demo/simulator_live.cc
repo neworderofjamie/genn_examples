@@ -12,13 +12,12 @@
 
 // OpenCV includes
 #include <opencv2/opencv.hpp>
+
 // Model parameters
 #include "parameters.h"
 
 // Auto-generated model code
 #include "superspike_demo_CODE/definitions.h"
-
-#define JETSON_POWER
 
 namespace
 {
@@ -60,6 +59,10 @@ void loadTargetSpikes(const std::string &filename)
         // Make neuron indices zero-based and convert time to ms
         data.back().first--;
         data.back().second *= 1000.0;
+        
+        // Check neuron IDs and times are valid
+        assert(data.back().first < Parameters::numOutput);
+        assert(data.back().second < Parameters::trialMs);
     }
 
     // Sort data
@@ -73,20 +76,20 @@ void loadTargetSpikes(const std::string &filename)
     std::transform(data.cbegin(), data.cend(), &spikeTimesOutput[0],
                    [](const std::pair<unsigned int, double> &s){ return s.second; });
     pushspikeTimesOutputToDevice(data.size());
-
+    
     // Loop through output neurons
     unsigned int spike = 0;
     for(unsigned int i = 0; i < Parameters::numOutput; i++) {
         // Fast-forward until there's a spike from this neuron
-        while(data[spike].first < i) {
+        while(spike < data.size() && data[spike].first < i) {
             spike++;
         }
 
         // Record neurons starting spike index
         startSpikeOutput[i] = spike;
-
+        
         // Fast-forward through all this neuron's spikes
-        while(data[spike].first == i) {
+        while(spike < data.size() && data[spike].first == i) {
             spike++;
         }
 
@@ -122,6 +125,10 @@ void generateFrozenPoissonInput(std::mt19937 &gen)
     allocatespikeTimesInput(spikeTimes.size());
     std::copy(spikeTimes.cbegin(), spikeTimes.cend(), &spikeTimesInput[0]);
     pushspikeTimesInputToDevice(spikeTimes.size());
+    
+    // Push start and end to device
+    pushstartSpikeInputToDevice();
+    pushendSpikeInputToDevice();
 }
 
 float calculateError(unsigned int timestep)
@@ -193,8 +200,7 @@ void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::at
             std::lock_guard<std::mutex> l(mutex);
             
             // Clear background behind text
-            cv::rectangle(outputImage, cv::Point(1194, 880),
-                          cv::Point(1920, 990),
+            cv::rectangle(outputImage, cv::Point(1304, 880), cv::Point(1920, 990),
                           CV_RGB(255, 255, 255), cv::FILLED);
             
             // Write current power usage to top-right corner
@@ -258,17 +264,17 @@ int main()
         assert(outputImage.size().width == 1920 && outputImage.size().height == 1080);
         
         // Create ROIs within background for spikes
-        cv::Mat inputSpikeROI(outputImage, cv::Rect(120, 475, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numInput * neuronScale));
-        cv::Mat hiddenSpikeROI(outputImage, cv::Rect(712, 475, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numHidden * neuronScale));
-        cv::Mat outputSpikeROI(outputImage, cv::Rect(1304, 475, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numOutput * neuronScale));
+        cv::Mat inputSpikeROI(outputImage, cv::Rect(120, 425, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numInput * neuronScale));
+        cv::Mat hiddenSpikeROI(outputImage, cv::Rect(712, 425, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numHidden * neuronScale));
+        cv::Mat outputSpikeROI(outputImage, cv::Rect(1304, 425, Parameters::trialTimesteps / timestepsPerPixel, Parameters::numOutput * neuronScale));
         
         allocateMem();
         allocateRecordingBuffers(Parameters::trialTimesteps);
         initialize();
         
         // Load target spikes
-        loadTargetSpikes("oxford-target.ras");
-    
+        loadTargetSpikes("bob_logo-target.ras");
+        
         initializeSparse();
         
         // Mutex for exchanging data at end of each trial
@@ -287,7 +293,8 @@ int main()
         
         // Repeat demo
         while(run) {
-            // **TODO** reinitialise model
+            // Reinitialise weights etc
+            initialize();
             
             // Generate frozen Poisson input
             generateFrozenPoissonInput(gen);
@@ -354,11 +361,10 @@ int main()
                     // Write spike images to output image ROI
                     writeSpikeImage(inputSpikeROI, recordSpkInput, Parameters::numInput, neuronScale, timestepsPerPixel, spikeColour);
                     writeSpikeImage(hiddenSpikeROI, recordSpkHidden, Parameters::numHidden, neuronScale, timestepsPerPixel, spikeColour);
-                    writeSpikeImage(outputSpikeROI, recordSpkOutput, Parameters::numOutput, neuronScale, timestepsPerPixel, spikeColour);
+                    writeSpikeImage(outputSpikeROI, recordSpkOutput, Parameters::numOutput, neuronScale, timestepsPerPixel, spikeColour);    
                     
                     // Clear background behind text
-                    cv::rectangle(outputImage, cv::Point(20, 880),
-                                  cv::Point(690, 990),
+                    cv::rectangle(outputImage, cv::Point(20, 880), cv::Point(690, 990),
                                   CV_RGB(255, 255, 255), cv::FILLED);
                 
                     // Display trial and error in top-right
@@ -372,6 +378,9 @@ int main()
                 }
 
             }
+            
+            // Free spike times so correct number can be re-allocated next repeat
+            freespikeTimesInput();
         }
     }
     catch(std::exception &ex) {

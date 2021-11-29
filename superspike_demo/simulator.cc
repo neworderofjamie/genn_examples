@@ -59,15 +59,15 @@ void loadTargetSpikes(const std::string &filename)
     unsigned int spike = 0;
     for(unsigned int i = 0; i < Parameters::numOutput; i++) {
         // Fast-forward until there's a spike from this neuron
-        while(data[spike].first < i) {
+        while(spike < data.size() && data[spike].first < i) {
             spike++;
         }
 
         // Record neurons starting spike index
         startSpikeOutput[i] = spike;
-
+        
         // Fast-forward through all this neuron's spikes
-        while(data[spike].first == i) {
+        while(spike < data.size() && data[spike].first == i) {
             spike++;
         }
 
