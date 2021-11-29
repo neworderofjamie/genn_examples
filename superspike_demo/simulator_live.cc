@@ -193,9 +193,9 @@ void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::at
             
 #ifdef JETSON_POWER
             // Clear background behind text
-            cv::rectangle(outputImage, cv::Point(1700, 0),
-                         cv::Point(1920, 200),
-                         CV_RGB(255, 255, 255), cv::FILLED);
+            cv::rectangle(outputImage, cv::Point(1194, 880),
+                          cv::Point(1920, 990),
+                          CV_RGB(255, 255, 255), cv::FILLED);
             
             // Read power from device
             std::ifstream powerStream("/sys/devices/3160000.i2c/i2c-0/0-0041/iio_device/in_power0_input");
@@ -205,7 +205,7 @@ void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::at
             // Write current power usage to top-right corner
             char status[255];
             sprintf(status, "Power:%.1fW", (float)power / 1000.0f);
-            cv::putText(outputImage, status, cv::Point(1700, 40),
+            cv::putText(outputImage, status, cv::Point(1304, 940),
                         cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0x97, 0xA7));
 #endif
             // Display image
