@@ -1,5 +1,6 @@
 // Standard C++ includes
 #include <atomic>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -182,7 +183,7 @@ void writeSpikeImage(cv::Mat &image, const uint32_t *spikes, unsigned int numNeu
     }
 }
 
-void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::atomic<bool> &run)
+void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::atomic<bool> &run, double &trialTime)
 {
     cv::namedWindow("Output", cv::WINDOW_NORMAL);
     cv::resizeWindow("Output", 1920, 1080);
@@ -191,7 +192,6 @@ void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::at
         {
             std::lock_guard<std::mutex> l(mutex);
             
-#ifdef JETSON_POWER
             // Clear background behind text
             cv::rectangle(outputImage, cv::Point(1194, 880),
                           cv::Point(1920, 990),
@@ -204,8 +204,12 @@ void displayThreadHandler(const cv::Mat &outputImage, std::mutex &mutex, std::at
             
             // Write current power usage to top-right corner
             char status[255];
-            sprintf(status, "Power:%.1fW", (float)power / 1000.0f);
+            sprintf(status, "Trial time:%.1fs (%.1fx real-time)", trialTime, (Parameters::trialMs / 1000.0) / trialTime);
             cv::putText(outputImage, status, cv::Point(1304, 940),
+                        cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0x97, 0xA7));
+#ifdef JETSON_POWER
+            sprintf(status, "Power:%.1fW", (float)power / 1000.0f);
+            cv::putText(outputImage, status, cv::Point(1304, 975),
                         cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0x97, 0xA7));
 #endif
             // Display image
@@ -266,8 +270,13 @@ int main()
         // Atomic flag for controlling main loop from GUI
         std::atomic<bool> run{true};
         
+        // Trial time
+        // **HACK** this is drawn in the same bit of the screen as the power - which is handled by the display thread
+        double trialTime = 0.0;
+        
         // Launch display thread
-        std::thread displayThread(displayThreadHandler, std::ref(outputImage), std::ref(outputMutex), std::ref(run));
+        std::thread displayThread(displayThreadHandler, std::ref(outputImage), std::ref(outputMutex), 
+                                  std::ref(run), std::ref(trialTime));
         
         // Repeat demo
         while(run) {
@@ -295,6 +304,9 @@ int main()
                 pullavgSqrErrOutputFromDevice();
                 error = calculateError(timestep);
                 
+                // Get start time of trial
+                auto startTime = std::chrono::high_resolution_clock::now();
+                
                 // Reset model timestep
                 // **NOTE** this a bit gross but means we can simplify a lot of logic
                 t = 0.0f;
@@ -312,7 +324,11 @@ int main()
                     timestep++;
 
                 }
-
+                
+                // Get end time fo trial
+                auto endTime = std::chrono::high_resolution_clock::now();
+                
+                
                 // Reset spike sources by re-uploading starting spike indices
                 // **TODO** build repeating spike source array
                 pushstartSpikeInputToDevice();
@@ -325,6 +341,9 @@ int main()
                 {
                     // Lock mutex
                     std::lock_guard<std::mutex> l(outputMutex);
+                    
+                    // Calculate trial time
+                    trialTime = std::chrono::duration<double>(endTime - startTime).count();
                     
                     // Write spike images to output image ROI
                     writeSpikeImage(inputSpikeROI, recordSpkInput, Parameters::numInput, neuronScale, timestepsPerPixel, spikeColour);
