@@ -133,7 +133,7 @@ int main()
 
         // Load target spikes
         loadTargetSpikes("oxford-target.ras");
-
+        
         // Generate frozen Poisson input
         generateFrozenPoissonInput(gen);
 
