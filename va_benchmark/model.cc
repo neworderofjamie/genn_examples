@@ -16,14 +16,14 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
-    Snippet::ParamValues vDist{
+    ParamValues vDist{
         {"min", Parameters::resetVoltage},
         {"max", Parameters::thresholdVoltage}};
 
-    Snippet::ParamValues fixedProb{{"prob", Parameters::probabilityConnection}};
+    ParamValues fixedProb{{"prob", Parameters::probabilityConnection}};
 
     // LIF model parameters
-    Snippet::ParamValues lifParams{
+    ParamValues lifParams{
         {"C", 1.0},
         {"TauM", 20.0},
         {"Vrest", -49.0},
@@ -33,20 +33,17 @@ void modelDefinition(NNmodel &model)
         {"TauRefrac", 5.0}};
 
     // LIF initial conditions
-    NeuronModels::LIF::VarValues lifInit(
-        initVar<InitVarSnippet::Uniform>(vDist),     // 0 - V
-        0.0);   // 1 - RefracTime
-
+    VarValues lifInit{
+        {"V", initVar<InitVarSnippet::Uniform>(vDist)},
+        {"RefracTime", 0.0}};
+    
     // Static synapse parameters
-    WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
-        Parameters::excitatoryWeight);    // 0 - Wij (nA)
-
-    WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
-        Parameters::inhibitoryWeight);    // 0 - Wij (nA)
+    VarValues excitatoryStaticSynapseInit{{"g", Parameters::excitatoryWeight}};
+    VarValues inhibitoryStaticSynapseInit{{"g", Parameters::inhibitoryWeight}};
 
     // Exponential current parameters
-    Snippet::ParamValues excitatoryExpCurrParams{{"tau", 5.0}};
-    Snippet::ParamValues inhibitoryExpCurrParams{{"tau", 10.0}};
+    ParamValues excitatoryExpCurrParams{{"tau", 5.0}};
+    ParamValues inhibitoryExpCurrParams{{"tau", 10.0}};
 
     // Create IF_curr neuron
     auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
