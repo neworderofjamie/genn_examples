@@ -1,7 +1,6 @@
 import numpy as np
 
-from pygenn import genn_model
-from pygenn.genn_wrapper import NO_DELAY
+from pygenn import create_wu_var_ref, genn_model
 
 # ----------------------------------------------------------------------------
 # Parameters
@@ -61,8 +60,8 @@ r_max_prop_model = genn_model.create_custom_custom_update_class(
     param_names=["updateTime", "tauRMS", "epsilon", "wMin", "wMax"],
     var_name_types=[("upsilon", "scalar")],
     extra_global_params=[("r0", "scalar")],
-    derived_params=[("updateTimesteps", genn_model.create_dpf_class(lambda pars, dt: pars[0] / dt)()),
-                    ("expRMS", genn_model.create_dpf_class(lambda pars, dt: np.exp(-pars[0] / pars[1]))())],
+    derived_params=[("updateTimesteps", lambda pars, dt: pars["updateTime"] / dt),
+                    ("expRMS", lambda pars, dt: np.exp(-pars["updateTime"] / pars["tauRMS"]))],
     var_refs=[("m", "scalar"), ("variable", "scalar")],
     update_code="""
     // Get gradients
@@ -136,8 +135,8 @@ hidden_neuron_model = genn_model.create_custom_neuron_class(
     param_names=["C", "tauMem", "Vrest", "Vthresh", "tauRefrac"],
     var_name_types=[("V", "scalar"), ("refracTime", "scalar"), ("errTilda", "scalar")],
     additional_input_vars=[("ISynFeedback", "scalar", 0.0)],
-    derived_params=[("ExpTC", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
-                    ("Rmembrane", genn_model.create_dpf_class(lambda pars, dt: pars[1] / pars[0])())],
+    derived_params=[("ExpTC", lambda pars, dt: np.exp(-dt / pars["tauMem"])),
+                    ("Rmembrane", lambda pars, dt: pars["tauMem"] / pars["C"])],
    
     sim_code="""
     // membrane potential dynamics
@@ -170,13 +169,13 @@ output_neuron_model = genn_model.create_custom_neuron_class(
                     ("errTilda", "scalar"), ("avgSqrErr", "scalar"), ("errDecay", "scalar"),
                     ("startSpike", "unsigned int"), ("endSpike", "unsigned int")],
     extra_global_params=[("spikeTimes", "scalar*")],
-    derived_params=[("ExpTC", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[1]))()),
-                    ("Rmembrane", genn_model.create_dpf_class(lambda pars, dt: pars[1] / pars[0])()),
-                    ("normFactor", genn_model.create_dpf_class(lambda pars, dt: 1.0 / (-np.exp(-calc_t_peak(pars[5], pars[6]) / pars[5]) + np.exp(-calc_t_peak(pars[5], pars[6]) / pars[6])))()),
-                    ("tRiseMult", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[5]))()),
-                    ("tDecayMult", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[6]))()),
-                    ("tPeak", genn_model.create_dpf_class(lambda pars, dt: calc_t_peak(pars[5], pars[6]))()),
-                    ("mulAvgErr", genn_model.create_dpf_class(lambda pars, dt: np.exp(-dt / pars[7]))())],
+    derived_params=[("ExpTC", lambda pars, dt: np.exp(-dt / pars["tauMem"])),
+                    ("Rmembrane", lambda pars, dt: pars["tauMem"] / pars["C"]),
+                    ("normFactor", lambda pars, dt: 1.0 / (-np.exp(-calc_t_peak(pars["tauRise"], pars["tauDecay"]) / pars["tauRise"]) + np.exp(-calc_t_peak(pars["tauRise"], pars["tauDecay"]) / pars["tauDecay"]))),
+                    ("tRiseMult", lambda pars, dt: np.exp(-dt / pars["tauRise"])),
+                    ("tDecayMult", lambda pars, dt: np.exp(-dt / pars["tauDecay"])),
+                    ("tPeak", lambda pars, dt: calc_t_peak(pars["tauRise"], pars["tauDecay"])),
+                    ("mulAvgErr", lambda pars, dt: np.exp(-dt / pars["tauAvgErr"]))],
 
     sim_code="""
     // membrane potential dynamics
@@ -323,8 +322,8 @@ hidden = model.add_neuron_population("Hidden", NUM_HIDDEN, hidden_neuron_model,
 output = model.add_neuron_population("Output", NUM_OUTPUT, output_neuron_model, 
                                      output_params, output_init_vars)
 
-input.set_extra_global_param("spikeTimes", input_spikes)
-output.set_extra_global_param("spikeTimes", target_spikes["time"])
+input.extra_global_params["spikeTimes"].set_values(input_spikes)
+output.extra_global_params["spikeTimes"].set_values(target_spikes["time"])
 
 # Turn on recording
 input.spike_recording_enabled = True
@@ -333,41 +332,41 @@ output.spike_recording_enabled = True
 
 # Add synapse populations
 input_hidden = model.add_synapse_population(
-    "InputHidden", "DENSE_INDIVIDUALG", NO_DELAY,
+    "InputHidden", "DENSE_INDIVIDUALG", 0,
     input, hidden,
     superspike_model, superspike_params, input_hidden_init_vars, superspike_pre_init_vars, superspike_post_init_vars,
     "ExpCurr", {"tau": 5.0}, {})
 
 hidden_output = model.add_synapse_population(
-    "HiddenOutput", "DENSE_INDIVIDUALG", NO_DELAY,
+    "HiddenOutput", "DENSE_INDIVIDUALG", 0,
     hidden, output,
     superspike_model, superspike_params, hidden_output_init_vars, superspike_pre_init_vars, superspike_post_init_vars,
     "ExpCurr", {"tau": 5.0}, {})
 
 output_hidden = model.add_synapse_population(
-    "OutputHidden", "DENSE_INDIVIDUALG", NO_DELAY,
+    "OutputHidden", "DENSE_INDIVIDUALG", 0,
     output, hidden,
     feedback_model, {}, {"w": 0.0}, {}, {},
     feedback_psm_model, {}, {})
 
 # Add custom update for calculating initial tranpose weights
 model.add_custom_update("input_hidden_transpose", "CalculateTranspose", "Transpose",
-                        {}, {}, {"variable": genn_model.create_wu_var_ref(hidden_output, "w", output_hidden, "w")})
+                        {}, {}, {"variable": create_wu_var_ref(hidden_output, "w", output_hidden, "w")})
 
 # Add custom updates for gradient update
-input_hidden_optimiser_var_refs = {"m": genn_model.create_wu_var_ref(input_hidden, "m"), 
-                                   "variable": genn_model.create_wu_var_ref(input_hidden, "w")}
+input_hidden_optimiser_var_refs = {"m": create_wu_var_ref(input_hidden, "m"), 
+                                   "variable": create_wu_var_ref(input_hidden, "w")}
 input_hidden_optimiser = model.add_custom_update("input_hidden_optimiser", "GradientLearn", r_max_prop_model,
                                                  r_max_prop_params, {"upsilon": 0.0}, input_hidden_optimiser_var_refs)
 
-hidden_output_optimiser_var_refs = {"m": genn_model.create_wu_var_ref(hidden_output, "m"), 
-                                   "variable": genn_model.create_wu_var_ref(hidden_output, "w", output_hidden, "w")}
+hidden_output_optimiser_var_refs = {"m": create_wu_var_ref(hidden_output, "m"), 
+                                   "variable": create_wu_var_ref(hidden_output, "w", output_hidden, "w")}
 hidden_output_optimiser = model.add_custom_update("hidden_output_optimiser", "GradientLearn", r_max_prop_model,
                                                   r_max_prop_params, {"upsilon": 0.0}, hidden_output_optimiser_var_refs)
 
 # Set initial learning rate
-input_hidden_optimiser.set_extra_global_param("r0", R0)
-hidden_output_optimiser.set_extra_global_param("r0", R0)
+input_hidden_optimiser.extra_global_params["r0"].set_values(R0)
+hidden_output_optimiser.extra_global_params["r0"].set_values(R0)
 
 # Build and load model
 if BUILD:
