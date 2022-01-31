@@ -13,10 +13,11 @@
 
 // Auto-generated model code
 #include "potjans_microcircuit_CODE/definitions.h"
+#include "potjans_microcircuit_CODE/macroLookup.h"
 
 // Macro to record a population's output
 #define RECORD_SPIKES(LAYER, POPULATION) \
-    writeTextSpikeRecording(#LAYER#POPULATION".csv", recordSpk##LAYER##POPULATION, Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION), timesteps, Parameters::dtMs, ",", true);
+    writeTextSpikeRecording(#LAYER#POPULATION".csv", GET_FIELD(LAYER##POPULATION,recordSpk), Parameters::getScaledNumNeurons(Parameters::Layer##LAYER, Parameters::Population##POPULATION), timesteps, Parameters::dtMs, ",", true);
 
 int main()
 {
@@ -28,7 +29,6 @@ int main()
         allocateRecordingBuffers(timesteps);
         initialize();
         initializeSparse();
-
         double recordS = 0.0;
 
         {
