@@ -11,7 +11,7 @@
 
 // Auto-generated model code
 #include "va_benchmark_CODE/definitions.h"
-
+#include "va_benchmark_CODE/macroLookup.h"
 int main()
 {
     try
@@ -32,9 +32,9 @@ int main()
             Timer a("Downloading spikes:");
             pullRecordingBuffersFromDevice();
             
-            writeTextSpikeRecording("spikes_e.csv", recordSpkE, Parameters::numExcitatory, 
+            writeTextSpikeRecording("spikes_e.csv", GET_FIELD(E, recordSpk), Parameters::numExcitatory, 
                                     Parameters::numTimesteps, Parameters::timestep, ",", true);
-            writeTextSpikeRecording("spikes_i.csv", recordSpkE, Parameters::numInhibitory, 
+            writeTextSpikeRecording("spikes_i.csv", GET_FIELD(I, recordSpk), Parameters::numInhibitory, 
                                     Parameters::numTimesteps, Parameters::timestep, ",", true);
         }
      
