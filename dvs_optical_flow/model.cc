@@ -1,12 +1,5 @@
-#include <cmath>
-#include <vector>
-
 // GeNN includes
 #include "modelSpec.h"
-
-// GeNN robotics includes
-#include "exp_curr.h"
-#include "lif.h"
 
 // Model includes
 #include "parameters.h"
@@ -14,7 +7,6 @@
 
 void modelDefinition(NNmodel &model)
 {
-    initGeNN();
     model.setDT(Parameters::timestep);
     model.setName("optical_flow");
 
@@ -22,7 +14,7 @@ void modelDefinition(NNmodel &model)
     // Build model
     //---------------------------------------------------------------------------
     // LIF model parameters for P population
-    LIF::ParamValues lifParams(
+    NeuronModels::LIF::ParamValues lifParams(
         1.0,    // 0 - C
         20.0,   // 1 - TauM
         -60.0,  // 2 - Vrest
@@ -32,7 +24,7 @@ void modelDefinition(NNmodel &model)
         1.0);    // 6 - TauRefrac
 
     // LIF initial conditions
-    LIF::VarValues lifInit(
+    NeuronModels::LIF::VarValues lifInit(
         -60.0,        // 0 - V
         0.0);       // 1 - RefracTime
 
@@ -46,13 +38,13 @@ void modelDefinition(NNmodel &model)
         -0.5);     // 0 - Wij (nA)
 
     // Exponential current parameters
-    ExpCurr::ParamValues macroPixelPostSynParams(
+    PostsynapticModels::ExpCurr::ParamValues macroPixelPostSynParams(
         5.0);         // 0 - TauSyn (ms)
 
-    ExpCurr::ParamValues outputExcitatoryPostSynParams(
+    PostsynapticModels::ExpCurr::ParamValues outputExcitatoryPostSynParams(
         25.0);         // 0 - TauSyn (ms)
 
-    ExpCurr::ParamValues outputInhibitoryPostSynParams(
+    PostsynapticModels::ExpCurr::ParamValues outputInhibitoryPostSynParams(
         50.0);         // 0 - TauSyn (ms)
 
     //------------------------------------------------------------------------
@@ -61,36 +53,37 @@ void modelDefinition(NNmodel &model)
     // Create IF_curr neuron
     auto *dvs = model.addNeuronPopulation<NeuronModels::SpikeSource>("DVS", Parameters::inputSize * Parameters::inputSize,
                                                          {}, {});
-    model.addNeuronPopulation<LIF>("MacroPixel", Parameters::macroPixelSize * Parameters::macroPixelSize,
-                                   lifParams, lifInit);
+    model.addNeuronPopulation<NeuronModels::LIF>("MacroPixel", Parameters::macroPixelSize * Parameters::macroPixelSize,
+                                                 lifParams, lifInit);
 
-    auto *output = model.addNeuronPopulation<LIF>("Output", Parameters::detectorSize * Parameters::detectorSize * Parameters::DetectorMax,
-                                   lifParams, lifInit);
+    auto *output = model.addNeuronPopulation<NeuronModels::LIF>("Output", Parameters::detectorSize * Parameters::detectorSize * Parameters::DetectorMax,
+                                                                lifParams, lifInit);
 
     //------------------------------------------------------------------------
     // Synapse populations
     //------------------------------------------------------------------------
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *dvsMacroPixel = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "DVS_MacroPixel", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "DVS", "MacroPixel",
         {}, dvsMacroPixelWeightUpdateInit,
         macroPixelPostSynParams, {});
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *macroPixelOutputExcitatory = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "MacroPixel_Output_Excitatory", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "MacroPixel", "Output",
         {}, macroPixelOutputExcitatoryWeightUpdateInit,
         outputExcitatoryPostSynParams, {});
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    auto *macroPixelOutputInhibitory = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
         "MacroPixel_Output_Inhibitory", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
         "MacroPixel", "Output",
         {}, macroPixelOutputInhibitoryWeightUpdateInit,
         outputInhibitoryPostSynParams, {});
-
+    
+    dvsMacroPixel->setMaxConnections(1);
+    macroPixelOutputExcitatory->setMaxConnections(Parameters::DetectorMax);
+    macroPixelOutputInhibitory->setMaxConnections(Parameters::DetectorMax);
     // Use zero-copy for input and output spikes as we want to access them every timestep
-    dvs->setSpikeZeroCopyEnabled(true);
-    output->setSpikeZeroCopyEnabled(true);
-
-    model.finalize();
+    //dvs->setSpikeZeroCopyEnabled(true);
+    //output->setSpikeZeroCopyEnabled(true);
 }
