@@ -1,47 +1,52 @@
 #pragma once
 
 // Lib CAER includes
+#include <libcaercpp/devices/davis.hpp>
 #include <libcaercpp/devices/dvs128.hpp>
+#include <libcaercpp/devices/dvxplorer.hpp>
 
 //----------------------------------------------------------------------------
-// DVS128
+// DVS::Polarity
 //----------------------------------------------------------------------------
-class DVS128
+namespace DVS
+{
+enum class Polarity
+{
+    On,
+    Off,
+    Both,
+};
+
+//----------------------------------------------------------------------------
+// DVS::Base
+//----------------------------------------------------------------------------
+template<typename Device>
+class Base
 {
 public:
-    //------------------------------------------------------------------------
-    // Enumerations
-    //------------------------------------------------------------------------
-    enum class Polarity
-    {
-        On,
-        Off,
-        Both,
-    };
-
-    DVS128(Polarity polarity, uint16_t deviceID = 1)
-        : m_DVS128Handle(deviceID, 0, 0, ""), m_Polarity(polarity), m_Width(0), m_Height(0)
+    Base(Polarity polarity, uint16_t deviceID = 1)
+        : m_DVSHandle(deviceID), m_Polarity(polarity), m_Width(0), m_Height(0)
     {
         // Let's take a look at the information we have on the device.
-        auto info = m_DVS128Handle.infoGet();
-
-        std::cout << info.deviceString << " - ID: " << info.deviceID << ", Master: " << info.deviceIsMaster;
-        std::cout << ", DVS X: " << info.dvsSizeX << ", DVS Y: " << info.dvsSizeY << ", Logic: " << info.logicVersion << std::endl;
+        std::cout << m_DVSHandle.toString() << std::endl;
 
         // Cache width and height
+        auto info = m_DVSHandle.infoGet();
         m_Width = (unsigned int)info.dvsSizeX;
         m_Height = (unsigned int)info.dvsSizeY;
 
         // Send the default configuration before using the device.
         // No configuration is sent automatically!
-        m_DVS128Handle.sendDefaultConfig();
+        m_DVSHandle.sendDefaultConfig();
 
+        
+    
         // Tweak some biases, to increase bandwidth in this case.
-        m_DVS128Handle.configSet(DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_PR, 695);
-        m_DVS128Handle.configSet(DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_FOLL, 867);
+        //m_DVSHandle.configSet(DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_PR, 695);
+        //m_DVSHandle.configSet(DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_FOLL, 867);
     }
 
-    ~DVS128()
+    ~Base()
     {
         stop();
     }
@@ -51,12 +56,15 @@ public:
     //------------------------------------------------------------------------
     void start()
     {
-        m_DVS128Handle.dataStart();
+        m_DVSHandle.dataStart(nullptr, nullptr, nullptr, nullptr, nullptr);
+        
+        // Let's turn on blocking data-get mode to avoid wasting resources.
+        m_DVSHandle.configSet(CAER_HOST_CONFIG_DATAEXCHANGE, CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
     }
 
     void stop()
     {
-        m_DVS128Handle.dataStop();
+        m_DVSHandle.dataStop();
     }
 
     void readEvents(unsigned int &spikeCount, unsigned int *spikes)
@@ -65,7 +73,7 @@ public:
         spikeCount = 0;
 
         // Get data from DVS
-        auto packetContainer = m_DVS128Handle.dataGet();
+        auto packetContainer = m_DVSHandle.dataGet();
         if (packetContainer == nullptr) {
             return;
         }
@@ -115,8 +123,13 @@ private:
     //------------------------------------------------------------------------
     // Members
     //------------------------------------------------------------------------
-    libcaer::devices::dvs128 m_DVS128Handle;
+    Device m_DVSHandle;
     const Polarity m_Polarity;
     unsigned int m_Width;
     unsigned int m_Height;
 };
+
+using DVS128 = Base<libcaer::devices::dvs128>;
+using DVXplorer = Base<libcaer::devices::dvXplorer>;
+using Davis = Base<libcaer::devices::davis>;
+}
