@@ -12,9 +12,83 @@ namespace DVS
 {
 enum class Polarity
 {
-    On,
-    Off,
-    Both,
+    ON,
+    OFF,
+    BOTH,
+};
+
+template<Polarity polarity = Polarity::BOTH>
+struct PolarityFilter
+{
+    static constexpr bool shouldAllow(const libcaer::events::PolarityEvent &event)
+    {
+        return (polarity == Polarity::BOTH
+                || (polarity == Polarity::ON && event.getPolarity())
+                || (polarity == Polarity::OFF && !event.getPolarity()));
+    }
+};
+
+template<uint16_t minX, uint16_t maxX, uint16_t minY, uint16_t maxY>
+struct CropFilter
+{
+    static constexpr bool shouldAllow(const libcaer::events::PolarityEvent &event)
+    {
+        return (event.getX() > minX && event.getX() < maxX 
+                && event.getY() > minY && event.getY() < maxY);
+    }
+};
+
+
+template<typename FilterA, typename FilterB>
+struct CombineFilter
+{
+    static constexpr bool shouldAllow(const libcaer::events::PolarityEvent &event)
+    {
+        return (FilterA::shouldAllow(event) && FilterB::shouldAllow(event));
+    }
+};
+
+struct NoFilter
+{
+    static constexpr bool shouldAllow(const libcaer::events::PolarityEvent&)
+    {
+        return true;
+    }
+};
+
+template<uint32_t FixedPointScale>
+struct Scale
+{
+    static constexpr uint32_t transform(uint32_t x)
+    {
+        return (x * FixedPointScale) >> 15;
+    }
+};
+
+template<uint32_t Offset>
+struct Subtract
+{
+    static constexpr uint32_t transform(uint32_t x)
+    {
+        return (x - Offset);
+    }
+};
+
+struct NoTransform
+{
+    static constexpr uint32_t transform(uint32_t x)
+    {
+        return x;
+    }
+};
+
+template<typename TransformA, typename TransformB>
+struct CombineTransform
+{
+    static constexpr uint32_t transform(uint32_t x)
+    {
+        return TransformB::transform(TransformA::transform(x));
+    }
 };
 
 //----------------------------------------------------------------------------
@@ -24,8 +98,8 @@ template<typename Device>
 class Base
 {
 public:
-    Base(Polarity polarity, uint16_t deviceID = 1)
-        : m_DVSHandle(deviceID), m_Polarity(polarity), m_Width(0), m_Height(0)
+    Base(uint16_t deviceID = 1)
+        : m_DVSHandle(deviceID), m_Width(0), m_Height(0)
     {
         // Let's take a look at the information we have on the device.
         std::cout << m_DVSHandle.toString() << std::endl;
@@ -39,7 +113,6 @@ public:
         // No configuration is sent automatically!
         m_DVSHandle.sendDefaultConfig();
 
-        
     
         // Tweak some biases, to increase bandwidth in this case.
         //m_DVSHandle.configSet(DVS128_CONFIG_BIAS, DVS128_CONFIG_BIAS_PR, 695);
@@ -67,11 +140,9 @@ public:
         m_DVSHandle.dataStop();
     }
 
-    void readEvents(unsigned int &spikeCount, unsigned int *spikes)
+    template<typename Filter = NoFilter, typename TransformX = NoTransform, typename TransformY = NoTransform>
+    void readEvents(uint32_t *spikeVector)
     {
-        // Zero spike count
-        spikeCount = 0;
-
         // Get data from DVS
         auto packetContainer = m_DVSHandle.dataGet();
         if (packetContainer == nullptr) {
@@ -79,8 +150,7 @@ public:
         }
 
         // Loop through packets
-        for (auto &packet : *packetContainer)
-        {
+        for(auto &packet : *packetContainer) {
             // If packet's empty, skip
             if (packet == nullptr) {
                 continue;
@@ -91,20 +161,20 @@ public:
                 auto polarityPacket = std::static_pointer_cast<libcaer::events::PolarityEventPacket>(packet);
 
                 // Loop through events
-                for(const auto &event : *polarityPacket)
-                {
-                    // If polarity is one we care about
-                    if(m_Polarity == Polarity::Both
-                        || (m_Polarity == Polarity::On && event.getPolarity())
-                        || (m_Polarity == Polarity::Off && !event.getPolarity())) {
-
-                        // Convert x and y coordinate to GeNN address and add to spike vector
-                        const unsigned int gennAddress = (event.getX() + (event.getY() * m_Width));
-                        spikes[spikeCount++] = gennAddress;
+                for(const auto &event : *polarityPacket) {
+                    // If event isn't filtered
+                    if(Filter::shouldAllow(event)) {
+                        // Transform event
+                        const uint32_t transformX = TransformX::transform(event.getX());
+                        const uint32_t transformY = TransformY::transform(event.getY());
+                        
+                        // **TODO** not sure quite how to get target width
+                        const unsigned int gennAddress = (transformX + (transformY * 128));
+                        
+                        // Set spike bit
+                        spikeVector[gennAddress / 32] |= (1 << (gennAddress % 32));
                     }
                 }
-
-                assert(spikeCount < (m_Width * m_Height));
             }
         }
     }
@@ -124,7 +194,6 @@ private:
     // Members
     //------------------------------------------------------------------------
     Device m_DVSHandle;
-    const Polarity m_Polarity;
     unsigned int m_Width;
     unsigned int m_Height;
 };
