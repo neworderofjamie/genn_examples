@@ -4,6 +4,15 @@
 // Model includes
 #include "parameters.h"
 
+class DVS : public NeuronModels::Base
+{
+public:
+    DECLARE_MODEL(DVS, 0, 0);
+    SET_THRESHOLD_CONDITION_CODE("$(spikeVector)[$(id) / 32] & (1 << ($(id) % 32))");
+    SET_EXTRA_GLOBAL_PARAMS( {{"spikeVector", "uint32_t*"}} );
+    SET_NEEDS_AUTO_REFRACTORY(false);
+};
+IMPLEMENT_MODEL(DVS);
 
 void modelDefinition(NNmodel &model)
 {
@@ -51,8 +60,8 @@ void modelDefinition(NNmodel &model)
     // Neuron populations
     //------------------------------------------------------------------------
     // Create IF_curr neuron
-    auto *dvs = model.addNeuronPopulation<NeuronModels::SpikeSource>("DVS", Parameters::inputSize * Parameters::inputSize,
-                                                         {}, {});
+    auto *dvs = model.addNeuronPopulation<DVS>("DVS", Parameters::inputSize * Parameters::inputSize,
+                                               {}, {});
     model.addNeuronPopulation<NeuronModels::LIF>("MacroPixel", Parameters::macroPixelSize * Parameters::macroPixelSize,
                                                  lifParams, lifInit);
 
