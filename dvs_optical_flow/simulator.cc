@@ -18,7 +18,7 @@
 #include "timer.h"
 
 // Common includes
-#include "../common/dvs_128.h"
+#include "../common/dvs.h"
 
 
 // Model includes
