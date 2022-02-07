@@ -15,20 +15,20 @@ namespace Parameters
         DetectorMax,
     };
 
-    const double timestep = 1.0;
+    constexpr double timestep = 1.0;
 
-    const unsigned int inputSize = 128;
-    const unsigned int kernelSize = 5;
-    const unsigned int centreSize = 125;
+    constexpr unsigned int inputSize = 256;
+    constexpr unsigned int kernelSize = 5;
+    constexpr unsigned int centreSize = 250;
 
-    const unsigned int macroPixelSize = centreSize / kernelSize;
+    constexpr unsigned int macroPixelSize = centreSize / kernelSize;
 
-    const unsigned int detectorSize = macroPixelSize - 2;
+    constexpr unsigned int detectorSize = macroPixelSize - 2;
 
-    const unsigned int outputScale = 25;
-    const unsigned int inputScale = 4;
+    constexpr unsigned int outputScale = 10;
+    constexpr unsigned int inputScale = 2;
 
-    const float spikePersistence = 0.995f;
+    constexpr float spikePersistence = 0.995f;
     
-    const float outputVectorScale = 2.0f;
+    constexpr float outputVectorScale = 2.0f;
 }

@@ -142,7 +142,7 @@ public:
         m_DVSHandle.configSet(modAddr, paramAddr, param);
     }
 
-    template<typename Filter = NoFilter, typename TransformX = NoTransform, typename TransformY = NoTransform>
+    template<typename Filter = NoFilter, typename TransformX = NoTransform, typename TransformY = NoTransform, unsigned int outputSize>
     void readEvents(uint32_t *spikeVector)
     {
         // Get data from DVS
@@ -170,8 +170,8 @@ public:
                         const uint32_t transformX = TransformX::transform(event.getX());
                         const uint32_t transformY = TransformY::transform(event.getY());
                         
-                        // **TODO** not sure quite how to get target width
-                        const unsigned int gennAddress = (transformX + (transformY * 128));
+                        // Convert transformed X and Y into GeNN address
+                        const unsigned int gennAddress = (transformX + (transformY * outputSize));
                         
                         // Set spike bit
                         spikeVector[gennAddress / 32] |= (1 << (gennAddress % 32));

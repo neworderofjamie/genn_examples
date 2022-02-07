@@ -303,8 +303,8 @@ int main()
 
     // Create DVXplorer device
     using Filter = DVS::CombineFilter<DVS::PolarityFilter<DVS::Polarity::ON>, DVS::CropFilter<80, 560, 0, 480>>;
-    using TransformX = DVS::CombineTransform<DVS::Subtract<80>, DVS::Scale<8738>>;
-    using TransformY = DVS::Scale<8738>;
+    using TransformX = DVS::CombineTransform<DVS::Subtract<80>, DVS::Scale<17476>>;
+    using TransformY = DVS::Scale<17476>;
     DVS::DVXplorer dvs;
     dvs.start();
     
@@ -340,7 +340,7 @@ int main()
             TimerAccumulate timer(dvsGet);
             
             std::fill_n(spikeVectorDVS, timestepWords, 0);
-            dvs.readEvents<Filter, TransformX, TransformY>(spikeVectorDVS);
+            dvs.readEvents<Filter, TransformX, TransformY, Parameters::inputSize>(spikeVectorDVS);
 
             // Copy to GPU
             pushspikeVectorDVSToDevice(timestepWords);
