@@ -418,9 +418,6 @@ int main()
     // Wait for display thread to die
     displayThread.join();
 
-    // Stop DVS
-    dvs.stop();
-
     std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "s, slept for " << sleepTime.count() << "s" << std::endl;
     std::cout << "Average DVS:" << (dvsGet * 1000.0) / i<< "ms, Step:" << (step * 1000.0) / i << "s, Render:" << (render * 1000.0) / i<< std::endl;
 
