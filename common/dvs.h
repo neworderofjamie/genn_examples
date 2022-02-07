@@ -17,6 +17,7 @@ enum class Polarity
     BOTH,
 };
 
+//! Filter events based on their polarity
 template<Polarity polarity = Polarity::BOTH>
 struct PolarityFilter
 {
@@ -28,8 +29,9 @@ struct PolarityFilter
     }
 };
 
+//! Filter events depending on whether they are in region of interest
 template<uint16_t minX, uint16_t maxX, uint16_t minY, uint16_t maxY>
-struct CropFilter
+struct ROIFilter
 {
     static constexpr bool shouldAllow(const libcaer::events::PolarityEvent &event)
     {
@@ -38,7 +40,7 @@ struct CropFilter
     }
 };
 
-
+//! Combine two event filters
 template<typename FilterA, typename FilterB>
 struct CombineFilter
 {
@@ -48,6 +50,7 @@ struct CombineFilter
     }
 };
 
+//! Don't filter any events
 struct NoFilter
 {
     static constexpr bool shouldAllow(const libcaer::events::PolarityEvent&)
@@ -56,6 +59,7 @@ struct NoFilter
     }
 };
 
+//! Scale event coordinate - FixedPointScale is calculated by multiplying fraction by 1^15
 template<uint32_t FixedPointScale>
 struct Scale
 {
@@ -65,6 +69,7 @@ struct Scale
     }
 };
 
+//! Subtract value from event coordinate
 template<uint32_t Offset>
 struct Subtract
 {
@@ -74,6 +79,7 @@ struct Subtract
     }
 };
 
+//! Don't transform event coordinate
 struct NoTransform
 {
     static constexpr uint32_t transform(uint32_t x)
@@ -82,6 +88,7 @@ struct NoTransform
     }
 };
 
+//! Combine two event coordinate transformations
 template<typename TransformA, typename TransformB>
 struct CombineTransform
 {
@@ -142,7 +149,7 @@ public:
         m_DVSHandle.configSet(modAddr, paramAddr, param);
     }
 
-    template<typename Filter = NoFilter, typename TransformX = NoTransform, typename TransformY = NoTransform, unsigned int outputSize>
+    template<unsigned int outputSize, typename Filter = NoFilter, typename TransformX = NoTransform, typename TransformY = NoTransform>
     void readEvents(uint32_t *spikeVector)
     {
         // Get data from DVS
