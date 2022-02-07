@@ -280,8 +280,8 @@ void applyOutputSpikes(unsigned int outputSpikeCount, const unsigned int *output
     {
         for(unsigned int y = 0; y < Parameters::detectorSize; y++)
         {
-            output[x][y][0] *= Parameters::spikePersistence;
-            output[x][y][1] *= Parameters::spikePersistence;
+            output[x][y][0] *= Parameters::flowPersistence;
+            output[x][y][1] *= Parameters::flowPersistence;
         }
     }
 }
@@ -303,8 +303,8 @@ int main()
 
     // Create DVXplorer device
     using Filter = DVS::CombineFilter<DVS::PolarityFilter<DVS::Polarity::ON>, DVS::CropFilter<80, 560, 0, 480>>;
-    using TransformX = DVS::CombineTransform<DVS::Subtract<80>, DVS::Scale<17476>>;
-    using TransformY = DVS::Scale<17476>;
+    using TransformX = DVS::Subtract<80>;
+    using TransformY = DVS::NoTransform;
     DVS::DVXplorer dvs;
     dvs.start();
     
