@@ -130,14 +130,16 @@ public:
     void start()
     {
         m_DVSHandle.dataStart(nullptr, nullptr, nullptr, nullptr, nullptr);
-        
-        // Let's turn on blocking data-get mode to avoid wasting resources.
-        m_DVSHandle.configSet(CAER_HOST_CONFIG_DATAEXCHANGE, CAER_HOST_CONFIG_DATAEXCHANGE_BLOCKING, true);
     }
 
     void stop()
     {
         m_DVSHandle.dataStop();
+    }
+    
+    void configSet(int8_t modAddr, uint8_t paramAddr, uint32_t param)
+    {
+        m_DVSHandle.configSet(modAddr, paramAddr, param);
     }
 
     template<typename Filter = NoFilter, typename TransformX = NoTransform, typename TransformY = NoTransform>
