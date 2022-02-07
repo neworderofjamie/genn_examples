@@ -99,13 +99,13 @@ void buildDetectors(unsigned int *excitatoryRowLength, unsigned int *excitatoryI
 
                 // Add excitatory synapses to all detectors
                 excitatoryInd[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                         xj + Parameters::DetectorLeft, yj);
+                                                              xj + Parameters::DetectorLeft, yj);
                 excitatoryInd[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                         xj + Parameters::DetectorRight, yj);
+                                                              xj + Parameters::DetectorRight, yj);
                 excitatoryInd[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                         xj + Parameters::DetectorUp, yj);
+                                                              xj + Parameters::DetectorUp, yj);
                 excitatoryInd[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                                         xj + Parameters::DetectorDown, yj);
+                                                              xj + Parameters::DetectorDown, yj);
                 excitatoryRowLength[iExcitatory++] = 4;
             }
             else {
@@ -302,7 +302,7 @@ int main()
     initializeSparse();
 
     // Create DVXplorer device
-    using Filter = DVS::CropFilter<80, 560, 0, 480>;
+    using Filter = DVS::CombineFilter<DVS::PolarityFilter<DVS::Polarity::ON>, DVS::CropFilter<80, 560, 0, 480>>;
     using TransformX = DVS::CombineTransform<DVS::Subtract<80>, DVS::Scale<8738>>;
     using TransformY = DVS::Scale<8738>;
     DVS::DVXplorer dvs;
@@ -325,8 +325,8 @@ int main()
     const auto dtDuration = std::chrono::duration<double, std::milli>{DT};
 
     // Duration counters
-    std::chrono::duration<double, std::milli> sleepTime{0};
-    std::chrono::duration<double, std::milli> overrunTime{0};
+    std::chrono::duration<double> sleepTime{0};
+    std::chrono::duration<double> overrunTime{0};
     unsigned int i = 0;
     
     // Catch interrupt (ctrl-c) signals
@@ -421,8 +421,8 @@ int main()
     // Stop DVS
     dvs.stop();
 
-    std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "ms, slept for " << sleepTime.count() << "ms" << std::endl;
-    std::cout << "DVS:" << dvsGet << "ms, Step:" << step << "ms, Render:" << render << std::endl;
+    std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "s, slept for " << sleepTime.count() << "s" << std::endl;
+    std::cout << "Average DVS:" << (dvsGet * 1000.0) / i<< "ms, Step:" << (step * 1000.0) / i << "s, Render:" << (render * 1000.0) / i<< std::endl;
 
     return 0;
 }
