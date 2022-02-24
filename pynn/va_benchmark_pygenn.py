@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 
-from pygenn import genn_wrapper
-from pygenn import genn_model
+from pygenn import (GeNNModel, VarLocation, SpanType, init_var, 
+                    init_sparse_connectivity)
 
 # Parameters
 TIMESTEP = 1.0
@@ -24,15 +24,15 @@ SCALE = (4000.0 / NUM_NEURONS) * (0.02 / PROBABILITY_CONNECTION)
 EXCITATORY_WEIGHT = 4.0E-3 * SCALE
 INHIBITORY_WEIGHT = -51.0E-3 * SCALE
 
-model = genn_model.GeNNModel("float", "va_benchmark")
-model.dT = TIMESTEP
-
+model = GeNNModel("float", "va_benchmark")
+model.dt = TIMESTEP
+model.default_narrow_sparse_ind_enabled = True
 fixed_prob = {"prob": PROBABILITY_CONNECTION}
 
 lif_params = {"C": 1.0, "TauM": 20.0, "Vrest": -49.0, "Vreset": RESET_VOLTAGE,
               "Vthresh": THRESHOHOLD_VOLTAGE, "Ioffset": 0.0, "TauRefrac": 5.0}
 
-lif_init = {"V": genn_model.init_var("Uniform", {"min": RESET_VOLTAGE, "max": THRESHOHOLD_VOLTAGE}),
+lif_init = {"V": init_var("Uniform", {"min": RESET_VOLTAGE, "max": THRESHOHOLD_VOLTAGE}),
             "RefracTime": 0.0}
 
 excitatory_synapse_init = {"g": EXCITATORY_WEIGHT}
@@ -46,29 +46,29 @@ inhibitory_pop = model.add_neuron_population("I", NUM_INHIBITORY, "LIF", lif_par
 
 excitatory_pop.spike_recording_enabled = True
 
-model.add_synapse_population("EE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("EE", "SPARSE_GLOBALG", 0,
     excitatory_pop, excitatory_pop,
     "StaticPulse", {}, excitatory_synapse_init, {}, {},
     "ExpCurr", excitatory_post_syn_params, {},
-    genn_model.init_connectivity("FixedProbabilityNoAutapse", fixed_prob))
+    init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("EI", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("EI", "SPARSE_GLOBALG", 0,
     excitatory_pop, inhibitory_pop,
     "StaticPulse", {}, excitatory_synapse_init, {}, {},
     "ExpCurr", excitatory_post_syn_params, {},
-    genn_model.init_connectivity("FixedProbability", fixed_prob))
+    init_sparse_connectivity("FixedProbability", fixed_prob))
 
-model.add_synapse_population("II", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("II", "SPARSE_GLOBALG", 0,
     inhibitory_pop, inhibitory_pop,
     "StaticPulse", {}, inhibitory_synapse_init, {}, {},
     "ExpCurr", inhibitory_post_syn_params, {},
-    genn_model.init_connectivity("FixedProbabilityNoAutapse", fixed_prob))
+    init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("IE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("IE", "SPARSE_GLOBALG", 0,
     inhibitory_pop, excitatory_pop,
     "StaticPulse", {}, inhibitory_synapse_init, {}, {},
     "ExpCurr", inhibitory_post_syn_params, {},
-    genn_model.init_connectivity("FixedProbability", fixed_prob))
+    init_sparse_connectivity("FixedProbability", fixed_prob))
 
 print("Building Model")
 model.build()

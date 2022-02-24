@@ -2,18 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 
-from pygenn import genn_wrapper
-from pygenn import genn_model
+from pygenn import (GeNNModel, create_custom_weight_update_class, init_var)
 
 # STDP synapse with additive weight dependence
-stdp_additive = genn_model.create_custom_weight_update_class(
+stdp_additive = create_custom_weight_update_class(
     "STDPAdditive",
     param_names=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
     var_name_types=[("g", "scalar")],
     pre_var_name_types=[("preTrace", "scalar")],
     post_var_name_types=[("postTrace", "scalar")],
-    derived_params=[("aPlusScaled", genn_model.create_dpf_class(lambda pars, dt: pars[2] * (pars[5] - pars[4]))()),
-                    ("aMinusScaled", genn_model.create_dpf_class(lambda pars, dt: pars[3] * (pars[5] - pars[4]))())],
+    derived_params=[("aPlusScaled", lambda pars, dt: pars["aPlus"] * (pars["wMax"] - pars["wMin"])),
+                    ("aMinusScaled", lambda pars, dt: pars["aMinus"] * (pars["wMax"] - pars["wMin"]))],
 
     sim_code=
         """
@@ -52,7 +51,7 @@ stdp_additive = genn_model.create_custom_weight_update_class(
     is_post_spike_time_required=True)
 
 # STDP synapse with multiplicative weight dependence
-stdp_multiplicative = genn_model.create_custom_weight_update_class(
+stdp_multiplicative = create_custom_weight_update_class(
     "STDPMultiplicative",
     param_names=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
     var_name_types=[("g", "scalar")],
@@ -102,8 +101,8 @@ A_PLUS = 0.01
 A_MINUS = 1.05 * A_PLUS
 
 
-model = genn_model.GeNNModel("float", "song")
-model.dT = DT
+model = GeNNModel("float", "song")
+model.dt = DT
 
 lif_params = {"C": 0.17, "TauM": 10.0, "Vrest": -74.0, "Vreset": -60.0,
               "Vthresh": -54.0, "Ioffset": 0.0, "TauRefrac": 1.0}
@@ -116,7 +115,7 @@ poisson_init = {"timeStepToSpike" : 0.0}
 
 post_syn_params = {"tau": 5.0}
 
-stdp_init = {"g": genn_model.init_var("Uniform", {"min": 0.0, "max": G_MAX})}
+stdp_init = {"g": init_var("Uniform", {"min": 0.0, "max": G_MAX})}
 stdp_params = {"tauPlus": 20.0, "tauMinus": 20.0, "aPlus": A_PLUS, "aMinus": A_MINUS, "wMin": 0.0, "wMax": G_MAX}
 stdp_pre_init = {"preTrace": 0.0}
 stdp_post_init = {"postTrace": 0.0}
@@ -127,12 +126,12 @@ multiplicative_pop = model.add_neuron_population("multiplicative", 1, "LIF", lif
 
 poisson_pop = model.add_neuron_population("input", NUM_EX_SYNAPSES, "PoissonNew", poisson_params, poisson_init)
 
-input_additive = model.add_synapse_population("input_additive", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+input_additive = model.add_synapse_population("input_additive", "DENSE_INDIVIDUALG", 0,
     poisson_pop, additive_pop,
     stdp_additive, stdp_params, stdp_init, stdp_pre_init, stdp_post_init,
     "ExpCurr", post_syn_params, {})
 
-input_multiplicative = model.add_synapse_population("input_multiplicative", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+input_multiplicative = model.add_synapse_population("input_multiplicative", "DENSE_INDIVIDUALG", 0,
     poisson_pop, multiplicative_pop,
     stdp_multiplicative, stdp_params, stdp_init, stdp_pre_init, stdp_post_init,
     "ExpCurr", post_syn_params, {})
@@ -149,8 +148,8 @@ while model.t < DURATION_MS:
     model.step_time()
 
 # Pull weight variables from device
-model.pull_var_from_device("input_additive", "g")
-model.pull_var_from_device("input_multiplicative", "g")
+input_additive.pull_var_from_device("g")
+input_multiplicative.pull_var_from_device("g")
 
 # Get weights
 weights = [input_additive.get_var_values("g"),
