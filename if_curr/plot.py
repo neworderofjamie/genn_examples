@@ -4,18 +4,21 @@ import numpy as np
 
 # Read CSV spikes
 data = np.loadtxt("voltages.csv", delimiter=",",
-                  dtype={"names": ("time", "voltage", "psi", "current"),
-                         "formats": (np.float, np.float, np.float, np.float)})
+                  dtype={"names": ("time", "voltage", "current"),
+                         "formats": (np.float, np.float, np.float)})
 
 # Create plot
-figure, axes = plt.subplots(2)
+figure, axis = plt.subplots()
+
+current_axis = axis.twinx()
 
 # Plot voltages
-axes[0].set_title("Voltage")
-axes[0].plot(data["time"], data["voltage"])
+axis.plot(data["time"], data["voltage"], color="red")
+current_axis.plot(data["time"], data["current"], color="blue")
 
-axes[1].set_title("Psi")
-axes[1].plot(data["time"], data["psi"])
+axis.set_xlabel("Time [ms]")
+axis.set_ylabel("Membrane voltage [mV]")
+current_axis.set_ylabel("Input current [nA]")
 
 # Show plot
 plt.show()
