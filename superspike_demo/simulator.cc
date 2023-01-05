@@ -15,7 +15,6 @@
 
 // Auto-generated model code
 #include "superspike_demo_CODE/definitions.h"
-#include "superspike_demo_CODE/macroLookup.h"
 
 namespace
 {
@@ -49,12 +48,12 @@ void loadTargetSpikes(const std::string &filename)
     std::sort(data.begin(), data.end());
 
     // Allocate memory for spike times
-    ALLOCATE_EGP_FIELD(Output, spikeTimes, data.size());
+    allocatespikeTimesOutput(data.size());
 
     // Copy just the sorted spike times into this memory and push to device
-    std::transform(data.cbegin(), data.cend(), GET_FIELD(Output, spikeTimes),
+    std::transform(data.cbegin(), data.cend(), &spikeTimesOutput[0],
                    [](const std::pair<unsigned int, double> &s){ return s.second; });
-    PUSH_EGP_FIELD(Output, spikeTimes, data.size());
+    pushspikeTimesOutputToDevice(data.size());
 
     // Loop through output neurons
     unsigned int spike = 0;
@@ -65,7 +64,7 @@ void loadTargetSpikes(const std::string &filename)
         }
 
         // Record neurons starting spike index
-        GET_FIELD(Output, startSpike)[i] = spike;
+        startSpikeOutput[i] = spike;
         
         // Fast-forward through all this neuron's spikes
         while(spike < data.size() && data[spike].first == i) {
@@ -73,7 +72,7 @@ void loadTargetSpikes(const std::string &filename)
         }
 
         // Record neurons ending spike index
-        GET_FIELD(Output, endSpike)[i] = spike;
+        endSpikeOutput[i] = spike;
     }
 
 }
@@ -89,7 +88,7 @@ void generateFrozenPoissonInput(std::mt19937 &gen)
     std::vector<float> spikeTimes;
     for(unsigned int i = 0; i < Parameters::numInput; i++) {
         // Record neurons starting spike index
-        GET_FIELD(Input, startSpike)[i] = spikeTimes.size();
+        startSpikeInput[i] = spikeTimes.size();
 
         // Generate spike train using exponential distribution
         for(float t = isiMs * dist(gen); t < Parameters::trialMs; t += isiMs * dist(gen)) {
@@ -97,13 +96,13 @@ void generateFrozenPoissonInput(std::mt19937 &gen)
         }
 
         // Record neurons ending spike index
-        GET_FIELD(Input, endSpike)[i] = spikeTimes.size();
+        endSpikeInput[i] = spikeTimes.size();
     }
 
     // Allocate memory for spike times
-    ALLOCATE_EGP_FIELD(Input, spikeTimes, spikeTimes.size());
-    std::copy(spikeTimes.cbegin(), spikeTimes.cend(), GET_FIELD(Input, spikeTimes));
-    PUSH_EGP_FIELD(Input, spikeTimes, spikeTimes.size());
+    allocatespikeTimesInput(spikeTimes.size());
+    std::copy(spikeTimes.cbegin(), spikeTimes.cend(), &spikeTimesInput[0]);
+    pushspikeTimesInputToDevice(spikeTimes.size());
 }
 
 float calculateError(unsigned int timestep)
@@ -116,17 +115,8 @@ float calculateError(unsigned int timestep)
     const double timeS = timestep * Parameters::timestepMs / 1000.0;
 
     // Calculate mean error
-    scalar *avgSqrErrOutput = GET_FIELD(Output, avgSqrErr);
     const float meanError = std::accumulate(&avgSqrErrOutput[0], &avgSqrErrOutput[Parameters::numOutput], 0.0f) / (float)Parameters::numOutput;
     return scaleTrErrFlt * meanError / (1.0 - std::exp(-timeS / c) + 1.0E-9);
-}
-
-void setR0(float r0) 
-{
-    *GET_FIELD(HiddenOutputWeightOptimiser, r0) = r0;
-    *GET_FIELD(InputHiddenWeightOptimiser, r0) = r0;
-    PUSH_EGP_FIELD(HiddenOutputWeightOptimiser, r0, 1);
-    PUSH_EGP_FIELD(InputHiddenWeightOptimiser, r0, 1);
 }
 }   // Anonymous namespace
 
@@ -147,10 +137,6 @@ int main()
         // Generate frozen Poisson input
         generateFrozenPoissonInput(gen);
 
-        // Allocate single elemenr0HiddenOutputWeightOptimisert arrays for r0 EGPs
-        ALLOCATE_EGP_FIELD(HiddenOutputWeightOptimiser, r0, 1);
-        ALLOCATE_EGP_FIELD(InputHiddenWeightOptimiser, r0, 1);
-        
         
         initializeSparse();
 
@@ -161,22 +147,20 @@ int main()
 
             // Loop through trials
             unsigned int timestep = 0;
-            
-            float r0 = Parameters::r0;
-            setR0(r0);
-            
+            r0HiddenOutputWeightOptimiser = Parameters::r0;
+            r0InputHiddenWeightOptimiser = Parameters::r0;
             for(unsigned int trial = 0; trial < Parameters::numTrials; trial++) {
                 // Reduce learning rate every 400 trials
                 if(trial != 0 && (trial % 400) == 0) {
-                    r0 *= 0.1;
-                    setR0(r0);
+                    r0HiddenOutputWeightOptimiser *= 0.1;
+                    r0InputHiddenWeightOptimiser *= 0.1;
                 }
 
                 // Display trial number peridically
                 if(trial != 0 && (trial % 10) == 0) {
                     // Get average square error
-                    PULL_FIELD(Output, avgSqrErr);
-                    std::cout << "Trial " << trial << " (r0 = " << r0 << ", error = " << calculateError(timestep) << ")" << std::endl;
+                    pullavgSqrErrOutputFromDevice();
+                    std::cout << "Trial " << trial << " (r0 = " << r0HiddenOutputWeightOptimiser << ", error = " << calculateError(timestep) << ")" << std::endl;
                 }
 
                 // Reset model timestep
@@ -199,18 +183,18 @@ int main()
 
                 // Reset spike sources by re-uploading starting spike indices
                 // **TODO** build repeating spike source array
-                PUSH_FIELD(Input, startSpike);
-                PUSH_FIELD(Output, startSpike);
+                pushstartSpikeInputToDevice();
+                pushstartSpikeOutputToDevice();
 
                 if((trial % 100) == 0) {
                     pullRecordingBuffersFromDevice();
-                    writeTextSpikeRecording("input_spikes_" + std::to_string(trial) + ".csv", GET_FIELD(Input, recordSpk),
+                    writeTextSpikeRecording("input_spikes_" + std::to_string(trial) + ".csv", recordSpkInput,
                                             Parameters::numInput, Parameters::trialTimesteps, Parameters::timestepMs,
                                             ",", true);
-                    writeTextSpikeRecording("hidden_spikes_" + std::to_string(trial) + ".csv", GET_FIELD(Hidden, recordSpk),
+                    writeTextSpikeRecording("hidden_spikes_" + std::to_string(trial) + ".csv", recordSpkHidden,
                                             Parameters::numHidden, Parameters::trialTimesteps, Parameters::timestepMs,
                                             ",", true);
-                    writeTextSpikeRecording("output_spikes_" + std::to_string(trial) + ".csv", GET_FIELD(Output, recordSpk),
+                    writeTextSpikeRecording("output_spikes_" + std::to_string(trial) + ".csv", recordSpkOutput,
                                             Parameters::numOutput, Parameters::trialTimesteps, Parameters::timestepMs,
                                             ",", true);
                 }
