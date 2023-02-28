@@ -1,26 +1,19 @@
 // GeNN includes
 #include "modelSpec.h"
 
-// GeNN robotics includes
-#include "exp_curr.h"
-#include "lif.h"
-
 // GeNN examples includes
 #include "../common/bcpnn.h"
 
 void modelDefinition(NNmodel &model)
 {
-    initGeNN();
     model.setDT(1.0);
     model.setName("bcpnn_simple");
-    GENN_PREFERENCES::autoInitSparseVars = true;
-    GENN_PREFERENCES::defaultVarMode = VarMode::LOC_HOST_DEVICE_INIT_DEVICE;
 
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
     // LIF model parameters
-    LIF::ParamValues lifParams(
+    NeuronModels::LIF::ParamValues lifParams(
         0.25,   // 0 - C
         10.0,   // 1 - TauM
         -65.0,  // 2 - Vrest
@@ -30,7 +23,7 @@ void modelDefinition(NNmodel &model)
         2.0);  // 6 - TauRefrac
 
     // LIF initial conditions
-    LIF::VarValues lifInit(
+    NeuronModels::LIF::VarValues lifInit(
         -65.0,  // 0 - V
         0.0);    // 1 - RefracTime
 
@@ -61,31 +54,34 @@ void modelDefinition(NNmodel &model)
         0.0);   // 1 - PjStar
 
     // Exponential current parameters
-    ExpCurr::ParamValues expCurrParams(
+    PostsynapticModels::ExpCurr::ParamValues expCurrParams(
         2.5);  // 0 - TauSyn (ms)
 
     // Create IF_curr neuron
     model.addNeuronPopulation<NeuronModels::SpikeSource>("PreStim", 1, {}, {});
     model.addNeuronPopulation<NeuronModels::SpikeSource>("PostStim", 1, {}, {});
-    model.addNeuronPopulation<LIF>("Pre", 1, lifParams, lifInit);
-    model.addNeuronPopulation<LIF>("Post", 1, lifParams, lifInit);
+    auto *pre = model.addNeuronPopulation<NeuronModels::LIF>("Pre", 1, lifParams, lifInit);
+    auto *post = model.addNeuronPopulation<NeuronModels::LIF>("Post", 1, lifParams, lifInit);
+    pre->setSpikeRecordingEnabled(true);
+    post->setSpikeRecordingEnabled(true);
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
             "PreStimToPre", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
             "PreStim", "Pre",
             {}, staticSynapseInit,
-            expCurrParams, {});
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, ExpCurr>(
+            expCurrParams, {},
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
+    model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
             "PostStimToPost", SynapseMatrixType::SPARSE_GLOBALG, NO_DELAY,
             "PostStim", "Post",
             {}, staticSynapseInit,
-            expCurrParams, {});
+            expCurrParams, {},
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 
-    model.addSynapsePopulation<BCPNNTwoTrace, ExpCurr>(
+    model.addSynapsePopulation<BCPNNTwoTrace, PostsynapticModels::ExpCurr>(
             "PreToPost", SynapseMatrixType::SPARSE_INDIVIDUALG, NO_DELAY,
             "Pre", "Post",
             bcpnnParams,  bcpnnInit, bcpnnPreInit, bcpnnPostInit,
-            expCurrParams, {});
-
-    model.finalize();
+            expCurrParams, {},
+            initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 }

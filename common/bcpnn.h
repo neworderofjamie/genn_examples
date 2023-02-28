@@ -25,10 +25,10 @@ public:
     SET_POST_VARS({{"ZjStar", "scalar"}, {"PjStar", "scalar"}});
 
     SET_DERIVED_PARAMS({
-        {"Ai", [](const vector<double> &pars, double){ return 1000.0 / (pars[3] * (pars[0] - pars[2])); }},
-        {"Aj", [](const vector<double> &pars, double){ return 1000.0 / (pars[3] * (pars[1] - pars[2])); }},
-        {"Aij", [](const vector<double> &pars, double){ return (1000000.0 / (pars[0] + pars[1])) / ((pars[3]  * pars[3]) * ((1.0 / ((1.0 / pars[0]) + (1.0 / pars[1]))) - pars[2])); }},
-        {"Epsilon", [](const vector<double> &pars, double){ return 1000.0 / (pars[3] * pars[2]); }}});
+        {"Ai", [](const std::vector<double> &pars, double){ return 1000.0 / (pars[3] * (pars[0] - pars[2])); }},
+        {"Aj", [](const std::vector<double> &pars, double){ return 1000.0 / (pars[3] * (pars[1] - pars[2])); }},
+        {"Aij", [](const std::vector<double> &pars, double){ return (1000000.0 / (pars[0] + pars[1])) / ((pars[3]  * pars[3]) * ((1.0 / ((1.0 / pars[0]) + (1.0 / pars[1]))) - pars[2])); }},
+        {"Epsilon", [](const std::vector<double> &pars, double){ return 1000.0 / (pars[3] * pars[2]); }}});
 
     SET_PRE_SPIKE_CODE(
         "const scalar dt = $(t) - $(sT_pre);\n"
@@ -42,8 +42,7 @@ public:
 
     SET_SIM_CODE(
         "if($(weightEnabled)) {\n"
-        "   $(addtoinSyn) = $(g);\n"
-        "   $(updatelinsyn);\n"
+        "   $(addToInSyn, $(g));\n"
         "}\n"
         "if($(plasticityEnabled)) {\n"
         "   const scalar timeSinceLastUpdate = $(t) - $(lastUpdateTime);\n"

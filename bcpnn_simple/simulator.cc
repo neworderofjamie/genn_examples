@@ -5,8 +5,8 @@
 #include <cassert>
 #include <cstdint>
 
-#include "connectors.h"
-#include "spike_csv_recorder.h"
+// Userproject includes
+#include "spikeRecorder.h"
 
 #include "bcpnn_simple_CODE/definitions.h"
 
@@ -111,21 +111,16 @@ int main()
     assert(preSpikeVector.size() == postSpikeVector.size());
 
     allocateMem();
-
+    allocateRecordingBuffers(preSpikeVector.size());
+    
     initialize();
-
-    buildOneToOneConnector(1, 1, CPreStimToPre, &allocatePreStimToPre);
-    buildOneToOneConnector(1, 1, CPostStimToPost, &allocatePostStimToPost);
-    buildOneToOneConnector(1, 1, CPreToPost, &allocatePreToPost);
-
-    // Setup reverse connection indices for STDP
-    initbcpnn_simple();
+    initializeSparse();
 
     // Load spike vectors
     std::cout << "Sim timesteps:" << preSpikeVector.size() << std::endl;
 
-    SpikeCSVRecorder preSpikes("pre_spikes.csv", glbSpkCntPre, glbSpkPre);
-    SpikeCSVRecorder postSpikes("post_spikes.csv", glbSpkCntPost, glbSpkPost);
+    //SpikeCSVRecorder preSpikes("pre_spikes.csv", glbSpkCntPre, glbSpkPre);
+    //SpikeCSVRecorder postSpikes("post_spikes.csv", glbSpkCntPost, glbSpkPost);
 
     FILE *preTrace = fopen("pre_trace.csv", "w");
     FILE *postTrace = fopen("post_trace.csv", "w");
@@ -146,21 +141,16 @@ int main()
         }
 
         // Simulate
-#ifndef CPU_ONLY
         pushPreStimCurrentSpikesToDevice();
         pushPostStimCurrentSpikesToDevice();
 
-        stepTimeGPU();
+        stepTime();
 
-        pullPreToPostStateFromDevice();
+        // **YUCK** only for recordXXXTrace logic
         pullPreCurrentSpikesFromDevice();
         pullPostCurrentSpikesFromDevice();
-#else
-        stepTimeCPU();
-#endif
-        // Record spikes
-        preSpikes.record(t);
-        postSpikes.record(t);
+        
+        pullPreToPostStateFromDevice();
 
         if (recordPreTrace) {
             fprintf(preTrace, "%f, %f, %f, %f\n", t, ZiStarPreToPost[0], PiStarPreToPost[0], gPreToPost[0]);
@@ -174,7 +164,12 @@ int main()
         recordPreTrace = (glbSpkCntPre[0] > 0);
         recordPostTrace = (glbSpkCntPost[0] > 0);
     }
-
+    
+    pullRecordingBuffersFromDevice();
+    writeTextSpikeRecording("pre_spikes.csv", recordSpkPre,
+                            1, preSpikeVector.size());
+    writeTextSpikeRecording("post_spikes.csv", recordSpkPost,
+                            1, preSpikeVector.size());
     fclose(preTrace);
     fclose(postTrace);
 
