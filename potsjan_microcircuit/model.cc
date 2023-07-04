@@ -7,7 +7,7 @@
 // Model includes
 #include "parameters.h"
 
-void modelDefinition(NNmodel &model)
+void modelDefinition(ModelSpec &model)
 {
     model.setDT(Parameters::dtMs);
     model.setName("potjans_microcircuit");
@@ -134,7 +134,7 @@ void modelDefinition(NNmodel &model)
                         // Determine matrix type
                         const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
                             ? SynapseMatrixType::PROCEDURAL_PROCEDURALG
-                            : SynapseMatrixType::SPARSE_INDIVIDUALG;
+                            : SynapseMatrixType::SPARSE;
 
                         // Excitatory
                         if(srcPop == Parameters::PopulationE) {
