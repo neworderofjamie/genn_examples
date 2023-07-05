@@ -38,8 +38,8 @@ void modelDefinition(ModelSpec &model)
         {"RefracTime", 0.0}};
     
     // Static synapse parameters
-    VarValues excitatoryStaticSynapseInit{{"g", Parameters::excitatoryWeight}};
-    VarValues inhibitoryStaticSynapseInit{{"g", Parameters::inhibitoryWeight}};
+    ParamValues excitatoryStaticSynapseInit{{"g", Parameters::excitatoryWeight}};
+    ParamValues inhibitoryStaticSynapseInit{{"g", Parameters::inhibitoryWeight}};
 
     // Exponential current parameters
     ParamValues excitatoryExpCurrParams{{"tau", 5.0}};
@@ -55,31 +55,31 @@ void modelDefinition(ModelSpec &model)
 
     // Determine matrix type
     const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
-        ? SynapseMatrixType::PROCEDURAL_GLOBALG
-        : (Parameters::bitmaskConnectivity ? SynapseMatrixType::BITMASK_GLOBALG : SynapseMatrixType::SPARSE_GLOBALG);
+        ? SynapseMatrixType::PROCEDURAL_PROCEDURALG
+        : (Parameters::bitmaskConnectivity ? SynapseMatrixType::BITMASK : SynapseMatrixType::SPARSE);
 
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulseConstantWeight, PostsynapticModels::ExpCurr>(
         "EE", matrixType, NO_DELAY,
         "E", "E",
-        {}, excitatoryStaticSynapseInit,
+        excitatoryStaticSynapseInit, {},
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulseConstantWeight, PostsynapticModels::ExpCurr>(
         "EI", matrixType, NO_DELAY,
         "E", "I",
-        {}, excitatoryStaticSynapseInit,
+        excitatoryStaticSynapseInit, {},
         excitatoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulseConstantWeight, PostsynapticModels::ExpCurr>(
         "II", matrixType, NO_DELAY,
         "I", "I",
-        {}, inhibitoryStaticSynapseInit,
+        inhibitoryStaticSynapseInit, {},
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
+    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulseConstantWeight, PostsynapticModels::ExpCurr>(
         "IE", matrixType, NO_DELAY,
         "I", "E",
-        {}, inhibitoryStaticSynapseInit,
+        inhibitoryStaticSynapseInit, {},
         inhibitoryExpCurrParams, {},
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
