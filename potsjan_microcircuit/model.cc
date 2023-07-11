@@ -20,7 +20,7 @@ void modelDefinition(ModelSpec &model)
     GENN_PREFERENCES.optimizeCode = true;
     GENN_PREFERENCES.generateEmptyStatePushPull = false;
     GENN_PREFERENCES.generateExtraGlobalParamPull = false;
-    GENN_PREFERENCES.generateLineInfo = true;
+    //GENN_PREFERENCES.generateLineInfo = true;
 
     ParamValues vDist{{"mean", -58.0}, {"sd", 5.0}};
 
@@ -133,7 +133,7 @@ void modelDefinition(ModelSpec &model)
 
                         // Determine matrix type
                         const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
-                            ? SynapseMatrixType::PROCEDURAL_PROCEDURALG
+                            ? SynapseMatrixType::PROCEDURAL
                             : SynapseMatrixType::SPARSE;
 
                         // Excitatory
