@@ -35,8 +35,8 @@ lif_params = {"C": 1.0, "TauM": 20.0, "Vrest": -49.0, "Vreset": RESET_VOLTAGE,
 lif_init = {"V": init_var("Uniform", {"min": RESET_VOLTAGE, "max": THRESHOHOLD_VOLTAGE}),
             "RefracTime": 0.0}
 
-excitatory_synapse_init = {"g": EXCITATORY_WEIGHT}
-inhibitory_synapse_init = {"g": INHIBITORY_WEIGHT}
+excitatory_synapse_params = {"g": EXCITATORY_WEIGHT}
+inhibitory_synapse_params = {"g": INHIBITORY_WEIGHT}
 
 excitatory_post_syn_params = {"tau": 5.0}
 inhibitory_post_syn_params = {"tau": 10.0}
@@ -46,27 +46,27 @@ inhibitory_pop = model.add_neuron_population("I", NUM_INHIBITORY, "LIF", lif_par
 
 excitatory_pop.spike_recording_enabled = True
 
-model.add_synapse_population("EE", "SPARSE_GLOBALG", 0,
+model.add_synapse_population("EE", "SPARSE", 0,
     excitatory_pop, excitatory_pop,
-    "StaticPulse", {}, excitatory_synapse_init, {}, {},
+    "StaticPulseConstantWeight", excitatory_synapse_params, {}, {}, {},
     "ExpCurr", excitatory_post_syn_params, {},
     init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("EI", "SPARSE_GLOBALG", 0,
+model.add_synapse_population("EI", "SPARSE", 0,
     excitatory_pop, inhibitory_pop,
-    "StaticPulse", {}, excitatory_synapse_init, {}, {},
+    "StaticPulseConstantWeight", excitatory_synapse_params, {}, {}, {},
     "ExpCurr", excitatory_post_syn_params, {},
     init_sparse_connectivity("FixedProbability", fixed_prob))
 
-model.add_synapse_population("II", "SPARSE_GLOBALG", 0,
+model.add_synapse_population("II", "SPARSE", 0,
     inhibitory_pop, inhibitory_pop,
-    "StaticPulse", {}, inhibitory_synapse_init, {}, {},
+    "StaticPulseConstantWeight", inhibitory_synapse_params, {}, {}, {},
     "ExpCurr", inhibitory_post_syn_params, {},
     init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("IE", "SPARSE_GLOBALG", 0,
+model.add_synapse_population("IE", "SPARSE", 0,
     inhibitory_pop, excitatory_pop,
-    "StaticPulse", {}, inhibitory_synapse_init, {}, {},
+    "StaticPulseConstantWeight", inhibitory_synapse_params, {}, {}, {},
     "ExpCurr", inhibitory_post_syn_params, {},
     init_sparse_connectivity("FixedProbability", fixed_prob))
 
