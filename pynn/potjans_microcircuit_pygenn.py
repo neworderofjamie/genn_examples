@@ -249,7 +249,7 @@ for trg_layer in LAYER_NAMES:
                     # Build unique synapse name
                     synapse_name = src_name + "_" + trg_name
 
-                    matrix_type = "PROCEDURAL_PROCEDURALG" if PROCEDURAL_CONNECTIVITY else "SPARSE_INDIVIDUALG"
+                    matrix_type = "PROCEDURAL" if PROCEDURAL_CONNECTIVITY else "SPARSE"
 
                     # Excitatory
                     if src_pop == "E":
