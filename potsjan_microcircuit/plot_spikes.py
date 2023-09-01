@@ -22,7 +22,7 @@ def load_spikes(filename):
     # Read CSV spikes
     spikes = np.loadtxt(filename, delimiter=",", skiprows=1,
                         dtype={"names": ("time", "neuron_id"),
-                            "formats": (np.float, np.int)})
+                            "formats": (float, int)})
 
     return spikes["time"], spikes["neuron_id"], name, num
 
