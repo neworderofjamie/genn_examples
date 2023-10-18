@@ -1,12 +1,13 @@
-#include <cmath>
-#include <vector>
+#include <fstream>
 
 #include "modelSpec.h"
 
 #include "parameters.h"
 
+NeuronGroup *e = nullptr;
 void modelDefinition(ModelSpec &model)
 {
+    GENN_PREFERENCES.debugCode = true;
     model.setDT(1.0);
     model.setName("va_benchmark");
     model.setDefaultVarLocation(VarLocation::DEVICE);
@@ -46,7 +47,7 @@ void modelDefinition(ModelSpec &model)
     ParamValues inhibitoryExpCurrParams{{"tau", 10.0}};
 
     // Create IF_curr neuron
-    auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
+    e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     // Enable spike recording
@@ -55,7 +56,7 @@ void modelDefinition(ModelSpec &model)
 
     // Determine matrix type
     const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
-        ? SynapseMatrixType::PROCEDURAL_PROCEDURALG
+        ? SynapseMatrixType::PROCEDURAL
         : (Parameters::bitmaskConnectivity ? SynapseMatrixType::BITMASK : SynapseMatrixType::SPARSE);
 
     auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulseConstantWeight, PostsynapticModels::ExpCurr>(
@@ -95,7 +96,28 @@ void modelDefinition(ModelSpec &model)
         ei->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
         ii->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
         ie->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
-
-
     }
 }
+
+void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
+{
+    runtime.allocate(Parameters::numTimesteps);
+    runtime.initialize();
+    runtime.initializeSparse();
+    
+    while(runtime.getTimestep() < Parameters::numTimesteps) {
+        runtime.stepTime();
+    }
+    
+    runtime.pullRecordingBuffersFromDevice();
+    
+    auto spikes = runtime.getRecordedSpikes(*e);
+    auto t = spikes.first.cbegin();
+    auto i = spikes.second.cbegin();
+    
+    std::ofstream test("spikes.csv");
+    for(;t < spikes.first.cend();t++,i++) {
+        test << *t << ", " << *i << std::endl;
+    }
+}
+        
