@@ -17,6 +17,7 @@ void modelDefinition(ModelSpec &model)
     model.setMergePostsynapticModels(true);
     model.setDefaultNarrowSparseIndEnabled(true);
 
+    GENN_PREFERENCES.debugCode = true;
     GENN_PREFERENCES.optimizeCode = true;
     GENN_PREFERENCES.generateEmptyStatePushPull = false;
     GENN_PREFERENCES.generateExtraGlobalParamPull = false;
@@ -203,4 +204,17 @@ void modelDefinition(ModelSpec &model)
     }
 
     std::cout << "Total neurons=" << totalNeurons << ", total synapses=" << totalSynapses << std::endl;
+}
+
+void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
+{
+    const unsigned int timesteps = (unsigned int)round(Parameters::durationMs / Parameters::dtMs);
+
+    runtime.allocate(timesteps);
+    runtime.initialize();
+    runtime.initializeSparse();
+
+    while(runtime.getTimestep() < timesteps) {
+        runtime.stepTime();
+    }
 }
