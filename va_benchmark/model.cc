@@ -4,10 +4,8 @@
 
 #include "parameters.h"
 
-NeuronGroup *e = nullptr;
 void modelDefinition(ModelSpec &model)
 {
-    GENN_PREFERENCES.debugCode = true;
     model.setDT(1.0);
     model.setName("va_benchmark");
     model.setDefaultVarLocation(VarLocation::DEVICE);
@@ -47,7 +45,7 @@ void modelDefinition(ModelSpec &model)
     ParamValues inhibitoryExpCurrParams{{"tau", 10.0}};
 
     // Create IF_curr neuron
-    e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
+    auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
     auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     // Enable spike recording
@@ -105,19 +103,22 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     runtime.initialize();
     runtime.initializeSparse();
     
+    const auto startTime = std::chrono::high_resolution_clock::now();
     while(runtime.getTimestep() < Parameters::numTimesteps) {
         runtime.stepTime();
     }
+    std::chrono::duration<double> duration = std::chrono::high_resolution_clock::now() - startTime;
+    std::cout << "Init time:" << runtime.getInitTime() << std::endl;
+    std::cout << "Total simulation time:" << duration.count() << " seconds" << std::endl;
+    std::cout << "\tNeuron update time:" << runtime.getNeuronUpdateTime() << std::endl;
+    std::cout << "\tPresynaptic update time:" << runtime.getPresynapticUpdateTime() << std::endl;
     
     runtime.pullRecordingBuffersFromDevice();
     
-    auto spikes = runtime.getRecordedSpikes(*e);
-    auto t = spikes.first.cbegin();
-    auto i = spikes.second.cbegin();
-    
-    std::ofstream test("spikes.csv");
-    for(;t < spikes.first.cend();t++,i++) {
-        test << *t << ", " << *i << std::endl;
-    }
+    const auto *e = model.findNeuronGroup("E");
+    const auto *i = model.findNeuronGroup("I");
+    runtime.writeRecordedSpikes(*e, "spikes_e.csv");
+    runtime.writeRecordedSpikes(*i, "spikes_i.csv");
+
 }
-        
+
