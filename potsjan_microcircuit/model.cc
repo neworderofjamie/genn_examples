@@ -17,10 +17,7 @@ void modelDefinition(ModelSpec &model)
     model.setMergePostsynapticModels(true);
     model.setDefaultNarrowSparseIndEnabled(true);
 
-    GENN_PREFERENCES.debugCode = true;
     GENN_PREFERENCES.optimizeCode = true;
-    GENN_PREFERENCES.generateEmptyStatePushPull = false;
-    GENN_PREFERENCES.generateExtraGlobalParamPull = false;
     //GENN_PREFERENCES.generateLineInfo = true;
 
     ParamValues vDist{{"mean", -58.0}, {"sd", 5.0}};
@@ -213,8 +210,38 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     runtime.allocate(timesteps);
     runtime.initialize();
     runtime.initializeSparse();
-
+    
+    const unsigned int tenPercentTimestep = timesteps / 10;
+    const auto startTime = std::chrono::high_resolution_clock::now();
     while(runtime.getTimestep() < timesteps) {
+        // Indicate every 10%
+        if((runtime.getTimestep() % tenPercentTimestep) == 0) {
+            std::cout << runtime.getTimestep() / 100 << "%" << std::endl;
+        }
+
         runtime.stepTime();
     }
+    std::chrono::duration<double> duration = std::chrono::high_resolution_clock::now() - startTime;
+    
+    if(Parameters::measureTiming) {
+        std::cout << "Init time:" << runtime.getInitTime() << std::endl;
+        std::cout << "Init sparse:" << runtime.getInitSparseTime() << std::endl;
+        std::cout << "Total simulation time:" << duration.count() << " seconds" << std::endl;
+        std::cout << "\tNeuron update time:" << runtime.getNeuronUpdateTime() << std::endl;
+        std::cout << "\tPresynaptic update time:" << runtime.getPresynapticUpdateTime() << std::endl;
+    }
+    else {
+        std::cout << "Total simulation time:" << duration.count() << " seconds" << std::endl;
+    }
+    
+    runtime.pullRecordingBuffersFromDevice();
+    runtime.writeRecordedSpikes(*model.findNeuronGroup("23E"), "23E.csv");
+    runtime.writeRecordedSpikes(*model.findNeuronGroup("23I"), "23I.csv");
+    runtime.writeRecordedSpikes(*model.findNeuronGroup("4E"), "4E.csv");
+    runtime.writeRecordedSpikes(*model.findNeuronGroup("4I"), "4I.csv");
+    runtime.writeRecordedSpikes(*model.findNeuronGroup("5E"), "5E.csv");
+    runtime.writeRecordedSpikes(*model.findNeuronGroup("5I"), "5I.csv");
+    runtime.writeRecordedSpikes(*model.findNeuronGroup("6E"), "6E.csv");
+    runtime.writeRecordedSpikes(*model.findNeuronGroup("6I"), "6I.csv");
+    
 }
