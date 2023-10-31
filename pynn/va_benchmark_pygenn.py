@@ -86,7 +86,7 @@ print("Simulation time:%fs" % (sim_end_time - sim_start_time))
 model.pull_recording_buffers_from_device()
 
 # Get recording data
-spike_times, spike_ids = excitatory_pop.spike_recording_data
+spike_times, spike_ids = excitatory_pop.spike_recording_data[0]
 
 fig, axes = plt.subplots(2)
 

@@ -346,7 +346,7 @@ start_id = 0
 bar_y = 0.0
 for pop in ordered_neuron_populations:
     # Get recording data
-    spike_times, spike_ids = pop.spike_recording_data
+    spike_times, spike_ids = pop.spike_recording_data[0]
     
     # Plot spikes
     actor = axes[0].scatter(spike_times, spike_ids + start_id, s=2, edgecolors="none")
