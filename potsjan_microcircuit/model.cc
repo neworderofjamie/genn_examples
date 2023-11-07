@@ -151,10 +151,10 @@ void modelDefinition(ModelSpec &model)
                                 {"d", initVar<InitVarSnippet::NormalClippedDelay>(dDist)}};
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, PostsynapticModels::ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation(
                                 synapseName, matrixType, NO_DELAY, srcName, trgName,
-                                {}, staticSynapseInit,
-                                excitatoryExpCurrParams, {},
+                                initWeightUpdate<WeightUpdateModels::StaticPulseDendriticDelay>({}, staticSynapseInit),
+                                initPostsynaptic<PostsynapticModels::ExpCurr>(excitatoryExpCurrParams),
                                 initConnectivity<InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement>(connectParams));
 
                             // Set max dendritic delay and span type
@@ -180,10 +180,10 @@ void modelDefinition(ModelSpec &model)
                                 {"d", initVar<InitVarSnippet::NormalClippedDelay>(dDist)}};
 
                             // Add synapse population
-                            auto *synPop = model.addSynapsePopulation<WeightUpdateModels::StaticPulseDendriticDelay, PostsynapticModels::ExpCurr>(
+                            auto *synPop = model.addSynapsePopulation(
                                 synapseName, matrixType, NO_DELAY, srcName, trgName,
-                                {}, staticSynapseInit,
-                                inhibitoryExpCurrParams, {},
+                                initWeightUpdate<WeightUpdateModels::StaticPulseDendriticDelay>({}, staticSynapseInit),
+                                initPostsynaptic<PostsynapticModels::ExpCurr>(inhibitoryExpCurrParams),
                                 initConnectivity<InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement>(connectParams));
 
                             // Set max dendritic delay and span type

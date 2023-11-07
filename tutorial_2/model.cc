@@ -43,18 +43,18 @@ void modelDefinition(ModelSpec &model)
 
     ParamValues ps_p{{"tau", 1.0}, {"E", -80.0}};
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulseConstantWeight, PostsynapticModels::ExpCond>(
+    model.addSynapsePopulation(
         "Pop1self", SynapseMatrixType::SPARSE, 100,
         "Pop1", "Pop1",
-        s_ini, {}, {}, {}, {}, {},
-        ps_p, {}, {{"V", createVarRef(pop1, "V")}},
+        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(s_ini),
+        initPostsynaptic<PostsynapticModels::ExpCond>(ps_p, {}, {{"V", createVarRef(pop1, "V")}}),
         initConnectivity<Ring>());
 
-    model.addSynapsePopulation<WeightUpdateModels::StaticPulseConstantWeight, PostsynapticModels::ExpCond>(
+    model.addSynapsePopulation(
         "StimPop1", SynapseMatrixType::SPARSE, NO_DELAY,
         "Stim", "Pop1",
-        s_ini, {}, {}, {}, {}, {},
-        ps_p, {}, {{"V", createVarRef(pop1, "V")}},
+        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(s_ini),
+        initPostsynaptic<PostsynapticModels::ExpCond>(ps_p, {}, {{"V", createVarRef(pop1, "V")}}),
         initConnectivity<InitSparseConnectivitySnippet::OneToOne>());
 }
 
