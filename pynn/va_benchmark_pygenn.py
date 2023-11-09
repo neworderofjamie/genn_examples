@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from time import time
 
 from pygenn import (GeNNModel, VarLocation, SpanType, init_var, 
+                    init_postsynaptic, init_weight_update,
                     init_sparse_connectivity)
 
 # Parameters
@@ -35,39 +36,34 @@ lif_params = {"C": 1.0, "TauM": 20.0, "Vrest": -49.0, "Vreset": RESET_VOLTAGE,
 lif_init = {"V": init_var("Uniform", {"min": RESET_VOLTAGE, "max": THRESHOHOLD_VOLTAGE}),
             "RefracTime": 0.0}
 
-excitatory_synapse_params = {"g": EXCITATORY_WEIGHT}
-inhibitory_synapse_params = {"g": INHIBITORY_WEIGHT}
-
-excitatory_post_syn_params = {"tau": 5.0}
-inhibitory_post_syn_params = {"tau": 10.0}
-
 excitatory_pop = model.add_neuron_population("E", NUM_EXCITATORY, "LIF", lif_params, lif_init)
 inhibitory_pop = model.add_neuron_population("I", NUM_INHIBITORY, "LIF", lif_params, lif_init)
 
 excitatory_pop.spike_recording_enabled = True
 
+excitatory_weight_init = init_weight_update("StaticPulseConstantWeight", {"g": EXCITATORY_WEIGHT})
+inhibitory_weight_init = init_weight_update("StaticPulseConstantWeight", {"g": INHIBITORY_WEIGHT})
+excitatory_postsynaptic_init = init_postsynaptic("ExpCurr", {"tau": 5.0})
+inhibitory_postsynaptic_init = init_postsynaptic("ExpCurr", {"tau": 10.0})
+
 model.add_synapse_population("EE", "SPARSE", 0,
     excitatory_pop, excitatory_pop,
-    "StaticPulseConstantWeight", excitatory_synapse_params, {}, {}, {},
-    "ExpCurr", excitatory_post_syn_params, {},
+    excitatory_weight_init, excitatory_postsynaptic_init,
     init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
 model.add_synapse_population("EI", "SPARSE", 0,
     excitatory_pop, inhibitory_pop,
-    "StaticPulseConstantWeight", excitatory_synapse_params, {}, {}, {},
-    "ExpCurr", excitatory_post_syn_params, {},
+    excitatory_weight_init, excitatory_postsynaptic_init,
     init_sparse_connectivity("FixedProbability", fixed_prob))
 
 model.add_synapse_population("II", "SPARSE", 0,
     inhibitory_pop, inhibitory_pop,
-    "StaticPulseConstantWeight", inhibitory_synapse_params, {}, {}, {},
-    "ExpCurr", inhibitory_post_syn_params, {},
+    inhibitory_weight_init, inhibitory_postsynaptic_init,
     init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
 model.add_synapse_population("IE", "SPARSE", 0,
     inhibitory_pop, excitatory_pop,
-    "StaticPulseConstantWeight", inhibitory_synapse_params, {}, {}, {},
-    "ExpCurr", inhibitory_post_syn_params, {},
+    inhibitory_weight_init, inhibitory_postsynaptic_init,
     init_sparse_connectivity("FixedProbability", fixed_prob))
 
 print("Building Model")

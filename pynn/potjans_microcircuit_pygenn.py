@@ -1,8 +1,8 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
 
-from pygenn import (GeNNModel, VarLocation, SpanType, init_var, 
-                    init_sparse_connectivity)
+from pygenn import (GeNNModel, VarLocation, SpanType, init_postsynaptic,
+                    init_sparse_connectivity, init_weight_update, init_var)
 from scipy.stats import norm
 from six import iteritems, itervalues
 from time import perf_counter
@@ -161,7 +161,7 @@ model.default_sparse_connectivity_location = VarLocation.DEVICE
 lif_init = {"V": init_var("Normal", {"mean": -58.0, "sd": 5.0}), "RefracTime": 0.0}
 poisson_init = {"current": 0.0}
 
-exp_curr_params = {"tau": 0.5}
+exp_curr_init = init_postsynaptic("ExpCurr", {"tau": 0.5})
 
 quantile = 0.9999
 normal_quantile_cdf = norm.ppf(quantile)
@@ -258,14 +258,13 @@ for trg_layer in LAYER_NAMES:
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": 0.0, "max": float(np.finfo(np.float32).max)}
 
                         # Create weight parameters
-                        static_synapse_init = {"g": init_var("NormalClipped", w_dist),
-                                               "d": init_var("NormalClippedDelay", d_dist)}
-
+                        static_synapse_init = init_weight_update("StaticPulseDendriticDelay", {},
+                                                                 {"g": init_var("NormalClipped", w_dist),
+                                                                  "d": init_var("NormalClippedDelay", d_dist)})
                         # Add synapse population
                         syn_pop = model.add_synapse_population(synapse_name, matrix_type, 0,
                             neuron_populations[src_name], neuron_populations[trg_name],
-                            "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
-                            "ExpCurr", exp_curr_params, {},
+                            static_synapse_init, exp_curr_init,
                             init_sparse_connectivity("FixedNumberTotalWithReplacement", connect_params))
 
                         # Set max dendritic delay and span type
@@ -281,14 +280,13 @@ for trg_layer in LAYER_NAMES:
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": float(-np.finfo(np.float32).max), "max": 0.0}
 
                         # Create weight parameters
-                        static_synapse_init = {"g": init_var("NormalClipped", w_dist),
-                                               "d": init_var("NormalClippedDelay", d_dist)}
-
+                        static_synapse_init = init_weight_update("StaticPulseDendriticDelay", {},
+                                                                 {"g": init_var("NormalClipped", w_dist),
+                                                                  "d": init_var("NormalClippedDelay", d_dist)})
                         # Add synapse population
                         syn_pop = model.add_synapse_population(synapse_name, matrix_type, 0,
                             neuron_populations[src_name], neuron_populations[trg_name],
-                            "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
-                            "ExpCurr", exp_curr_params, {},
+                            static_synapse_init, exp_curr_init,
                             init_sparse_connectivity("FixedNumberTotalWithReplacement", connect_params))
 
                         # Set max dendritic delay and span type
