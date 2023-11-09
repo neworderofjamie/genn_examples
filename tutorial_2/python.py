@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from pygenn import (GeNNModel, init_sparse_connectivity,
-                    create_sparse_connect_init_snippet, create_var_ref)
+from pygenn import (GeNNModel, init_postsynaptic, init_sparse_connectivity,
+                    init_weight_update, create_sparse_connect_init_snippet,
+                    create_var_ref)
 
 ring_model = create_sparse_connect_init_snippet(
     "ring",
@@ -28,27 +29,24 @@ ini = {"V": -60.0,      # membrane potential
        "h": 0.3176767,  # prob. for not Na channel blocking
        "n": 0.5961207}  # prob. for K channel activation
 
-s_ini = {"g": -0.2}
-
-ps_p = {"tau": 1.0, # Decay time constant [ms] 
-        "E": -80.0} # Reversal potential [mV]
-
 
 stim_ini = {"startSpike": [0], "endSpike": [1]}
 
 pop1 = model.add_neuron_population("Pop1", 10, "TraubMiles", p, ini)
 stim = model.add_neuron_population("Stim", 1, "SpikeSourceArray", {}, stim_ini)
 
+weight_init = init_weight_update("StaticPulseConstantWeight", {"g": -0.2})
+postsynaptic_init = init_postsynaptic("ExpCond", {"tau": 1.0, "E": -80.0}, 
+                                      var_refs={"V": create_var_ref(pop1, "V")})
+
 model.add_synapse_population("Pop1self", "SPARSE", 10,
     pop1, pop1,
-    "StaticPulse", {}, s_ini, {}, {}, {}, {},
-    "ExpCond", ps_p, {}, {"V": create_var_ref(pop1, "V")},
+    weight_init, postsynaptic_init,
     init_sparse_connectivity(ring_model, {}))
 
 model.add_synapse_population("StimPop1", "SPARSE", 0,
     stim, pop1,
-    "StaticPulse", {}, s_ini, {}, {}, {}, {},
-    "ExpCond", ps_p, {}, {"V": create_var_ref(pop1, "V")},
+    weight_init, postsynaptic_init,
     init_sparse_connectivity("OneToOne", {}))
 stim.extra_global_params["spikeTimes"].set_values([0.0])
 
