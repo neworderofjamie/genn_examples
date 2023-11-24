@@ -7,7 +7,7 @@ public:
     DECLARE_SNIPPET(Ring);
     SET_ROW_BUILD_CODE(
         "addSynapse((id_pre + 1) % num_post);\n");
-    SET_CALC_MAX_ROW_LENGTH_FUNC([](unsigned int, unsigned int, const std::unordered_map<std::string,double> &){ return 1;});
+    SET_CALC_MAX_ROW_LENGTH_FUNC([](unsigned int, unsigned int, const ParamValues &){ return 1;});
 };
 IMPLEMENT_SNIPPET(Ring);
 
