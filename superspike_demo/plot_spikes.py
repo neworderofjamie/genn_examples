@@ -5,7 +5,7 @@ import numpy as np
 from glob import glob
 from os import path
 
-spike_dtype = {"names": ("time", "neuron_id"), "formats": (np.float, np.int)}
+spike_dtype = {"names": ("time", "neuron_id"), "formats": (float, int)}
 
 
 input_spikes = sorted(list(glob("input_spikes_*.csv")))

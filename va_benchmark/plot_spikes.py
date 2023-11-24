@@ -5,10 +5,10 @@ import numpy as np
 # Read CSV spikes
 spikes_e = np.loadtxt("spikes_e.csv", delimiter=",", skiprows=1,
                       dtype={"names": ("time", "neuron_id"),
-                             "formats": (np.float, np.int)})
+                             "formats": (float, int)})
 spikes_i = np.loadtxt("spikes_i.csv", delimiter=",", skiprows=1,
                       dtype={"names": ("time", "neuron_id"),
-                             "formats": (np.float, np.int)})
+                             "formats": (float, int)})
 
 # Create plot
 figure, axes = plt.subplots(2, sharex=True)
