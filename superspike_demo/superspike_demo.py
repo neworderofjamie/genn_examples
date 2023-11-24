@@ -119,8 +119,6 @@ superspike_model = create_weight_update_model(
     // Get error from neuron model and compute full
     // expression under integral and calculate m
     m += lambda * errTilda;
-
-    // Back
     """)
 
 feedback_model = create_weight_update_model(
@@ -349,7 +347,7 @@ input_hidden = model.add_synapse_population(
 hidden_output = model.add_synapse_population(
     "HiddenOutput", "DENSE", 0,
     hidden, output,
-    init_weight_update(superspike_model, superspike_params, input_hidden_init_vars, superspike_pre_init_vars, superspike_post_init_vars,
+    init_weight_update(superspike_model, superspike_params, hidden_output_init_vars, superspike_pre_init_vars, superspike_post_init_vars,
                        post_var_refs={"V": create_var_ref(output, "V"), "errTilda": create_var_ref(output, "errTilda")}),
     init_postsynaptic("ExpCurr", {"tau": 5.0}))
 
