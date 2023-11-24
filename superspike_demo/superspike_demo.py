@@ -63,8 +63,8 @@ r_max_prop_model = create_custom_update_model(
     "r_max_prop",
     param_names=["updateTime", "tauRMS", "epsilon", "wMin", "wMax", "r0"],
     var_name_types=[("upsilon", "scalar")],
-    derived_params=[("updateTimesteps", lambda pars, dt: pars["updateTime"].as_float / dt),
-                    ("expRMS", lambda pars, dt: np.exp(-pars["updateTime"].as_float / pars["tauRMS"].as_float))],
+    derived_params=[("updateTimesteps", lambda pars, dt: pars["updateTime"] / dt),
+                    ("expRMS", lambda pars, dt: np.exp(-pars["updateTime"] / pars["tauRMS"]))],
     var_refs=[("m", "scalar"), ("variable", "scalar")],
     update_code="""
     // Get gradients
@@ -141,8 +141,8 @@ hidden_neuron_model = create_neuron_model(
     param_names=["C", "tauMem", "Vrest", "Vthresh", "tauRefrac"],
     var_name_types=[("V", "scalar"), ("refracTime", "scalar"), ("errTilda", "scalar")],
     additional_input_vars=[("ISynFeedback", "scalar", 0.0)],
-    derived_params=[("ExpTC", lambda pars, dt: np.exp(-dt / pars["tauMem"].as_float)),
-                    ("Rmembrane", lambda pars, dt: pars["tauMem"].as_float / pars["C"].as_float)],
+    derived_params=[("ExpTC", lambda pars, dt: np.exp(-dt / pars["tauMem"])),
+                    ("Rmembrane", lambda pars, dt: pars["tauMem"] / pars["C"])],
    
     sim_code="""
     // membrane potential dynamics
@@ -175,13 +175,13 @@ output_neuron_model = create_neuron_model(
                     ("errTilda", "scalar"), ("avgSqrErr", "scalar"), ("errDecay", "scalar"),
                     ("startSpike", "unsigned int"), ("endSpike", "unsigned int")],
     extra_global_params=[("spikeTimes", "scalar*")],
-    derived_params=[("ExpTC", lambda pars, dt: np.exp(-dt / pars["tauMem"].as_float)),
-                    ("Rmembrane", lambda pars, dt: pars["tauMem"].as_float / pars["C"].as_float),
-                    ("normFactor", lambda pars, dt: 1.0 / (-np.exp(-calc_t_peak(pars["tauRise"].as_float, pars["tauDecay"].as_float) / pars["tauRise"].as_float) + np.exp(-calc_t_peak(pars["tauRise"].as_float, pars["tauDecay"].as_float) / pars["tauDecay"].as_float))),
-                    ("tRiseMult", lambda pars, dt: np.exp(-dt / pars["tauRise"].as_float)),
-                    ("tDecayMult", lambda pars, dt: np.exp(-dt / pars["tauDecay"].as_float)),
-                    ("tPeak", lambda pars, dt: calc_t_peak(pars["tauRise"].as_float, pars["tauDecay"].as_float)),
-                    ("mulAvgErr", lambda pars, dt: np.exp(-dt / pars["tauAvgErr"].as_float))],
+    derived_params=[("ExpTC", lambda pars, dt: np.exp(-dt / pars["tauMem"])),
+                    ("Rmembrane", lambda pars, dt: pars["tauMem"] / pars["C"]),
+                    ("normFactor", lambda pars, dt: 1.0 / (-np.exp(-calc_t_peak(pars["tauRise"], pars["tauDecay"]) / pars["tauRise"]) + np.exp(-calc_t_peak(pars["tauRise"], pars["tauDecay"]) / pars["tauDecay"]))),
+                    ("tRiseMult", lambda pars, dt: np.exp(-dt / pars["tauRise"])),
+                    ("tDecayMult", lambda pars, dt: np.exp(-dt / pars["tauDecay"])),
+                    ("tPeak", lambda pars, dt: calc_t_peak(pars["tauRise"], pars["tauDecay"])),
+                    ("mulAvgErr", lambda pars, dt: np.exp(-dt / pars["tauAvgErr"]))],
 
     sim_code="""
     // membrane potential dynamics
