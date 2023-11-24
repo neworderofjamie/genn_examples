@@ -53,7 +53,7 @@ def calc_t_peak(tau_rise, tau_decay):
     return ((tau_decay * tau_rise) / (tau_decay - tau_rise)) * np.log(tau_decay / tau_rise)
 
 def write_spike_file(filename, data):
-    np.savetxt(filename, np.column_stack(data), fmt=["%f","%d"], 
+    np.savetxt(filename, np.column_stack(data[0]), fmt=["%f","%d"],
                delimiter=",", header="Time [ms], Neuron ID")
 
 # ----------------------------------------------------------------------------
@@ -386,7 +386,7 @@ model.load(num_recording_timesteps=TRIAL_TIMESTEPS)
 model.custom_update("CalculateTranspose")
 
 # Loop through trials
-output_avg_sqr_err_view = output.vars["avgSqrErr"].view
+output_avg_sqr_err_var = output.vars["avgSqrErr"]
 current_r0 = R0
 timestep = 0
 for trial in range(NUM_TRIALS):
@@ -395,16 +395,16 @@ for trial in range(NUM_TRIALS):
         current_r0 *= 0.1
 
         input_hidden_optimiser.set_dynamic_param_value("r0", current_r0)
-        hidden_output_r0_view.set_dynamic_param_value("r0", current_r0)
+        hidden_output_optimiser.set_dynamic_param_value("r0", current_r0)
 
     # Display trial number peridically
     if trial != 0 and (trial % 10) == 0:
         # Get average square error
-        output.pull_var_from_device("avgSqrErr")
+        output_avg_sqr_err_var.pull_from_device()
 
         # Calculate mean error
         time_s = timestep * TIMESTEP_MS / 1000.0;
-        mean_error = np.sum(output_avg_sqr_err_view) / float(NUM_OUTPUT);
+        mean_error = np.sum(output_avg_sqr_err_var.view) / float(NUM_OUTPUT);
         mean_error *= SCALE_TR_ERR_FLT / (1.0 - np.exp(-time_s / TAU_AVG_ERR_S) + 1.0E-9);
 
         print("Trial %u (r0 = %f, error = %f)" % (trial, current_r0, mean_error))
