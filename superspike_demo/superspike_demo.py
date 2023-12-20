@@ -10,7 +10,6 @@ from pygenn import GeNNModel
 # Parameters
 # ----------------------------------------------------------------------------
 TIMESTEP_MS = 0.1
-BUILD = True
 TIMING = True
 
 # Network structure
@@ -127,13 +126,6 @@ feedback_model = create_weight_update_model(
     pre_neuron_var_refs=[("errTilda", "scalar")],
     synapse_dynamics_code="""
     addToPost(w * errTilda);
-    """)
-
-feedback_psm_model = create_postsynaptic_model(
-    "feedback_psm",
-    apply_input_code="""
-    Isyn += inSyn;
-    inSyn = 0;
     """)
 
 hidden_neuron_model = create_neuron_model(
@@ -355,7 +347,7 @@ output_hidden = model.add_synapse_population(
     "OutputHidden", "DENSE", 0,
     output, hidden,
     init_weight_update(feedback_model, {}, {"w": 0.0}, pre_var_refs={"errTilda": create_var_ref(output, "errTilda")}),
-    init_postsynaptic(feedback_psm_model))
+    init_postsynaptic("DeltaCurr"))
 output_hidden.post_target_var = "ISynFeedback"
 
 # Add custom update for calculating initial tranpose weights
@@ -376,8 +368,7 @@ hidden_output_optimiser = model.add_custom_update("hidden_output_optimiser", "Gr
 hidden_output_optimiser.set_param_dynamic("r0")
 
 # Build and load model
-if BUILD:
-    model.build()
+model.build()
 model.load(num_recording_timesteps=TRIAL_TIMESTEPS)
 
 # Calculate initial transpose feedback weights
