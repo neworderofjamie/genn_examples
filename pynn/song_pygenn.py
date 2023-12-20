@@ -2,10 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 
-from pygenn import (GeNNModel, create_custom_weight_update_class, init_var)
+from pygenn import (GeNNModel, create_weight_update_model, 
+                    init_postsynaptic, init_var, init_weight_update)
 
 # STDP synapse with additive weight dependence
-stdp_additive = create_custom_weight_update_class(
+stdp_additive = create_weight_update_model(
     "STDPAdditive",
     param_names=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
     var_name_types=[("g", "scalar")],
@@ -45,13 +46,10 @@ stdp_additive = create_custom_weight_update_class(
         """
         const scalar dt = $(t) - $(sT_post);
         $(postTrace) = $(postTrace) * exp(-dt / $(tauMinus)) + 1.0;
-        """,
-
-    is_pre_spike_time_required=True,
-    is_post_spike_time_required=True)
+        """)
 
 # STDP synapse with multiplicative weight dependence
-stdp_multiplicative = create_custom_weight_update_class(
+stdp_multiplicative = create_weight_update_model(
     "STDPMultiplicative",
     param_names=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
     var_name_types=[("g", "scalar")],
@@ -87,10 +85,7 @@ stdp_multiplicative = create_custom_weight_update_class(
         """
         const scalar dt = $(t) - $(sT_post);
         $(postTrace) = $(postTrace) * exp(-dt / $(tauMinus)) + 1.0;
-        """,
-
-    is_pre_spike_time_required=True,
-    is_post_spike_time_required=True)
+        """)
 
 DT = 1.0
 NUM_EX_SYNAPSES = 1000
@@ -126,15 +121,15 @@ multiplicative_pop = model.add_neuron_population("multiplicative", 1, "LIF", lif
 
 poisson_pop = model.add_neuron_population("input", NUM_EX_SYNAPSES, "PoissonNew", poisson_params, poisson_init)
 
-input_additive = model.add_synapse_population("input_additive", "DENSE_INDIVIDUALG", 0,
+input_additive = model.add_synapse_population("input_additive", "DENSE", 0,
     poisson_pop, additive_pop,
-    stdp_additive, stdp_params, stdp_init, stdp_pre_init, stdp_post_init,
-    "ExpCurr", post_syn_params, {})
+    init_weight_update(stdp_additive, stdp_params, stdp_init, stdp_pre_init, stdp_post_init),
+    init_postsynaptic("ExpCurr", post_syn_params))
 
-input_multiplicative = model.add_synapse_population("input_multiplicative", "DENSE_INDIVIDUALG", 0,
+input_multiplicative = model.add_synapse_population("input_multiplicative", "DENSE", 0,
     poisson_pop, multiplicative_pop,
-    stdp_multiplicative, stdp_params, stdp_init, stdp_pre_init, stdp_post_init,
-    "ExpCurr", post_syn_params, {})
+    init_weight_update(stdp_multiplicative, stdp_params, stdp_init, stdp_pre_init, stdp_post_init),
+    init_postsynaptic("ExpCurr", post_syn_params))
 
 print("Building Model")
 model.build()
