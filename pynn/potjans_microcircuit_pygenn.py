@@ -239,7 +239,7 @@ for trg_layer in LAYER_NAMES:
                           % (src_name, trg_name, num_connections, mean_weight, weight_sd, MEAN_DELAY[src_pop], DELAY_SD[src_pop]))
 
                     # Build parameters for fixed number total connector
-                    connect_params = {"total": num_connections}
+                    connect_params = {"num": num_connections}
 
                     # Build distribution for delay parameters
                     d_dist = {"mean": MEAN_DELAY[src_pop], "sd": DELAY_SD[src_pop], "min": 0.0, "max": max_delay[src_pop]}
