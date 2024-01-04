@@ -46,22 +46,22 @@ inhibitory_weight_init = init_weight_update("StaticPulseConstantWeight", {"g": I
 excitatory_postsynaptic_init = init_postsynaptic("ExpCurr", {"tau": 5.0})
 inhibitory_postsynaptic_init = init_postsynaptic("ExpCurr", {"tau": 10.0})
 
-model.add_synapse_population("EE", "SPARSE", 0,
+model.add_synapse_population("EE", "SPARSE",
     excitatory_pop, excitatory_pop,
     excitatory_weight_init, excitatory_postsynaptic_init,
     init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("EI", "SPARSE", 0,
+model.add_synapse_population("EI", "SPARSE",
     excitatory_pop, inhibitory_pop,
     excitatory_weight_init, excitatory_postsynaptic_init,
     init_sparse_connectivity("FixedProbability", fixed_prob))
 
-model.add_synapse_population("II", "SPARSE", 0,
+model.add_synapse_population("II", "SPARSE",
     inhibitory_pop, inhibitory_pop,
     inhibitory_weight_init, inhibitory_postsynaptic_init,
     init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("IE", "SPARSE", 0,
+model.add_synapse_population("IE", "SPARSE",
     inhibitory_pop, excitatory_pop,
     inhibitory_weight_init, inhibitory_postsynaptic_init,
     init_sparse_connectivity("FixedProbability", fixed_prob))

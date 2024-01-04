@@ -262,7 +262,7 @@ for trg_layer in LAYER_NAMES:
                                                                  {"g": init_var("NormalClipped", w_dist),
                                                                   "d": init_var("NormalClippedDelay", d_dist)})
                         # Add synapse population
-                        syn_pop = model.add_synapse_population(synapse_name, matrix_type, 0,
+                        syn_pop = model.add_synapse_population(synapse_name, matrix_type,
                             neuron_populations[src_name], neuron_populations[trg_name],
                             static_synapse_init, exp_curr_init,
                             init_sparse_connectivity("FixedNumberTotalWithReplacement", connect_params))
@@ -284,7 +284,7 @@ for trg_layer in LAYER_NAMES:
                                                                  {"g": init_var("NormalClipped", w_dist),
                                                                   "d": init_var("NormalClippedDelay", d_dist)})
                         # Add synapse population
-                        syn_pop = model.add_synapse_population(synapse_name, matrix_type, 0,
+                        syn_pop = model.add_synapse_population(synapse_name, matrix_type,
                             neuron_populations[src_name], neuron_populations[trg_name],
                             static_synapse_init, exp_curr_init,
                             init_sparse_connectivity("FixedNumberTotalWithReplacement", connect_params))
@@ -350,11 +350,11 @@ for pop in ordered_neuron_populations:
     actor = axes[0].scatter(spike_times, spike_ids + start_id, s=2, edgecolors="none")
 
     # Plot bar showing rate in matching colour
-    axes[1].barh(bar_y, len(spike_times) / (float(pop.size) * DURATION_MS / 1000.0), 
+    axes[1].barh(bar_y, len(spike_times) / (float(pop.num_neurons) * DURATION_MS / 1000.0), 
                  align="center", color=actor.get_facecolor(), ecolor="black")
 
     # Update offset
-    start_id += pop.size
+    start_id += pop.num_neurons
 
     # Update bar pos
     bar_y += 1.0
