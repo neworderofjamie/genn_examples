@@ -32,7 +32,7 @@ stdp_additive = create_weight_update_model(
         if(dt > 0) {
             const scalar timing = exp(-dt / tauPlus);
             const scalar newWeight = g + (aPlusScaled * preTrace * timing);
-            $(g) = fmin(wMax, fmax(wMin, newWeight));
+            g = fmin(wMax, fmax(wMin, newWeight));
         }
         """,
 
