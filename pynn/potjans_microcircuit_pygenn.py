@@ -193,7 +193,7 @@ for layer in LAYER_NAMES:
 
         pop_size = get_scaled_num_neurons(layer, pop)
         neuron_pop = model.add_neuron_population(pop_name, pop_size, "LIF", lif_params, lif_init)
-        model.add_current_source(pop_name + "_poisson", "PoissonExp", pop_name, poisson_params, poisson_init)
+        model.add_current_source(pop_name + "_poisson", "PoissonExp", neuron_pop, poisson_params, poisson_init)
 
         # Enable spike recording
         neuron_pop.spike_recording_enabled = True
