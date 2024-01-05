@@ -45,6 +45,7 @@ void modelDefinition(ModelSpec &model)
 
     // Loop through populations and layers
     std::cout << "Creating neuron populations:" << std::endl;
+    NeuronGroup *neuronGroups[Parameters::LayerMax][Parameters::PopulationMax] = {nullptr};
     unsigned int totalNeurons = 0;
     for(unsigned int layer = 0; layer < Parameters::LayerMax; layer++) {
         for(unsigned int pop = 0; pop < Parameters::PopulationMax; pop++) {
@@ -70,18 +71,19 @@ void modelDefinition(ModelSpec &model)
 
             // Create population
             const unsigned int popSize = Parameters::getScaledNumNeurons(layer, pop);
-            auto *neuronPop = model.addNeuronPopulation<NeuronModels::LIF>(popName, popSize,
-                                                                           lifParams, lifInit);
+            neuronGroups[layer][pop] = model.addNeuronPopulation<NeuronModels::LIF>(
+                popName, popSize, lifParams, lifInit);
 
             // Add poisson current source population
-            model.addCurrentSource<CurrentSourceModels::PoissonExp>(popName + "_poisson", popName,
-                                                                    poissonParams, poissonInit);
+            model.addCurrentSource<CurrentSourceModels::PoissonExp>(
+                popName + "_poisson", neuronGroups[layer][pop], poissonParams, poissonInit);
+
             // Make recordable on host
-            neuronPop->setSpikeRecordingEnabled(true);
+            neuronGroups[layer][pop]->setSpikeRecordingEnabled(true);
 #ifdef USE_ZERO_COPY
-            //neuronPop->setSpikeLocation(VarLocation::ZERO_COPY);
+            //neuronGroups[layer][pop]->setSpikeLocation(VarLocation::ZERO_COPY);
 #else
-            //neuronPop->setSpikeLocation(VarLocation::HOST_DEVICE);
+            //neuronGroups[layer][pop]->setSpikeLocation(VarLocation::HOST_DEVICE);
 #endif
             std::cout << "\tPopulation " << popName << ": num neurons:" << popSize << ", external weight:" << extWeight << ", external input rate:" << extInputRate << std::endl;
 
@@ -95,12 +97,12 @@ void modelDefinition(ModelSpec &model)
     unsigned int totalSynapses = 0;
     for(unsigned int trgLayer = 0; trgLayer < Parameters::LayerMax; trgLayer++) {
         for(unsigned int trgPop = 0; trgPop < Parameters::PopulationMax; trgPop++) {
-            const std::string trgName = Parameters::getPopulationName(trgLayer, trgPop);
+            auto *trg = neuronGroups[trgLayer][trgPop];
 
             // Loop through source populations and layers
             for(unsigned int srcLayer = 0; srcLayer < Parameters::LayerMax; srcLayer++) {
                 for(unsigned int srcPop = 0; srcPop < Parameters::PopulationMax; srcPop++) {
-                    const std::string srcName = Parameters::getPopulationName(srcLayer, srcPop);
+                    auto *src = neuronGroups[srcLayer][srcPop];
 
                     // Determine mean weight
                     const double meanWeight = Parameters::getMeanWeight(srcLayer, srcPop, trgLayer, trgPop) / sqrt(Parameters::connectivityScalingFactor);
@@ -119,15 +121,15 @@ void modelDefinition(ModelSpec &model)
 
                     if(numConnections > 0) {
                         const double prob = (double)numConnections / ((double)Parameters::getScaledNumNeurons(srcLayer, srcPop) * (double)Parameters::getScaledNumNeurons(trgLayer, trgPop));
-                        std::cout << "\tConnection between '" << srcName << "' and '" << trgName << "': numConnections=" << numConnections << "(" << prob << "), meanWeight=" << meanWeight << ", weightSD=" << weightSD << ", meanDelay=" << Parameters::meanDelay[srcPop] << ", delaySD=" << Parameters::delaySD[srcPop] << std::endl;
+                        std::cout << "\tConnection between '" << src->getName() << "' and '" << trg->getName() << "': numConnections=" << numConnections << "(" << prob << "), meanWeight=" << meanWeight << ", weightSD=" << weightSD << ", meanDelay=" << Parameters::meanDelay[srcPop] << ", delaySD=" << Parameters::delaySD[srcPop] << std::endl;
 
                         // Build parameters for fixed number total connector
-                        ParamValues connectParams{{"total", numConnections}};
+                        ParamValues connectParams{{"num", numConnections}};
 
                         totalSynapses += numConnections;
 
                         // Build unique synapse name
-                        const std::string synapseName = srcName + "_" + trgName;
+                        const std::string synapseName = src->getName() + "_" + trg->getName();
 
                         // Determine matrix type
                         const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
@@ -152,7 +154,7 @@ void modelDefinition(ModelSpec &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation(
-                                synapseName, matrixType, NO_DELAY, srcName, trgName,
+                                synapseName, matrixType, src, trg,
                                 initWeightUpdate<WeightUpdateModels::StaticPulseDendriticDelay>({}, staticSynapseInit),
                                 initPostsynaptic<PostsynapticModels::ExpCurr>(excitatoryExpCurrParams),
                                 initConnectivity<InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement>(connectParams));
@@ -181,7 +183,7 @@ void modelDefinition(ModelSpec &model)
 
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation(
-                                synapseName, matrixType, NO_DELAY, srcName, trgName,
+                                synapseName, matrixType, src, trg,
                                 initWeightUpdate<WeightUpdateModels::StaticPulseDendriticDelay>({}, staticSynapseInit),
                                 initPostsynaptic<PostsynapticModels::ExpCurr>(inhibitoryExpCurrParams),
                                 initConnectivity<InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement>(connectParams));
