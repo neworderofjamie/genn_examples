@@ -17,9 +17,9 @@ namespace Parameters
 
     constexpr double timestep = 1.0;
 
-    constexpr unsigned int inputSize = 480;
+    constexpr unsigned int inputSize = 260;
     constexpr unsigned int kernelSize = 5;
-    constexpr unsigned int centreSize = 465;
+    constexpr unsigned int centreSize = 245;
 
     constexpr unsigned int macroPixelSize = centreSize / kernelSize;
 
