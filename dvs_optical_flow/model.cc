@@ -35,8 +35,6 @@ IMPLEMENT_SNIPPET(DVSModel);
 // Anonymous namespace
 namespace
 {
-typedef void (*allocateFn)(unsigned int);
-
 volatile std::sig_atomic_t g_SignalStatus;
 
 void signalHandler(int status)
@@ -403,7 +401,7 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     using Filter = DVS::CombineFilter<DVS::PolarityFilter<DVS::Polarity::ON>, DVS::ROIFilter<43, 303, 0, 260>>;
     using TransformX = DVS::Subtract<43>;
     using TransformY = DVS::NoTransform;
-    DVS::Davis dvsDevice;
+    DVS::Davis<> dvsDevice;
     dvsDevice.start();
 
     double dvsGet = 0.0;
@@ -516,6 +514,6 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     // Wait for display thread to die
     displayThread.join();
 
-    //std::cout << "Ran for " << i << " " << DT << "ms timesteps, overan for " << overrunTime.count() << "s, slept for " << sleepTime.count() << "s" << std::endl;
+    std::cout << "Ran for " << i << " " << Parameters::timestep << "ms timesteps, overan for " << overrunTime.count() << "s, slept for " << sleepTime.count() << "s" << std::endl;
     //std::cout << "Average DVS:" << (dvsGet * 1000.0) / i<< "ms, Step:" << (step * 1000.0) / i << "s, Render:" << (render * 1000.0) / i<< std::endl;
 }
