@@ -163,10 +163,10 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
                 // White out whole are of rectangle
                 const int x = 1250 + (i * 40);
                 cv::rectangle(outputImage, cv::Point(x, barTop), cv::Point(x + barWidth, barTop + barHeight),
-                            cv::Scalar::all(255), cv::FILLED);
+                              cv::Scalar::all(255), cv::FILLED);
 
                 // Draw bar
-                const int scaledOutput = int(64.0f * std::clamp(output[i], 0.0f, 4.0f));
+                const int scaledOutput = int(6.4f * std::clamp(output[i], 0.0f, 40.0f));
                 const auto colour = (i == maxOutput) ? CV_RGB(0, 255, 0) : CV_RGB(255, 0, 0);
                 cv::rectangle(outputImage, cv::Point(x, barTop + barHeight - scaledOutput), cv::Point(x + barWidth, barTop + barHeight),
                             colour, cv::FILLED);
@@ -214,7 +214,7 @@ void modelDefinition(ModelSpec &model)
         {"RefracTime", 0.0}};
 
     ParamValues outputParam{
-        {"TauOut", 20.0}};
+        {"TauOut", 100.0}};
 
     VarValues outputInit{
         {"Y", 0.0},
@@ -309,7 +309,7 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     // Subtract ROI offset and shift right to put each coordinate in [0,32)
     using TransformX = DVS::CombineTransform<DVS::Subtract<45>, DVS::ShiftRight<3>>;
     using TransformY = DVS::CombineTransform<DVS::Subtract<2>, DVS::ShiftRight<3>>;
-    DVS::Davis<true> dvsDevice;
+    DVS::Davis dvsDevice;
     dvsDevice.start();
 
     std::mutex inputMutex;
@@ -334,7 +334,8 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
         {
             //TimerAccumulate timer(dvsGet);
             spikeVectorDVS->memsetHostPointer(0);
-            dvsDevice.readEvents<32, Filter, TransformX, TransformY>(spikeVectorDVSPtr);
+            //dvsDevice.readEvents<32, Filter, TransformX, TransformY>(spikeVectorDVSPtr);
+            dvsDevice.readEventsHist<32, 4, Filter, TransformX, TransformY, true>(spikeVectorDVSPtr);
 
             // Copy to GPU
             spikeVectorDVS->pushToDevice();

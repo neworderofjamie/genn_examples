@@ -401,7 +401,7 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     using Filter = DVS::CombineFilter<DVS::PolarityFilter<DVS::Polarity::ON>, DVS::ROIFilter<43, 303, 0, 260>>;
     using TransformX = DVS::Subtract<43>;
     using TransformY = DVS::NoTransform;
-    DVS::Davis<> dvsDevice;
+    DVS::Davis dvsDevice;
     dvsDevice.start();
 
     double dvsGet = 0.0;
