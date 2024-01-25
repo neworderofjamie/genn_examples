@@ -69,6 +69,16 @@ struct Scale
     }
 };
 
+//! Shift coordinate right
+template<int Shift>
+struct ShiftRight
+{
+    static constexpr uint32_t transform(uint32_t x)
+    {
+        return x >> Shift;
+    }
+};
+
 //! Subtract value from event coordinate
 template<uint32_t Offset>
 struct Subtract
@@ -101,7 +111,7 @@ struct CombineTransform
 //----------------------------------------------------------------------------
 // DVS::Base
 //----------------------------------------------------------------------------
-template<typename Device>
+template<typename Device, bool UsePolarity = false>
 class Base
 {
 public:
@@ -176,10 +186,12 @@ public:
                         // Transform event
                         const uint32_t transformX = TransformX::transform(event.getX());
                         const uint32_t transformY = TransformY::transform(event.getY());
-                        
+
                         // Convert transformed X and Y into GeNN address
-                        const unsigned int gennAddress = (transformX + (transformY * outputSize));
-                        
+                        const unsigned int gennAddress = UsePolarity
+                            ? ((event.getPolarity() ? 1 : 0) + (transformX * 2) + (transformY * 2 * outputSize))
+                            : (transformX + (transformY * outputSize));
+
                         // Set spike bit
                         spikeVector[gennAddress / 32] |= (1 << (gennAddress % 32));
                     }
@@ -207,7 +219,12 @@ private:
     unsigned int m_Height;
 };
 
-using DVS128 = Base<libcaer::devices::dvs128>;
-using DVXplorer = Base<libcaer::devices::dvXplorer>;
-using Davis = Base<libcaer::devices::davis>;
+template<bool UsePolarity = false>
+using DVS128 = Base<libcaer::devices::dvs128, UsePolarity>;
+
+template<bool UsePolarity = false>
+using DVXplorer = Base<libcaer::devices::dvXplorer, UsePolarity>;
+
+template<bool UsePolarity = false>
+using Davis = Base<libcaer::devices::davis, UsePolarity>;
 }
