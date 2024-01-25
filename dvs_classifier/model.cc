@@ -1,5 +1,6 @@
 // Standard C++ includes
 #include <fstream>
+#include <list>
 #include <mutex>
 #include <thread>
 
@@ -110,8 +111,33 @@ void loadArray(const std::string &filename, Runtime::ArrayBase *array)
     input.read(reinterpret_cast<char*>(array->getHostPointer()), array->getSizeBytes());
 }
 
+void renderSpikeImage(const NeuronGroup &ng, std::list<cv::Mat> &spikeImages, const Runtime::Runtime &runtime,
+                      double startTime)
+{
+     // Get hidden spikes
+    const auto spikes = runtime.getRecordedSpikes(ng)[0];
+
+    // If there's not yet 10 images in list, add one
+    if(spikeImages.size() < 10) {
+        spikeImages.emplace_back(256, 32, CV_8UC3);
+    }
+    // Otherwise splice oldest image back to end
+    else {
+        spikeImages.splice(spikeImages.end(), spikeImages, spikeImages.begin());
+    }
+
+    // Clear newest spike image
+    spikeImages.back().setTo(cv::Scalar::all(255));
+
+    // Loop through spikes and set pixels in spike image
+    for(size_t i = 0; i < spikes.first.size(); i++) {
+        spikeImages.back().at<cv::Vec3b>(spikes.second[i], (int)(spikes.first[i] - startTime)) = cv::Vec3b(0, 0, 0);
+    }
+}
+
 void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
-                          std::mutex &outputMutex, const float (&output)[11])
+                          std::mutex &outputMutex, const float (&output)[11],
+                          std::mutex &hiddenSpikeMutex, const std::list<cv::Mat> &hidden1SpikeImages, const std::list<cv::Mat> &hidden2SpikeImages)
 {
     cv::namedWindow("Input", cv::WINDOW_NORMAL);
     cv::resizeWindow("Input", 32 * 10,
@@ -173,6 +199,28 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
             }
         }
 
+        // Draw hidden spikes
+        {
+            std::lock_guard<std::mutex> lock(hiddenSpikeMutex);
+
+            {
+                size_t i = 0;
+                for(const auto &img : hidden1SpikeImages) {
+                    cv::Mat roi(outputImage, cv::Rect(454 + (i++ * 32), 400, 32, 256));
+                    img.copyTo(roi);
+                }
+            }
+
+            {
+                size_t i = 0;
+                for(const auto &img : hidden2SpikeImages) {
+                    cv::Mat roi(outputImage, cv::Rect(852 + (i++ * 32), 400, 32, 256));
+                    img.copyTo(roi);
+                }
+            }
+
+        }
+
         // Convert spike image to 8bpp
         {
             std::lock_guard<std::mutex> lock(inputMutex);
@@ -230,6 +278,8 @@ void modelDefinition(ModelSpec &model)
     auto *hidden1 = model.addNeuronPopulation<RecurrentALIF>("Hidden1", 256, hiddenParam, hiddenInit);
     auto *hidden2 = model.addNeuronPopulation<RecurrentALIF>("Hidden2", 256, hiddenParam, hiddenInit);
     auto *output = model.addNeuronPopulation<OutputClassification>("Output", 11, outputParam, outputInit);
+    hidden1->setSpikeRecordingEnabled(true);
+    hidden2->setSpikeRecordingEnabled(true);
 
     //------------------------------------------------------------------------
     // Synapse populations
@@ -260,6 +310,8 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
 {
     // Lookup neuron groups
     auto *dvs = model.findNeuronGroup("DVS");
+    auto *hidden1 = model.findNeuronGroup("Hidden1");
+    auto *hidden2 = model.findNeuronGroup("Hidden2");
     auto *output = model.findNeuronGroup("Output");
 
     // Lookup synapse groups
@@ -269,7 +321,7 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     auto *hidden2Hidden2 = model.findSynapseGroup("Hidden2_Hidden2");
     auto *hidden2Output = model.findSynapseGroup("Hidden2_Output");
 
-    runtime.allocate();
+    runtime.allocate(32);
     runtime.allocateArray(*dvs, "spikeVector", 64);
     runtime.initialize();
 
@@ -315,11 +367,18 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     std::mutex inputMutex;
     cv::Mat inputImage(32, 32, CV_32FC3);
 
+    // Create circular buffer of 10 spike images
+    std::mutex hiddenSpikeMutex;
+    std::list<cv::Mat> hidden1SpikeImages;
+    std::list<cv::Mat> hidden2SpikeImages;
+
+
     std::mutex outputMutex;
     float outputData[11];
     std::thread displayThread(displayThreadHandler,
-                              std::ref(inputMutex), std::ref(inputImage),
-                              std::ref(outputMutex), std::ref(outputData));
+                              std::ref(inputMutex), std::cref(inputImage),
+                              std::ref(outputMutex), std::cref(outputData),
+                              std::ref(hiddenSpikeMutex), std::cref(hidden1SpikeImages), std::cref(hidden2SpikeImages));
 
     // Catch interrupt (ctrl-c) signals
     std::signal(SIGINT, signalHandler);
@@ -334,8 +393,7 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
         {
             //TimerAccumulate timer(dvsGet);
             spikeVectorDVS->memsetHostPointer(0);
-            //dvsDevice.readEvents<32, Filter, TransformX, TransformY>(spikeVectorDVSPtr);
-            dvsDevice.readEventsHist<32, 4, Filter, TransformX, TransformY, true>(spikeVectorDVSPtr);
+            dvsDevice.readEventsHist<32, 2, Filter, TransformX, TransformY, true>(spikeVectorDVSPtr);
 
             // Copy to GPU
             spikeVectorDVS->pushToDevice();
@@ -365,13 +423,13 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
                         // Subtract number of leading zeros from neuron ID
                         neuronID -= numLZ;
 
-                        //(event.getPolarity() ? 1 : 0) + (transformX * 2) + (transformY * 2 * outputSize))
-                        const unsigned int neuronX = (neuronID / 2) / 32;
-                        const unsigned int neuronY = (neuronID / 2) % 32;
+                        // Convert to x, y, p
+                        const unsigned int neuronX = (neuronID / 2) % 32;
+                        const unsigned int neuronY = (neuronID / 2) / 32;
                         const unsigned int neuronPolarity = neuronID % 2;
 
                         // Add to pixel
-                        inputImage.at<cv::Vec3f>(neuronX, neuronY) += cv::Vec3f(0.0f, 1.0f - neuronPolarity, (float)neuronPolarity);
+                        inputImage.at<cv::Vec3f>(neuronY, neuronX) += cv::Vec3f(0.0f, 1.0f - neuronPolarity, (float)neuronPolarity);
 
                         // New neuron id of the highest bit of this word
                         neuronID--;
@@ -390,19 +448,27 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
             runtime.stepTime();
 
             outputY->pullFromDevice();
-            //runtime.pullRecordingBuffersFromDevice();
+
+            // Every 32 timesteps (roughly one frame)
+            if(i != 0 && (i % 32) == 0) {
+                // Pull recording buffers from device
+                runtime.pullRecordingBuffersFromDevice();
+
+                // Lock mutex
+                std::lock_guard<std::mutex> lock(hiddenSpikeMutex);
+
+                // Render spike images
+                const double startTime = i - 32.0;
+                renderSpikeImage(*hidden1, hidden1SpikeImages, runtime, startTime);
+                renderSpikeImage(*hidden2, hidden2SpikeImages, runtime, startTime);
+            }
         }
 
         {
             //TimerAccumulate timer(render);
             {
                 std::lock_guard<std::mutex> lock(outputMutex);
-
-
-                // Copy output into array
                 std::copy_n(outputYPtr, 11, outputData);
-                //auto outputSpikes = runtime.getRecordedSpikes(*output);
-                //applyOutputSpikes(outputSpikes[0].second, outputData);
             }
         }
 
