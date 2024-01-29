@@ -111,33 +111,23 @@ void loadArray(const std::string &filename, Runtime::ArrayBase *array)
     input.read(reinterpret_cast<char*>(array->getHostPointer()), array->getSizeBytes());
 }
 
-void renderSpikeImage(const NeuronGroup &ng, std::list<cv::Mat> &spikeImages, const Runtime::Runtime &runtime,
-                      double startTime)
+void renderSpikeImage(const NeuronGroup &ng, cv::Mat &spikeImage, const Runtime::Runtime &runtime)
 {
      // Get hidden spikes
     const auto spikes = runtime.getRecordedSpikes(ng)[0];
 
-    // If there's not yet 10 images in list, add one
-    if(spikeImages.size() < 10) {
-        spikeImages.emplace_back(256, 32, CV_8UC3);
-    }
-    // Otherwise splice oldest image back to end
-    else {
-        spikeImages.splice(spikeImages.end(), spikeImages, spikeImages.begin());
-    }
-
-    // Clear newest spike image
-    spikeImages.back().setTo(cv::Scalar::all(255));
-
     // Loop through spikes and set pixels in spike image
-    for(size_t i = 0; i < spikes.first.size(); i++) {
-        spikeImages.back().at<cv::Vec3b>(spikes.second[i], (int)(spikes.first[i] - startTime)) = cv::Vec3b(0, 0, 0);
+    for(size_t i = 0; i < spikes.second.size(); i++) {
+        const unsigned int id = spikes.second[i];
+        spikeImage.at<cv::Vec3f>(id / 16, id % 16) += cv::Vec3f(1.0f, 1.0f, 1.0f);
     }
+
+    spikeImage *= 0.97f;
 }
 
 void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, const float &numInputSpikes,
                           std::mutex &outputMutex, const float (&output)[11],
-                          std::mutex &hiddenSpikeMutex, const std::list<cv::Mat> &hidden1SpikeImages, const std::list<cv::Mat> &hidden2SpikeImages)
+                          std::mutex &hiddenSpikeMutex, const cv::Mat &hidden1SpikeImage, const cv::Mat &hidden2SpikeImage)
 {
     cv::namedWindow("Input", cv::WINDOW_NORMAL);
     cv::resizeWindow("Input", 32 * 10,
@@ -148,6 +138,8 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, con
 
     // Create 8bpp image to copy input images into
     cv::Mat inputImage8(32, 32, CV_8UC3);
+    cv::Mat hidden1SpikeImage8(16, 16, CV_8UC3);
+    cv::Mat hidden2SpikeImage8(16, 16, CV_8UC3);
 
 #ifdef JETSON_POWER
     std::ifstream powerStream("/sys/devices/platform/7000c400.i2c/i2c-1/1-0040/iio_device/in_power0_input");
@@ -202,22 +194,8 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, con
         // Draw hidden spikes
         {
             std::lock_guard<std::mutex> lock(hiddenSpikeMutex);
-
-            {
-                size_t i = 0;
-                for(const auto &img : hidden1SpikeImages) {
-                    cv::Mat roi(outputImage, cv::Rect(454 + (i++ * 32), 400, 32, 256));
-                    img.copyTo(roi);
-                }
-            }
-
-            {
-                size_t i = 0;
-                for(const auto &img : hidden2SpikeImages) {
-                    cv::Mat roi(outputImage, cv::Rect(852 + (i++ * 32), 400, 32, 256));
-                    img.copyTo(roi);
-                }
-            }
+            hidden1SpikeImage.convertTo(hidden1SpikeImage8, CV_8U, 255.0);
+            hidden2SpikeImage.convertTo(hidden2SpikeImage8, CV_8U, 255.0);
 
         }
 
@@ -235,8 +213,12 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, con
                         cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(0, 0, 0));
         }
         // Resize into ROI
-        cv::Mat roiMat(outputImage, cv::Rect(120, 400, 256, 256));
-        cv::resize(inputImage8, roiMat, roiMat.size(), 0.0, 0.0, cv::INTER_NEAREST);
+        cv::Mat outputROI(outputImage, cv::Rect(120, 400, 256, 256));
+        cv::Mat hidden1ROI(outputImage, cv::Rect(454, 400, 256, 256));
+        cv::Mat hidden2ROI(outputImage, cv::Rect(852, 400, 256, 256));
+        cv::resize(inputImage8, outputROI, outputROI.size(), 0.0, 0.0, cv::INTER_NEAREST);
+        cv::resize(hidden1SpikeImage8, hidden1ROI, hidden1ROI.size(), 0.0, 0.0, cv::INTER_NEAREST);
+        cv::resize(hidden2SpikeImage8, hidden2ROI, hidden2ROI.size(), 0.0, 0.0, cv::INTER_NEAREST);
 
         // Render
         cv::imshow("Output", outputImage);
@@ -334,7 +316,7 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     auto *hidden2Hidden2 = model.findSynapseGroup("Hidden2_Hidden2");
     auto *hidden2Output = model.findSynapseGroup("Hidden2_Output");
 
-    runtime.allocate(32);
+    runtime.allocate(1);
     runtime.allocateArray(*dvs, "spikeVector", 64);
     runtime.initialize();
 
@@ -398,20 +380,19 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
 
     std::mutex inputMutex;
     float numInputSpikes = 0.0f;
-    cv::Mat inputImage(32, 32, CV_32FC3);
+    cv::Mat inputImage(32, 32, CV_32FC3, 0.0f);
 
     // Create circular buffer of 10 spike images
     std::mutex hiddenSpikeMutex;
-    std::list<cv::Mat> hidden1SpikeImages;
-    std::list<cv::Mat> hidden2SpikeImages;
-
+    cv::Mat hidden1SpikeImage(16, 16, CV_32FC3, 0.0f);
+    cv::Mat hidden2SpikeImage(16, 16, CV_32FC3, 0.0f);
 
     std::mutex outputMutex;
     float outputData[11];
     std::thread displayThread(displayThreadHandler,
                               std::ref(inputMutex), std::cref(inputImage), std::cref(numInputSpikes),
                               std::ref(outputMutex), std::cref(outputData),
-                              std::ref(hiddenSpikeMutex), std::cref(hidden1SpikeImages), std::cref(hidden2SpikeImages));
+                              std::ref(hiddenSpikeMutex), std::cref(hidden1SpikeImage), std::cref(hidden2SpikeImage));
 
     // Catch interrupt (ctrl-c) signals
     std::signal(SIGINT, signalHandler);
@@ -486,19 +467,15 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
 
             outputY->pullFromDevice();
 
-            // Every 32 timesteps (roughly one frame)
-            if(i != 0 && (i % 32) == 0) {
-                // Pull recording buffers from device
-                runtime.pullRecordingBuffersFromDevice();
+            // Pull recording buffers from device
+            runtime.pullRecordingBuffersFromDevice();
 
-                // Lock mutex
-                std::lock_guard<std::mutex> lock(hiddenSpikeMutex);
+            // Lock mutex
+            std::lock_guard<std::mutex> lock(hiddenSpikeMutex);
 
-                // Render spike images
-                const double startTime = i - 32.0;
-                renderSpikeImage(*hidden1, hidden1SpikeImages, runtime, startTime);
-                renderSpikeImage(*hidden2, hidden2SpikeImages, runtime, startTime);
-            }
+            // Render spike images
+            renderSpikeImage(*hidden1, hidden1SpikeImage, runtime);
+            renderSpikeImage(*hidden2, hidden2SpikeImage, runtime);
         }
 
         {
