@@ -206,10 +206,10 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, con
             // Clear background and draw spike rate
             char spikesPerSecond[255];
             sprintf(spikesPerSecond, "%d spikes per second", (int)std::round(numInputSpikes * 1000.0));
-            cv::rectangle(outputImage, cv::Point(120, 730), cv::Point(760, 770),
+            cv::rectangle(outputImage, cv::Point(100, 720), cv::Point(760, 770),
                           CV_RGB(255, 255, 255), cv::FILLED);
-            cv::putText(outputImage, spikesPerSecond, cv::Point(120, 750),
-                        cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(0, 0, 0));
+            cv::putText(outputImage, spikesPerSecond, cv::Point(100, 750),
+                        cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(0, 0, 0));
         }
         // Resize into ROI
         cv::Mat outputROI(outputImage, cv::Rect(140, 460, 256, 256));
