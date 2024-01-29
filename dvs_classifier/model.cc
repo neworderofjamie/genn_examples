@@ -125,7 +125,7 @@ void renderSpikeImage(const NeuronGroup &ng, cv::Mat &spikeImage, const Runtime:
     spikeImage *= 0.97f;
 }
 
-void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
+void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, const float &numInputSpikes,
                           std::mutex &outputMutex, const float (&output)[11],
                           std::mutex &hiddenSpikeMutex, const cv::Mat &hidden1SpikeImage, const cv::Mat &hidden2SpikeImage)
 {
@@ -203,6 +203,14 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
         {
             std::lock_guard<std::mutex> lock(inputMutex);
             inputImage.convertTo(inputImage8, CV_8U, 255.0);
+
+            // Clear background and draw spike rate
+            char spikesPerSecond[255];
+            sprintf(spikesPerSecond, "%d spikes per second", (int)std::round(numInputSpikes * 1000.0));
+            cv::rectangle(outputImage, cv::Point(120, 680), cv::Point(700, 720),
+                          CV_RGB(255, 255, 255), cv::FILLED);
+            cv::putText(outputImage, spikesPerSecond, cv::Point(120, 700),
+                        cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(0, 0, 0));
         }
         // Resize into ROI
         cv::Mat outputROI(outputImage, cv::Rect(120, 400, 256, 256));
@@ -266,26 +274,31 @@ void modelDefinition(ModelSpec &model)
     //------------------------------------------------------------------------
     // Synapse populations
     //------------------------------------------------------------------------
-    model.addSynapsePopulation("DVS_Hidden1", SynapseMatrixType::DENSE,
-                               dvs, hidden1,
-                               initWeightUpdate<WeightUpdateModels::StaticPulse>({}, weightInit),
-                               initPostsynaptic<PostsynapticModels::DeltaCurr>());
-    model.addSynapsePopulation("Hidden1_Hidden2", SynapseMatrixType::DENSE,
-                               hidden1, hidden2,
-                               initWeightUpdate<WeightUpdateModels::StaticPulse>({}, weightInit),
-                               initPostsynaptic<PostsynapticModels::DeltaCurr>());
+    auto *dvsHidden1 = model.addSynapsePopulation("DVS_Hidden1", SynapseMatrixType::SPARSE,
+                                                  dvs, hidden1,
+                                                  initWeightUpdate<WeightUpdateModels::StaticPulse>({}, weightInit),
+                                                  initPostsynaptic<PostsynapticModels::DeltaCurr>());
+    auto *hidden1Hidden2 = model.addSynapsePopulation("Hidden1_Hidden2", SynapseMatrixType::SPARSE,
+                                                      hidden1, hidden2,
+                                                      initWeightUpdate<WeightUpdateModels::StaticPulse>({}, weightInit),
+                                                      initPostsynaptic<PostsynapticModels::DeltaCurr>());
     model.addSynapsePopulation("Hidden1_Output", SynapseMatrixType::DENSE,
                                hidden1, output,
                                initWeightUpdate<WeightUpdateModels::StaticPulse>({}, weightInit),
                                initPostsynaptic<PostsynapticModels::DeltaCurr>());
-    model.addSynapsePopulation("Hidden2_Hidden2", SynapseMatrixType::DENSE,
-                               hidden2, hidden2,
-                               initWeightUpdate<WeightUpdateModels::StaticPulse>({}, weightInit),
-                               initPostsynaptic<PostsynapticModels::DeltaCurr>());
+    auto *hidden2Hidden2 = model.addSynapsePopulation("Hidden2_Hidden2", SynapseMatrixType::SPARSE,
+                                                      hidden2, hidden2,
+                                                      initWeightUpdate<WeightUpdateModels::StaticPulse>({}, weightInit),
+                                                      initPostsynaptic<PostsynapticModels::DeltaCurr>());
     model.addSynapsePopulation("Hidden2_Output", SynapseMatrixType::DENSE,
                                hidden2, output,
                                initWeightUpdate<WeightUpdateModels::StaticPulse>({}, weightInit),
                                initPostsynaptic<PostsynapticModels::DeltaCurr>());
+
+    // Set max connections
+    dvsHidden1->setMaxConnections(44);
+    hidden1Hidden2->setMaxConnections(39);
+    hidden2Hidden2->setMaxConnections(8);
 }
 
 void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
@@ -312,19 +325,36 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     // Pop2 = hidden1
     // Pop3 = hidden2
     // Pop1 = output
-    loadArray("checkpoints_0_512_100_dvs_gesture_1234_256_256_False_True_alif_alif_1.0_1.0_1.0_1.0/99-Conn_Pop0_Pop2-g.bin",
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop0_Pop2-g.bin",
               runtime.getArray(*dvsHidden1, "g"));
-    loadArray("checkpoints_0_512_100_dvs_gesture_1234_256_256_False_True_alif_alif_1.0_1.0_1.0_1.0/99-Conn_Pop2_Pop3-g.bin",
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop0_Pop2-ragged_ind.bin",
+              runtime.getArray(*dvsHidden1, "ind"));
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop0_Pop2-row_length.bin",
+              runtime.getArray(*dvsHidden1, "rowLength"));
+
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop2_Pop3-g.bin",
               runtime.getArray(*hidden1Hidden2, "g"));
-    loadArray("checkpoints_0_512_100_dvs_gesture_1234_256_256_False_True_alif_alif_1.0_1.0_1.0_1.0/99-Conn_Pop2_Pop1-g.bin",
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop2_Pop3-ragged_ind.bin",
+              runtime.getArray(*hidden1Hidden2, "ind"));
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop2_Pop3-row_length.bin",
+              runtime.getArray(*hidden1Hidden2, "rowLength"));
+
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop2_Pop1-g.bin",
               runtime.getArray(*hidden1Output, "g"));
-    loadArray("checkpoints_0_512_100_dvs_gesture_1234_256_256_False_True_alif_alif_1.0_1.0_1.0_1.0/99-Conn_Pop3_Pop3-g.bin",
+
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop3_Pop3-g.bin",
               runtime.getArray(*hidden2Hidden2, "g"));
-    loadArray("checkpoints_0_512_100_dvs_gesture_1234_256_256_False_True_alif_alif_1.0_1.0_1.0_1.0/99-Conn_Pop3_Pop1-g.bin",
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop3_Pop3-ragged_ind.bin",
+              runtime.getArray(*hidden2Hidden2, "ind"));
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop3_Pop3-row_length.bin",
+              runtime.getArray(*hidden2Hidden2, "rowLength"));
+
+
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Conn_Pop3_Pop1-g.bin",
               runtime.getArray(*hidden2Output, "g"));
 
     // Load bias
-    loadArray("checkpoints_0_512_100_dvs_gesture_1234_256_256_False_True_alif_alif_1.0_1.0_1.0_1.0/99-Pop1-Bias.bin",
+    loadArray("checkpoints_512_100_dvs_gesture_1_1234_256_256_False_True_alif_alif_0.1_0.1_0.01_0.01/99-Pop1-Bias.bin",
               runtime.getArray(*output, "B"));
     runtime.initializeSparse();
 
@@ -340,6 +370,8 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     // Convert timestep to a duration
     const auto dtDuration = std::chrono::duration<double, std::milli>{1.0};
 
+    const float inputSpikeAlpha = std::exp(-1.0f / 100.0f);
+
     // Subtract ROI offset and shift right to put each coordinate in [0,32)
     using TransformX = DVS::CombineTransform<DVS::Subtract<45>, DVS::ShiftRight<3>>;
     using TransformY = DVS::CombineTransform<DVS::Subtract<2>, DVS::ShiftRight<3>>;
@@ -347,6 +379,7 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     dvsDevice.start();
 
     std::mutex inputMutex;
+    float numInputSpikes = 0.0f;
     cv::Mat inputImage(32, 32, CV_32FC3, 0.0f);
 
     // Create circular buffer of 10 spike images
@@ -357,7 +390,7 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     std::mutex outputMutex;
     float outputData[11];
     std::thread displayThread(displayThreadHandler,
-                              std::ref(inputMutex), std::cref(inputImage),
+                              std::ref(inputMutex), std::cref(inputImage), std::cref(numInputSpikes),
                               std::ref(outputMutex), std::cref(outputData),
                               std::ref(hiddenSpikeMutex), std::cref(hidden1SpikeImage), std::cref(hidden2SpikeImage));
 
@@ -374,7 +407,8 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
         {
             //TimerAccumulate timer(dvsGet);
             spikeVectorDVS->memsetHostPointer(0);
-            dvsDevice.readEventsHist<32, 2, Filter, TransformX, TransformY, true>(spikeVectorDVSPtr);
+            //dvsDevice.readEventsHist<32, 2, Filter, TransformX, TransformY, true>(spikeVectorDVSPtr);
+            dvsDevice.readEvents<32, Filter, TransformX, TransformY, true>(spikeVectorDVSPtr);
 
             // Copy to GPU
             spikeVectorDVS->pushToDevice();
@@ -384,42 +418,45 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
             //TimerAccumulate timer(render);
             std::lock_guard<std::mutex> lock(inputMutex);
 
-            {
-                for(unsigned int w = 0; w < 64; w++) {
-                    // Get word
-                    uint32_t spikeWord = spikeVectorDVSPtr[w];
+            unsigned int inputSpikeCount = 0;
+            for(unsigned int w = 0; w < 64; w++) {
+                // Get word
+                uint32_t spikeWord = spikeVectorDVSPtr[w];
 
-                    // Calculate neuron id of highest bit of this word
-                    unsigned int neuronID = (w * 32) + 31;
+                // Calculate neuron id of highest bit of this wnumInputSpikeord
+                unsigned int neuronID = (w * 32) + 31;
 
-                    // While bits remain
-                    while(spikeWord != 0) {
-                        // Calculate leading zeros
-                        const int numLZ = __builtin_clz(spikeWord);
+                // While bits remain
+                while(spikeWord != 0) {
+                    // Calculate leading zeros
+                    const int numLZ = __builtin_clz(spikeWord);
 
-                        // If all bits have now been processed, zero spike word
-                        // Otherwise shift past the spike we have found
-                        spikeWord = (numLZ == 31) ? 0 : (spikeWord << (numLZ + 1));
+                    // If all bits have now been processed, zero spike word
+                    // Otherwise shift past the spike we have found
+                    spikeWord = (numLZ == 31) ? 0 : (spikeWord << (numLZ + 1));
 
-                        // Subtract number of leading zeros from neuron ID
-                        neuronID -= numLZ;
+                    // Subtract number of leading zeros from neuron ID
+                    neuronID -= numLZ;
 
-                        // Convert to x, y, p
-                        const unsigned int neuronX = (neuronID / 2) % 32;
-                        const unsigned int neuronY = (neuronID / 2) / 32;
-                        const unsigned int neuronPolarity = neuronID % 2;
+                    // Convert to x, y, p
+                    const unsigned int neuronX = (neuronID / 2) % 32;
+                    const unsigned int neuronY = (neuronID / 2) / 32;
+                    const unsigned int neuronPolarity = neuronID % 2;
 
-                        // Add to pixel
-                        inputImage.at<cv::Vec3f>(neuronY, neuronX) += cv::Vec3f(0.0f, 1.0f - neuronPolarity, (float)neuronPolarity);
+                    // Add to pixel
+                    inputImage.at<cv::Vec3f>(neuronY, neuronX) += cv::Vec3f(0.0f, 1.0f - neuronPolarity, (float)neuronPolarity);
+                    inputSpikeCount++;
 
-                        // New neuron id of the highest bit of this word
-                        neuronID--;
-                    }
+                    // New neuron id of the highest bit of this word
+                    neuronID--;
                 }
-
-                // Decay image
-                inputImage *= 0.97f;
             }
+
+            // Calculate EWMA of number of input spikes
+            numInputSpikes = ((1.0f - inputSpikeAlpha) * (float)inputSpikeCount) + (inputSpikeAlpha * numInputSpikes);
+
+            // Decay image
+            inputImage *= 0.97f;
         }
 
         {
