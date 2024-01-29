@@ -129,9 +129,8 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, con
                           std::mutex &outputMutex, const float (&output)[11],
                           std::mutex &hiddenSpikeMutex, const cv::Mat &hidden1SpikeImage, const cv::Mat &hidden2SpikeImage)
 {
-    cv::namedWindow("Input", cv::WINDOW_NORMAL);
-    cv::resizeWindow("Input", 32 * 10,
-                     32 * 10);
+    cv::namedWindow("Output", cv::WINDOW_NORMAL);
+    cv::resizeWindow("Output", 1920, 1080);
 
     // Load background
     cv::Mat outputImage = cv::imread("background.png");
@@ -174,12 +173,12 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, con
         {
             std::lock_guard<std::mutex> lock(outputMutex);
             const size_t maxOutput = std::distance(std::begin(output), std::max_element(std::begin(output), std::end(output)));
-            const int barTop = 400;
+            const int barTop = 460;
             const int barHeight = 256;
             const int barWidth = 30;
             for(size_t i = 0; i < 11; i++) {
                 // White out whole are of rectangle
-                const int x = 1250 + (i * 40);
+                const int x = 1328 + (i * 40);
                 cv::rectangle(outputImage, cv::Point(x, barTop), cv::Point(x + barWidth, barTop + barHeight),
                               cv::Scalar::all(255), cv::FILLED);
 
@@ -207,22 +206,26 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, con
             // Clear background and draw spike rate
             char spikesPerSecond[255];
             sprintf(spikesPerSecond, "%d spikes per second", (int)std::round(numInputSpikes * 1000.0));
-            cv::rectangle(outputImage, cv::Point(120, 680), cv::Point(700, 720),
+            cv::rectangle(outputImage, cv::Point(120, 730), cv::Point(760, 770),
                           CV_RGB(255, 255, 255), cv::FILLED);
-            cv::putText(outputImage, spikesPerSecond, cv::Point(120, 700),
+            cv::putText(outputImage, spikesPerSecond, cv::Point(120, 750),
                         cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, CV_RGB(0, 0, 0));
         }
         // Resize into ROI
-        cv::Mat outputROI(outputImage, cv::Rect(120, 400, 256, 256));
-        cv::Mat hidden1ROI(outputImage, cv::Rect(454, 400, 256, 256));
-        cv::Mat hidden2ROI(outputImage, cv::Rect(852, 400, 256, 256));
+        cv::Mat outputROI(outputImage, cv::Rect(140, 460, 256, 256));
+        cv::Mat hidden1ROI(outputImage, cv::Rect(536, 460, 256, 256));
+        cv::Mat hidden2ROI(outputImage, cv::Rect(932, 460, 256, 256));
         cv::resize(inputImage8, outputROI, outputROI.size(), 0.0, 0.0, cv::INTER_NEAREST);
         cv::resize(hidden1SpikeImage8, hidden1ROI, hidden1ROI.size(), 0.0, 0.0, cv::INTER_NEAREST);
         cv::resize(hidden2SpikeImage8, hidden2ROI, hidden2ROI.size(), 0.0, 0.0, cv::INTER_NEAREST);
 
         // Render
         cv::imshow("Output", outputImage);
-        cv::waitKey(33);
+        if(cv::waitKey(33) == 'f') {
+            const auto currentFullscreen = cv::getWindowProperty("Output", cv::WND_PROP_FULLSCREEN);
+            cv::setWindowProperty("Output", cv::WND_PROP_FULLSCREEN,
+                                  (currentFullscreen == cv::WINDOW_NORMAL) ? cv::WINDOW_FULLSCREEN : cv::WINDOW_NORMAL);
+        }
     }
 }
 }
