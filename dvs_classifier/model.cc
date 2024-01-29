@@ -184,7 +184,7 @@ void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage, con
                               cv::Scalar::all(255), cv::FILLED);
 
                 // Draw bar
-                const int scaledOutput = int(6.4f * std::clamp(output[i], 0.0f, 40.0f));
+                const int scaledOutput = int(12.8f * std::clamp(output[i], 0.0f, 20.0f));
                 const auto colour = (i == maxOutput) ? CV_RGB(0, 255, 0) : CV_RGB(255, 0, 0);
                 cv::rectangle(outputImage, cv::Point(x, barTop + barHeight - scaledOutput), cv::Point(x + barWidth, barTop + barHeight),
                             colour, cv::FILLED);
@@ -270,6 +270,12 @@ void modelDefinition(ModelSpec &model)
     auto *output = model.addNeuronPopulation<OutputClassification>("Output", 11, outputParam, outputInit);
     hidden1->setSpikeRecordingEnabled(true);
     hidden2->setSpikeRecordingEnabled(true);
+#ifdef __AARCH64__
+    dvs->setExtraGlobalParamLocation("spikeVector", VarLocation::HOST_DEVICE_ZERO_COPY);
+    hidden1->setRecordingZeroCopyEnabled(true);
+    hidden2->setRecordingZeroCopyEnabled(true);
+    output->setVarLocation("Y", VarLocation::HOST_DEVICE_ZERO_COPY);
+#endif
 
     //------------------------------------------------------------------------
     // Synapse populations
