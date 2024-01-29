@@ -48,8 +48,8 @@
      id="namedview180"
      showgrid="false"
      inkscape:zoom="0.58287205"
-     inkscape:cx="1517.1264"
-     inkscape:cy="616.61494"
+     inkscape:cx="1247.7705"
+     inkscape:cy="613.18366"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
@@ -138,7 +138,7 @@
        style="font-size:64px;text-align:center;text-anchor:middle;fill:#0097a7;fill-opacity:1;">GPU-enhanced neural networks</tspan></text>
   <text
      xml:space="preserve"
-     style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;fill:#595959;fill-opacity:1;stroke:none;"
+     style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;fill:#595959;fill-opacity:1;stroke:none"
      x="12.131418"
      y="235.65291"
      id="text412"><tspan
@@ -149,7 +149,7 @@
        sodipodi:role="line"
        x="12.131418"
        y="285.65289"
-       id="tspan50">them to efficient edge devices.</tspan></text>
+       id="tspan50">them to efficient edge devices. Here, a sparse recurrent model is trained on DVS gesture.</tspan></text>
   <text
      xml:space="preserve"
      style="font-style:normal;font-weight:normal;font-size:26.66666603px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;writing-mode:vertical-lr;fill:#595959;fill-opacity:1;stroke:none;"
@@ -401,7 +401,7 @@
      sodipodi:nodetypes="cccccccccc" />
   <text
      xml:space="preserve"
-     style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:middle;fill:#0097a7;fill-opacity:1;stroke:none"
+     style="font-style:normal;font-weight:normal;font-size:48px;line-height:1.25;font-family:sans-serif;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:middle;fill:#0097a7;fill-opacity:1;stroke:none;"
      x="632.70959"
      y="914.59845"
      id="text406-3"><tspan
@@ -409,5 +409,5 @@
        x="632.70959"
        y="914.59845"
        id="tspan408-6"
-       style="font-size:64px;text-align:center;text-anchor:middle;fill:#0097a7;fill-opacity:1">https://genn-team.github.io</tspan></text>
+       style="font-size:48px;text-align:center;text-anchor:middle;fill:#0097a7;fill-opacity:1;">https://genn-team.github.io</tspan></text>
 </svg>
