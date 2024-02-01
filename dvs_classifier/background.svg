@@ -2,24 +2,24 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://creativecommons.org/ns#"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:xlink="http://www.w3.org/1999/xlink"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    version="1.1"
    id="svg178"
    width="1920"
    height="1080"
    viewBox="0 0 1920 1080"
    sodipodi:docname="background.svg"
-   inkscape:export-filename="/its/home/jk421/genn_examples/dvs_classifier/background.png"
+   inkscape:export-filename="background.png"
    inkscape:export-xdpi="96"
    inkscape:export-ydpi="96"
-   inkscape:version="0.92.3 (2405546, 2018-03-11)">
+   inkscape:version="1.2.2 (732a01da63, 2022-12-09)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
   <metadata
      id="metadata184">
     <rdf:RDF>
@@ -43,22 +43,25 @@
      guidetolerance="10"
      inkscape:pageopacity="1"
      inkscape:pageshadow="2"
-     inkscape:window-width="2560"
-     inkscape:window-height="1386"
+     inkscape:window-width="1920"
+     inkscape:window-height="1017"
      id="namedview180"
      showgrid="false"
      inkscape:zoom="0.58287205"
-     inkscape:cx="1247.7705"
-     inkscape:cy="613.18366"
-     inkscape:window-x="0"
-     inkscape:window-y="0"
+     inkscape:cx="895.56533"
+     inkscape:cy="614.19998"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg178"
      inkscape:snap-bbox="true"
      inkscape:snap-to-guides="true"
      inkscape:snap-object-midpoints="true"
      inkscape:measure-start="972.769,473.517"
-     inkscape:measure-end="1277.3,362.858" />
+     inkscape:measure-end="1277.3,362.858"
+     inkscape:showpageshadow="2"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1" />
   <text
      xml:space="preserve"
      style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;writing-mode:vertical-lr;fill:#000000;fill-opacity:1;stroke:none"
@@ -122,20 +125,28 @@
      width="76.309608" />
   <text
      xml:space="preserve"
-     style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:middle;fill:#0097a7;fill-opacity:1;stroke:none;"
-     x="957.92188"
-     y="90.075821"
+     style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:middle;fill:#0097a7;fill-opacity:1;stroke:none"
+     x="959.21875"
+     y="72.919395"
      id="text406"><tspan
        sodipodi:role="line"
-       id="tspan404"
-       x="957.92188"
-       y="90.075821"
-       style="font-size:64px;text-align:center;text-anchor:middle;fill:#0097a7;fill-opacity:1;">Spike-based classification using low-power</tspan><tspan
-       sodipodi:role="line"
-       x="957.92188"
-       y="170.07582"
+       x="959.21875"
+       y="72.919395"
        id="tspan408"
-       style="font-size:64px;text-align:center;text-anchor:middle;fill:#0097a7;fill-opacity:1;">GPU-enhanced neural networks</tspan></text>
+       style="font-size:64px;text-align:center;text-anchor:middle;fill:#0097a7;fill-opacity:1">Spiking classification using GPU-enhanced neural networks</tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-style:normal;font-weight:normal;font-size:53.3333px;line-height:1.25;font-family:sans-serif;text-align:center;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:middle;fill:#0097a7;fill-opacity:1;stroke:none"
+     x="959.96094"
+     y="156.82642"
+     id="text406-8"><tspan
+       sodipodi:role="line"
+       x="959.96094"
+       y="156.82642"
+       id="tspan408-67"
+       style="font-size:53.3333px;text-align:center;text-anchor:middle;fill:#0097a7;fill-opacity:1">Can <tspan
+   style="font-weight:bold"
+   id="tspan351">you</tspan> air drum like an IBMer?</tspan></text>
   <text
      xml:space="preserve"
      style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;fill:#595959;fill-opacity:1;stroke:none"
