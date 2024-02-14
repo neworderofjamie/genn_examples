@@ -161,7 +161,7 @@ void modelDefinition(ModelSpec &model)
 
                             // Set max dendritic delay and span type
                             synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
-                            synPop->setSpanType(Parameters::presynapticParallelism ? SynapseGroup::SpanType::PRESYNAPTIC : SynapseGroup::SpanType::POSTSYNAPTIC);
+                            synPop->setParallelismHint(Parameters::presynapticParallelism ? SynapseGroup::ParallelismHint::PRESYNAPTIC : SynapseGroup::ParallelismHint::POSTSYNAPTIC);
                             if(Parameters::presynapticParallelism) {
                                 synPop->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
                             }
@@ -190,7 +190,7 @@ void modelDefinition(ModelSpec &model)
 
                             // Set max dendritic delay and span type
                             synPop->setMaxDendriticDelayTimesteps(maxDendriticDelaySlots);
-                            synPop->setSpanType(Parameters::presynapticParallelism ? SynapseGroup::SpanType::PRESYNAPTIC : SynapseGroup::SpanType::POSTSYNAPTIC);
+                            synPop->setParallelismHint(Parameters::presynapticParallelism ? SynapseGroup::ParallelismHint::PRESYNAPTIC : SynapseGroup::ParallelismHint::POSTSYNAPTIC);
                             if(Parameters::presynapticParallelism) {
                                 synPop->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
                             }

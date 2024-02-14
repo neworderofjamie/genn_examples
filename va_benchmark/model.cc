@@ -80,10 +80,10 @@ void modelDefinition(ModelSpec &model)
 
     if(Parameters::presynapticParallelism) {
         // Set span type
-        ee->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-        ei->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-        ii->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-        ie->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+        ee->setParallelismHint(SynapseGroup::ParallelismHint::PRESYNAPTIC);
+        ei->setParallelismHint(SynapseGroup::ParallelismHint::PRESYNAPTIC);
+        ii->setParallelismHint(SynapseGroup::ParallelismHint::PRESYNAPTIC);
+        ie->setParallelismHint(SynapseGroup::ParallelismHint::PRESYNAPTIC);
 
         // Set threads per spike
         ee->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
