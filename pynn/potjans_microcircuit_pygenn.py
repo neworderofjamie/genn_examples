@@ -1,7 +1,7 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
 
-from pygenn import (GeNNModel, VarLocation, SpanType, init_postsynaptic,
+from pygenn import (GeNNModel, VarLocation, init_postsynaptic,
                     init_sparse_connectivity, init_weight_update, init_var)
 from scipy.stats import norm
 from six import iteritems, itervalues
@@ -271,7 +271,6 @@ for trg_layer in LAYER_NAMES:
                         syn_pop.max_dendritic_delay_timesteps = max_dendritic_delay_slots
 
                         if PROCEDURAL_CONNECTIVITY:
-                            syn_pop.span_type = SpanType.PRESYNAPTIC
                             syn_pop.num_threads_per_spike = NUM_THREADS_PER_SPIKE
                     # Inhibitory
                     else:
@@ -293,7 +292,6 @@ for trg_layer in LAYER_NAMES:
                         syn_pop.max_dendritic_delay_timesteps = max_dendritic_delay_slots
 
                         if PROCEDURAL_CONNECTIVITY:
-                            syn_pop.span_type = SpanType.PRESYNAPTIC
                             syn_pop.num_threads_per_spike = NUM_THREADS_PER_SPIKE
 print("Total neurons=%u, total synapses=%u" % (total_neurons, total_synapses))
 

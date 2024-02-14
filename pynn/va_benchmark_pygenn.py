@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 
-from pygenn import (GeNNModel, VarLocation, SpanType, init_var, 
+from pygenn import (GeNNModel, VarLocation, init_var,
                     init_postsynaptic, init_weight_update,
                     init_sparse_connectivity)
 
