@@ -23,14 +23,13 @@ for p in range(100):
 poisson_ids = np.asarray(poisson_ids, dtype=int)
 poisson_times = np.asarray(poisson_times)
 
-# Calculate end spikes
+# Calculate start and end index of each neurons spikes in sorted array
 end_spike = np.cumsum(np.bincount(poisson_ids, minlength=100))
+start_spike = np.concatenate(([0], end_spike[0:-1]))
 
 # Sort events first by neuron id and then 
 # by time and use to order spike times
 poisson_times = poisson_times[np.lexsort((poisson_times, poisson_ids))]
-
-start_spike = np.concatenate(([0], end_spike[0:-1]))
 
 # Build model
 model = GeNNModel("float", "spike_source_array")

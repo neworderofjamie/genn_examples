@@ -2,38 +2,36 @@ import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 
-from pygenn import genn_wrapper
-from pygenn import genn_model
+from pygenn import GeNNModel
+from pygenn import (create_weight_update_model, init_postsynaptic,
+                    init_sparse_connectivity, init_weight_update)
 
 # Additive STDP model with nearest neighbour spike pairing
-hebbian_stdp_model = genn_model.create_custom_weight_update_class(
+hebbian_stdp_model = create_weight_update_model(
     "hebbian_stdp",
-    param_names=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
-    var_name_types=[("g", "scalar")],
+    params=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
+    vars=[("g", "scalar")],
     
     # Code that gets called whenever a presynaptic spike arrives at the synapse
-    sim_code=
+    pre_spike_syn_code=
         """
-        $(addToInSyn, $(g));
-        const scalar dt = $(t) - $(sT_post);
+        addToPost(g);
+        const scalar dt = t - st_post;
         if(dt > 0) {
-            const scalar newWeight = $(g) - ($(aMinus) * exp(-dt / $(tauMinus)));
-            $(g) = fmin($(wMax), fmax($(wMin), newWeight));
+            const scalar newWeight = g - (aMinus * exp(-dt / tauMinus));
+            g = fmin(wMax, fmax(wMin, newWeight));
         }
         """,
 
     # Code that gets called whenever a back-propagated postsynaptic spike arrives at the synapse
-    learn_post_code=
+    post_spike_syn_code=
         """
-        const scalar dt = $(t) - $(sT_pre);
+        const scalar dt = t - st_pre;
         if(dt > 0) {
-            const scalar newWeight = $(g) + ($(aPlus) * exp(-dt / $(tauPlus)));
-            $(g) = fmin($(wMax), fmax($(wMin), newWeight));
+            const scalar newWeight = g + (aPlus * exp(-dt / tauPlus));
+            g = fmin(wMax, fmax(wMin, newWeight));
         }
-        """,
-
-    is_pre_spike_time_required=True,
-    is_post_spike_time_required=True)
+        """)
 
 # Model parameters
 NUM_NEURONS = 14
@@ -67,8 +65,8 @@ post_stim_spike_times = np.concatenate([p + np.arange(0, TIME_BETWEEN_PAIRS * NU
                                        for p in post_phase])
 
 # Create model using single-precion and 1ms timesteps
-model = genn_model.GeNNModel("float", "stdp_curve_pygenn")
-model.dT = 1.0
+model = GeNNModel("float", "stdp_curve_pygenn")
+model.dt = 1.0
 
 # Add a neuron population and two spike sources to provide pre and postsynaptic stimuli
 neuron_pop = model.add_neuron_population("Pop", NUM_NEURONS, "LIF", lif_params, lif_init)
@@ -76,24 +74,24 @@ pre_stim_pop = model.add_neuron_population("PreStim", NUM_NEURONS, "SpikeSourceA
 post_stim_pop = model.add_neuron_population("PostStim", NUM_NEURONS, "SpikeSourceArray", {}, stim_init)
 
 # Set spike source spike times
-pre_stim_pop.set_extra_global_param("spikeTimes", pre_stim_spike_times)
-post_stim_pop.set_extra_global_param("spikeTimes", post_stim_spike_times)
+pre_stim_pop.extra_global_params["spikeTimes"].set_init_values(pre_stim_spike_times)
+post_stim_pop.extra_global_params["spikeTimes"].set_init_values(post_stim_spike_times)
 
 # Add STDP connection between presynaptic spike source and neurons
 # Uses build in one-to-one connectivity and initialises all weights to 0.5 (midway between wMin and wMax)
-pre_stim_to_pop = model.add_synapse_population("PreStimToPop", "SPARSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+pre_stim_to_pop = model.add_synapse_population("PreStimToPop", "SPARSE",
     pre_stim_pop, neuron_pop,
-    hebbian_stdp_model, stdp_params, {"g": 0.5}, {}, {},
-    "DeltaCurr", {}, {},
-    genn_model.init_connectivity("OneToOne", {}))
+    init_weight_update(hebbian_stdp_model, stdp_params, {"g": 0.5}),
+    init_postsynaptic("DeltaCurr"),
+    init_sparse_connectivity("OneToOne"))
 
 # Add static connection between postsynaptic spike source and neurons
 # Uses built in one-to-one connectivity and initialises all weights to large value to cause immediate spikes
-model.add_synapse_population("PostStimToPop", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("PostStimToPop", "SPARSE",
     post_stim_pop, neuron_pop,
-    "StaticPulse", {}, {"g": 8.0}, {}, {},
-    "ExpCurr", {"tau": 5.0}, {},
-    genn_model.init_connectivity("OneToOne", {}))
+    init_weight_update("StaticPulseConstantWeight", {"g": 8.0}),
+    init_postsynaptic("ExpCurr", {"tau": 5.0}),
+    init_sparse_connectivity("OneToOne", {}))
 
 # Build and load model
 model.build()
@@ -105,12 +103,12 @@ while model.t < 60200.0:
 
 # Download weight and connectivity from GPU and access via synapse group
 # **NOTE** because connectivity is initialised on device it also needs downloading
-pre_stim_to_pop.pull_var_from_device("g")
 pre_stim_to_pop.pull_connectivity_from_device()
-weight = pre_stim_to_pop.get_var_values("g")
+g = pre_stim_to_pop.vars["g"]
+g.pull_from_device()
 
 # Scale weights relative to initial value
-weight = (weight - 0.5) / 0.5
+weight = (g.current_values - 0.5) / 0.5
 
 # Create plot
 figure, axis = plt.subplots()
