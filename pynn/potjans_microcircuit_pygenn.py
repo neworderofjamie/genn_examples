@@ -1,7 +1,8 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
 
-from pygenn import genn_model, genn_wrapper
+from pygenn import (GeNNModel, VarLocation, init_postsynaptic,
+                    init_sparse_connectivity, init_weight_update, init_var)
 from scipy.stats import norm
 from six import iteritems, itervalues
 from time import perf_counter
@@ -149,18 +150,18 @@ def get_full_mean_input_current(layer, pop):
 # ----------------------------------------------------------------------------
 # Network creation
 # ----------------------------------------------------------------------------
-model = genn_model.GeNNModel("float", "potjans_microcircuit")
-model.dT = DT_MS
-model._model.set_merge_postsynaptic_models(True)
-model._model.set_default_narrow_sparse_ind_enabled(True)
+model = GeNNModel("float", "potjans_microcircuit")
+model.dt = DT_MS
+model.fuse_postsynaptic_models = True
+model.default_narrow_sparse_ind_enabled = True
 model.timing_enabled = MEASURE_TIMING
-model.default_var_location = genn_wrapper.VarLocation_DEVICE
-model.default_sparse_connectivity_location = genn_wrapper.VarLocation_DEVICE
+model.default_var_location = VarLocation.DEVICE
+model.default_sparse_connectivity_location = VarLocation.DEVICE
 
-lif_init = {"V": genn_model.init_var("Normal", {"mean": -58.0, "sd": 5.0}), "RefracTime": 0.0}
+lif_init = {"V": init_var("Normal", {"mean": -58.0, "sd": 5.0}), "RefracTime": 0.0}
 poisson_init = {"current": 0.0}
 
-exp_curr_params = {"tau": 0.5}
+exp_curr_init = init_postsynaptic("ExpCurr", {"tau": 0.5})
 
 quantile = 0.9999
 normal_quantile_cdf = norm.ppf(quantile)
@@ -192,7 +193,7 @@ for layer in LAYER_NAMES:
 
         pop_size = get_scaled_num_neurons(layer, pop)
         neuron_pop = model.add_neuron_population(pop_name, pop_size, "LIF", lif_params, lif_init)
-        model.add_current_source(pop_name + "_poisson", "PoissonExp", pop_name, poisson_params, poisson_init)
+        model.add_current_source(pop_name + "_poisson", "PoissonExp", neuron_pop, poisson_params, poisson_init)
 
         # Enable spike recording
         neuron_pop.spike_recording_enabled = True
@@ -238,7 +239,7 @@ for trg_layer in LAYER_NAMES:
                           % (src_name, trg_name, num_connections, mean_weight, weight_sd, MEAN_DELAY[src_pop], DELAY_SD[src_pop]))
 
                     # Build parameters for fixed number total connector
-                    connect_params = {"total": num_connections}
+                    connect_params = {"num": num_connections}
 
                     # Build distribution for delay parameters
                     d_dist = {"mean": MEAN_DELAY[src_pop], "sd": DELAY_SD[src_pop], "min": 0.0, "max": max_delay[src_pop]}
@@ -248,7 +249,7 @@ for trg_layer in LAYER_NAMES:
                     # Build unique synapse name
                     synapse_name = src_name + "_" + trg_name
 
-                    matrix_type = "PROCEDURAL_PROCEDURALG" if PROCEDURAL_CONNECTIVITY else "SPARSE_INDIVIDUALG"
+                    matrix_type = "PROCEDURAL" if PROCEDURAL_CONNECTIVITY else "SPARSE"
 
                     # Excitatory
                     if src_pop == "E":
@@ -257,22 +258,20 @@ for trg_layer in LAYER_NAMES:
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": 0.0, "max": float(np.finfo(np.float32).max)}
 
                         # Create weight parameters
-                        static_synapse_init = {"g": genn_model.init_var("NormalClipped", w_dist),
-                                               "d": genn_model.init_var("NormalClippedDelay", d_dist)}
-
+                        static_synapse_init = init_weight_update("StaticPulseDendriticDelay", {},
+                                                                 {"g": init_var("NormalClipped", w_dist),
+                                                                  "d": init_var("NormalClippedDelay", d_dist)})
                         # Add synapse population
-                        syn_pop = model.add_synapse_population(synapse_name, matrix_type, genn_wrapper.NO_DELAY,
+                        syn_pop = model.add_synapse_population(synapse_name, matrix_type,
                             neuron_populations[src_name], neuron_populations[trg_name],
-                            "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
-                            "ExpCurr", exp_curr_params, {},
-                            genn_model.init_connectivity("FixedNumberTotalWithReplacement", connect_params))
+                            static_synapse_init, exp_curr_init,
+                            init_sparse_connectivity("FixedNumberTotalWithReplacement", connect_params))
 
                         # Set max dendritic delay and span type
-                        syn_pop.pop.set_max_dendritic_delay_timesteps(max_dendritic_delay_slots)
+                        syn_pop.max_dendritic_delay_timesteps = max_dendritic_delay_slots
 
                         if PROCEDURAL_CONNECTIVITY:
-                            syn_pop.pop.set_span_type(genn_wrapper.SynapseGroup.SpanType_PRESYNAPTIC)
-                            syn_pop.pop.set_num_threads_per_spike(NUM_THREADS_PER_SPIKE)
+                            syn_pop.num_threads_per_spike = NUM_THREADS_PER_SPIKE
                     # Inhibitory
                     else:
                         # Build distribution for weight parameters
@@ -280,22 +279,20 @@ for trg_layer in LAYER_NAMES:
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": float(-np.finfo(np.float32).max), "max": 0.0}
 
                         # Create weight parameters
-                        static_synapse_init = {"g": genn_model.init_var("NormalClipped", w_dist),
-                                               "d": genn_model.init_var("NormalClippedDelay", d_dist)}
-
+                        static_synapse_init = init_weight_update("StaticPulseDendriticDelay", {},
+                                                                 {"g": init_var("NormalClipped", w_dist),
+                                                                  "d": init_var("NormalClippedDelay", d_dist)})
                         # Add synapse population
-                        syn_pop = model.add_synapse_population(synapse_name, matrix_type, genn_wrapper.NO_DELAY,
+                        syn_pop = model.add_synapse_population(synapse_name, matrix_type,
                             neuron_populations[src_name], neuron_populations[trg_name],
-                            "StaticPulseDendriticDelay", {}, static_synapse_init, {}, {},
-                            "ExpCurr", exp_curr_params, {},
-                            genn_model.init_connectivity("FixedNumberTotalWithReplacement", connect_params))
+                            static_synapse_init, exp_curr_init,
+                            init_sparse_connectivity("FixedNumberTotalWithReplacement", connect_params))
 
                         # Set max dendritic delay and span type
-                        syn_pop.pop.set_max_dendritic_delay_timesteps(max_dendritic_delay_slots)
+                        syn_pop.max_dendritic_delay_timesteps = max_dendritic_delay_slots
 
                         if PROCEDURAL_CONNECTIVITY:
-                            syn_pop.pop.set_span_type(genn_wrapper.SynapseGroup.SpanType_PRESYNAPTIC)
-                            syn_pop.pop.set_num_threads_per_spike(NUM_THREADS_PER_SPIKE)
+                            syn_pop.num_threads_per_spike = NUM_THREADS_PER_SPIKE
 print("Total neurons=%u, total synapses=%u" % (total_neurons, total_synapses))
 
 if BUILD_MODEL:
@@ -345,17 +342,17 @@ start_id = 0
 bar_y = 0.0
 for pop in ordered_neuron_populations:
     # Get recording data
-    spike_times, spike_ids = pop.spike_recording_data
+    spike_times, spike_ids = pop.spike_recording_data[0]
     
     # Plot spikes
     actor = axes[0].scatter(spike_times, spike_ids + start_id, s=2, edgecolors="none")
 
     # Plot bar showing rate in matching colour
-    axes[1].barh(bar_y, len(spike_times) / (float(pop.size) * DURATION_MS / 1000.0), 
+    axes[1].barh(bar_y, len(spike_times) / (float(pop.num_neurons) * DURATION_MS / 1000.0), 
                  align="center", color=actor.get_facecolor(), ecolor="black")
 
     # Update offset
-    start_id += pop.size
+    start_id += pop.num_neurons
 
     # Update bar pos
     bar_y += 1.0

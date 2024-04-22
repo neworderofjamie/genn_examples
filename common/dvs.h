@@ -69,6 +69,16 @@ struct Scale
     }
 };
 
+//! Shift coordinate right
+template<int Shift>
+struct ShiftRight
+{
+    static constexpr uint32_t transform(uint32_t x)
+    {
+        return x >> Shift;
+    }
+};
+
 //! Subtract value from event coordinate
 template<uint32_t Offset>
 struct Subtract
@@ -149,7 +159,7 @@ public:
         m_DVSHandle.configSet(modAddr, paramAddr, param);
     }
 
-    template<unsigned int outputSize, typename Filter = NoFilter, typename TransformX = NoTransform, typename TransformY = NoTransform>
+    template<unsigned int OutputSize, typename Filter = NoFilter, typename TransformX = NoTransform, typename TransformY = NoTransform, bool UsePolarity = false>
     void readEvents(uint32_t *spikeVector)
     {
         // Get data from DVS
@@ -176,12 +186,67 @@ public:
                         // Transform event
                         const uint32_t transformX = TransformX::transform(event.getX());
                         const uint32_t transformY = TransformY::transform(event.getY());
-                        
+
                         // Convert transformed X and Y into GeNN address
-                        const unsigned int gennAddress = (transformX + (transformY * outputSize));
-                        
+                        const unsigned int gennAddress = UsePolarity
+                            ? ((event.getPolarity() ? 1 : 0) + (transformX * 2) + (transformY * 2 * OutputSize))
+                            : (transformX + (transformY * OutputSize));
+
                         // Set spike bit
                         spikeVector[gennAddress / 32] |= (1 << (gennAddress % 32));
+                    }
+                }
+            }
+        }
+    }
+
+    template<unsigned int OutputSize, int Threshold, typename Filter = NoFilter,
+             typename TransformX = NoTransform, typename TransformY = NoTransform,
+             bool UsePolarity = false>
+    void readEventsHist(uint32_t *spikeVector)
+    {
+        // Create zeroed stack array to hold histrogram
+        std::array<int, OutputSize * OutputSize> histogram{0};
+
+        // Get data from DVS
+        auto packetContainer = m_DVSHandle.dataGet();
+        if (packetContainer == nullptr) {
+            return;
+        }
+
+        // Loop through packets4
+        for(auto &packet : *packetContainer) {
+            // If packet's empty, skip
+            if (packet == nullptr) {
+                continue;
+            }
+            // Otherwise if this is a polarity event
+            else if (packet->getEventType() == POLARITY_EVENT) {
+                // Cast to polarity packet
+                auto polarityPacket = std::static_pointer_cast<libcaer::events::PolarityEventPacket>(packet);
+
+                // Loop through events
+                for(const auto &event : *polarityPacket) {
+                    // If event isn't filtered
+                    if(Filter::shouldAllow(event)) {
+                        // Transform event
+                        const uint32_t transformX = TransformX::transform(event.getX());
+                        const uint32_t transformY = TransformY::transform(event.getY());
+
+                        // Increment histogram
+                        const int histAddress = transformX + (transformY * OutputSize);
+                        int &histBin = histogram[histAddress];
+                        const int increment = UsePolarity ? (event.getPolarity() ? 1 : -1) : 1;
+                        histBin += increment;
+
+                        // If bin has reached threshold
+                        if(std::abs(histBin) > Threshold) {
+                            // Add polarity of required and set spike bit
+                            const unsigned int gennAddress = UsePolarity
+                                ? ((histAddress * 2) + ((histBin > 0) ? 1 : 0))
+                                : histAddress;
+                            spikeVector[gennAddress / 32] |= (1 << (gennAddress % 32));
+                        }
                     }
                 }
             }

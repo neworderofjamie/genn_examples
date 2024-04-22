@@ -7,30 +7,30 @@
 //----------------------------------------------------------------------------
 class RMaxProp : public CustomUpdateModels::Base
 {
-    DECLARE_CUSTOM_UPDATE_MODEL(RMaxProp, 5, 1, 2);
+    DECLARE_SNIPPET(RMaxProp);
 
     SET_UPDATE_CODE(
         "// Get gradients\n"
         "const scalar gradient = $(m) / $(updateTimesteps);\n"
         "// Calculate learning rate r\n"
         "$(upsilon) = fmax($(upsilon) * $(expRMS), gradient * gradient);\n"
-        "const scalar r = $(r0) / (sqrt($(upsilon)) + $(epsilon));\n"
+        "const scalar r = *$(r0) / (sqrt($(upsilon)) + $(epsilon));\n"
         "// Update synaptic parameter\n"
         "$(variable) += r * gradient;\n"
         "$(variable) = fmin($(wMax), fmax($(wMin), $(variable)));\n"
         "$(m) = 0.0;\n");
 
-    SET_EXTRA_GLOBAL_PARAMS({{"r0", "scalar"}})
+    SET_EXTRA_GLOBAL_PARAMS({{"r0", "scalar*"}})
     
     SET_PARAM_NAMES({"updateTime", "tauRMS", "epsilon", "wMin", "wMax"});
     SET_DERIVED_PARAMS({
-        {"updateTimesteps", [](const std::vector<double> &pars, double dt){ return pars[0] / dt; }},
-        {"expRMS", [](const std::vector<double> &pars, double){ return std::exp(-pars[0] / pars[1]); }}});
+        {"updateTimesteps", [](const ParamValues &pars, double dt){ return pars.at("updateTime") / dt; }},
+        {"expRMS", [](const ParamValues &pars, double){ return std::exp(-pars.at("updateTime") / pars.at("tauRMS")); }}});
     SET_VARS({{"upsilon", "scalar"}});
     SET_VAR_REFS({{"m", "scalar", VarAccessMode::READ_WRITE}, 
                   {"variable", "scalar", VarAccessMode::READ_WRITE}});
 };
-IMPLEMENT_MODEL(RMaxProp);
+IMPLEMENT_SNIPPET(RMaxProp);
 
 //----------------------------------------------------------------------------
 // SuperSpikeBase
@@ -73,7 +73,7 @@ class SuperSpikeBase : public WeightUpdateModels::Base
 class SuperSpike : public SuperSpikeBase
 {
 public:
-    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpike, 3, 4, 2, 1);
+    DECLARE_SNIPPET(SuperSpike);
     
     SET_SYNAPSE_DYNAMICS_CODE(
         "// Filtered eligibility trace\n"
@@ -84,7 +84,7 @@ public:
         "$(m) += $(lambda) * $(errTilda_post);\n");
 
 };
-IMPLEMENT_MODEL(SuperSpike);
+IMPLEMENT_SNIPPET(SuperSpike);
 
 //----------------------------------------------------------------------------
 // SuperSpikeApprox
@@ -92,7 +92,7 @@ IMPLEMENT_MODEL(SuperSpike);
 class SuperSpikeApprox : public SuperSpikeBase
 {
 public:
-    DECLARE_WEIGHT_UPDATE_MODEL(SuperSpikeApprox, 3, 4, 2, 1);
+    DECLARE_SNIPPET(SuperSpikeApprox);
     
     SET_EVENT_THRESHOLD_CONDITION_CODE("$(zTilda) > 1.0E-4");
     SET_EVENT_CODE(
@@ -104,7 +104,7 @@ public:
         "$(m) += $(lambda) * $(errTilda_post);\n");
 
 };
-IMPLEMENT_MODEL(SuperSpikeApprox);
+IMPLEMENT_SNIPPET(SuperSpikeApprox);
 
 //----------------------------------------------------------------------------
 // Feedback
@@ -112,13 +112,13 @@ IMPLEMENT_MODEL(SuperSpikeApprox);
 class Feedback : public WeightUpdateModels::Base
 {
 public:
-    DECLARE_MODEL(Feedback, 0, 1);
+    DECLARE_SNIPPET(Feedback);
 
     SET_VARS({{"w", "scalar"}});
 
     SET_SYNAPSE_DYNAMICS_CODE("$(addToInSyn, $(w) * $(errTilda_pre));\n");
 };
-IMPLEMENT_MODEL(Feedback);
+IMPLEMENT_SNIPPET(Feedback);
 
 //---------------------------------------------------------------------------
 // FeedbackPSM
@@ -127,13 +127,13 @@ IMPLEMENT_MODEL(Feedback);
 class FeedbackPSM : public PostsynapticModels::Base
 {
 public:
-    DECLARE_MODEL(FeedbackPSM, 0, 0);
+    DECLARE_SNIPPET(FeedbackPSM);
 
     SET_APPLY_INPUT_CODE(
         "$(ISynFeedback) += $(inSyn);\n"
         "$(inSyn) = 0;\n");
 };
-IMPLEMENT_MODEL(FeedbackPSM);
+IMPLEMENT_SNIPPET(FeedbackPSM);
 
 //----------------------------------------------------------------------------
 // Hidden
@@ -141,7 +141,7 @@ IMPLEMENT_MODEL(FeedbackPSM);
 class Hidden : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Hidden, 5, 3);
+    DECLARE_SNIPPET(Hidden);
 
     SET_PARAM_NAMES({
         "C",            // 0 - Membrane capacitance
@@ -151,12 +151,10 @@ public:
         "tauRefrac"});  // 4 - Refractory time constant (ms)
 
     SET_DERIVED_PARAMS({
-        {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }}});
+        {"ExpTC", [](const ParamValues &pars, double dt){ return std::exp(-dt / pars.at("tauMem")); }},
+        {"Rmembrane", [](const ParamValues &pars, double){ return  pars.at("tauMem") / pars.at("C"); }}});
 
     SET_VARS({{"V", "scalar"}, {"refracTime", "scalar"}, {"errTilda", "scalar"}});
-
-    SET_EXTRA_GLOBAL_PARAMS({{"spikeTimes", "scalar*"}});
 
     SET_ADDITIONAL_INPUT_VARS({{"ISynFeedback", "scalar", 0.0}});
 
@@ -182,7 +180,7 @@ public:
 
     SET_NEEDS_AUTO_REFRACTORY(false);
 };
-IMPLEMENT_MODEL(Hidden);
+IMPLEMENT_SNIPPET(Hidden);
 
 //----------------------------------------------------------------------------
 // Output
@@ -190,7 +188,7 @@ IMPLEMENT_MODEL(Hidden);
 class Output : public NeuronModels::Base
 {
 public:
-    DECLARE_MODEL(Output, 8, 8);
+    DECLARE_SNIPPET(Output);
 
     SET_PARAM_NAMES({
         "C",            // 0 - Membrane capacitance
@@ -203,13 +201,13 @@ public:
         "tauAvgErr"});  // 7 - Average error time constant (ms)
 
     SET_DERIVED_PARAMS({
-        {"ExpTC", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[1]); }},
-        {"Rmembrane", [](const std::vector<double> &pars, double){ return  pars[1] / pars[0]; }},
-        {"normFactor", [](const std::vector<double> &pars, double){ return 1.0 / (-std::exp(-calcTPeak(pars[5], pars[6]) / pars[5]) + std::exp(-calcTPeak(pars[5], pars[6]) / pars[6])); }},
-        {"tRiseMult", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[5]); }},
-        {"tDecayMult", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[6]); }},
-        {"tPeak", [](const std::vector<double> &pars, double){ return calcTPeak(pars[5], pars[6]); }},
-        {"mulAvgErr", [](const std::vector<double> &pars, double dt){ return std::exp(-dt / pars[7]); }}});
+        {"ExpTC", [](const ParamValues &pars, double dt){ return std::exp(-dt / pars.at("tauMem")); }},
+        {"Rmembrane", [](const ParamValues &pars, double){ return  pars.at("tauMem") / pars.at("C"); }},
+        {"normFactor", [](const ParamValues&pars, double){ return 1.0 / (-std::exp(-calcTPeak(pars.at("tauRise"), pars.at("tauDecay")) / pars.at("tauRise")) + std::exp(-calcTPeak(pars.at("tauRise"), pars.at("tauDecay")) / pars.at("tauDecay"))); }},
+        {"tRiseMult", [](const ParamValues &pars, double dt){ return std::exp(-dt / pars.at("tauRise")); }},
+        {"tDecayMult", [](const ParamValues &pars, double dt){ return std::exp(-dt / pars.at("tauDecay")); }},
+        {"tPeak", [](const ParamValues &pars, double){ return calcTPeak(pars.at("tauRise"), pars.at("tauDecay")); }},
+        {"mulAvgErr", [](const ParamValues &pars, double dt){ return std::exp(-dt / pars.at("tauAvgErr")); }}});
 
     SET_VARS({{"V", "scalar"}, {"refracTime", "scalar"}, {"errRise", "scalar"}, {"errTilda", "scalar"}, {"avgSqrErr", "scalar"},
               {"errDecay", "scalar"}, {"startSpike", "unsigned int"}, {"endSpike", "unsigned int"}});
@@ -255,7 +253,7 @@ private:
         return ((tauDecay * tauRise) / (tauDecay - tauRise)) * std::log(tauDecay / tauRise);
     }
 };
-IMPLEMENT_MODEL(Output);
+IMPLEMENT_SNIPPET(Output);
 
 void modelDefinition(NNmodel &model)
 {
@@ -266,92 +264,51 @@ void modelDefinition(NNmodel &model)
     //------------------------------------------------------------------------
     // Input layer parameters
     //------------------------------------------------------------------------
-    NeuronModels::SpikeSourceArray::VarValues inputVars(
-        uninitialisedVar(),     // 0 - startSpike
-        uninitialisedVar());    // 1 - endSpike
+    VarValues inputVars{{"startSpike", uninitialisedVar()}, {"endSpike", uninitialisedVar()}};
 
     //------------------------------------------------------------------------
     // Hidden layer parameters
     //------------------------------------------------------------------------
-    Hidden::ParamValues hiddenParams(
-        10.0,                   // 0 - Membrane capacitance
-        10.0,                   // 1 - Membrane time constant (ms)
-        -60.0,                  // 2 - Resting membrane voltage (mV)
-        -50.0,                  // 3 - Spiking threshold (mV)
-        5.0);                   // 4 - Refractory time constant (ms)
-
-    Hidden::VarValues hiddenVars(
-        -60.0,  // V
-        0.0,    // refracTime
-        0.0);   // errTilda
-
+    ParamValues hiddenParams{{"C", 10.0}, {"tauMem", 10.0}, {"Vrest", -60.0}, 
+                             {"Vthresh", -50.0}, {"tauRefrac", 5.0}};
+    
+    
+    VarValues hiddenVars{{"V", -60.0}, {"refracTime", 0.0}, {"errTilda", 0.0}};
+        
     //------------------------------------------------------------------------
     // Output layer parameters
     //------------------------------------------------------------------------
-    Output::ParamValues outputParams(
-        10.0,                   // 0 - Membrane capacitance
-        10.0,                   // 1 - Membrane time constant (ms)
-        -60.0,                  // 2 - Resting membrane voltage (mV)
-        -50.0,                  // 3 - Spiking threshold (mV)
-        5.0,                    // 4 - Refractory time constant (ms)
-        Parameters::tauRise,    // 5 - Rise time constant (ms)
-        Parameters::tauDecay,   // 6 - Decay time constant (ms)
-        Parameters::tauAvgErr); // 7 - Average error time constant (ms)
-    Output::VarValues outputVars(
-        -60.0,                  // V
-        0.0,                    // refracTime
-        0.0,                    // errRise
-        0.0,                    // errTilda
-        0.0,                    // errDecay
-        0.0,                    // avgSqrErr
-        uninitialisedVar(),     // startSpike
-        uninitialisedVar());    // endSpike
+    ParamValues outputParams{{"C", 10.0}, {"tauMem", 10.0}, {"Vrest", -60.0},
+                             {"Vthresh", -50.0}, {"tauRefrac", 5.0}, {"tauRise", Parameters::tauRise},
+                             {"tauDecay", Parameters::tauDecay}, {"tauAvgErr", Parameters::tauAvgErr}};
+    VarValues outputVars{{"V", -60.0}, {"refracTime", 0.0}, {"errRise", 0.0}, {"errTilda", 0.0}, {"avgSqrErr", 0.0},
+                         {"errDecay", 0.0}, {"startSpike", uninitialisedVar()}, {"endSpike", uninitialisedVar()}};
 
     //------------------------------------------------------------------------
     // Synapse parameters
     //------------------------------------------------------------------------
-    PostsynapticModels::ExpCurr::ParamValues expCurrParams(
-        5.0);  // 0 - TauSyn (ms)
+    ParamValues expCurrParams{{"tau", 5.0}};
 
-    SuperSpike::ParamValues superSpikeParams(
-        Parameters::tauRise,    // 0 - Rise time constant (ms)
-        Parameters::tauDecay,   // 1 - Decay time constant (ms)
-        1000.0);                // 2 - Beta
+    ParamValues superSpikeParams{{"tauRise", Parameters::tauRise}, 
+                                 {"tauDecay", Parameters::tauDecay}, {"beta", 1000.0}};
+    VarValues superSpikePreVars{{"z", 0.0}, {"zTilda", 0.0}};
+    VarValues superSpikePostVars{{"sigmaPrime", 0.0}};
 
-    SuperSpike::PreVarValues superSpikePreVars(
-        0.0,    // z
-        0.0);   // zTilda
+    ParamValues inputHiddenWeightDist{{"mean", 0.0}, {"sd", Parameters::w0 / std::sqrt((double)Parameters::numInput)},
+                                      {"min", Parameters::wMin}, {"max", Parameters::wMax}};
+    
+    VarValues inputHiddenVars{{"w", initVar<InitVarSnippet::NormalClipped>(inputHiddenWeightDist)},
+                              {"e", 0.0}, {"lambda", 0.0}, {"m", 0.0}};
 
-    SuperSpike::PostVarValues superSpikePostVars(
-        0.0);   // sigmaPrime
-
-    InitVarSnippet::NormalClipped::ParamValues inputHiddenWeightDist(
-        0.0,                                                        // 0 - mean
-        Parameters::w0 / std::sqrt((double)Parameters::numInput),   // 1 - standard deviation
-        Parameters::wMin,                                           // 2 - min
-        Parameters::wMax);                                          // 3 - max
-    SuperSpike::VarValues inputHiddenVars(
-        initVar<InitVarSnippet::NormalClipped>(inputHiddenWeightDist),  // w
-        0.0,                                                            // e
-        0.0,                                                            // lambda
-        0.0);                                                           // m
-
-    InitVarSnippet::NormalClipped::ParamValues hiddenOutputWeightDist(
-        0.0,                                                        // 0 - mean
-        Parameters::w0 / std::sqrt((double)Parameters::numHidden),  // 1 - standard deviation
-        Parameters::wMin,                                           // 2 - min
-        Parameters::wMax);                                          // 3 - max
-    SuperSpike::VarValues hiddenOutputVars(
-        initVar<InitVarSnippet::NormalClipped>(hiddenOutputWeightDist), // w
-        0.0,                                                            // e
-        0.0,                                                            // lambda
-        0.0);                                                           // m
-
+    ParamValues hiddenOutputWeightDist{{"mean", 0.0}, {"sd", Parameters::w0 / std::sqrt((double)Parameters::numHidden)},
+                                       {"min", Parameters::wMin}, {"max", Parameters::wMax}};
+    VarValues hiddenOutputVars{{"w", initVar<InitVarSnippet::NormalClipped>(hiddenOutputWeightDist)},
+                               {"e", 0.0}, {"lambda", 0.0}, {"m", 0.0}};
+    
     // **HACK** this is actually a nasty corner case for the initialisation rules
     // We really want this uninitialised as we are going to copy over transpose
     // But then initialiseSparse would copy over host values
-    Feedback::VarValues feedbackVars(
-        0.0);
+    VarValues feedbackVars{{"w", 0.0}};
 
     //------------------------------------------------------------------------
     // Neuron groups
@@ -388,24 +345,22 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Custom updates
     //---------------------------------------------------------------------------
-    CustomUpdateModels::Transpose::WUVarReferences transposeHiddenOutputVarReferences(
-        createWUVarRef(hiddenOutput, "w", outputHidden, "w"));    // variable);
+    WUVarReferences transposeHiddenOutputVarReferences{{"variable", createWUVarRef(hiddenOutput, "w", outputHidden, "w")}};
     model.addCustomUpdate<CustomUpdateModels::Transpose>("InputHiddenWeightTranspose", "CalculateTranspose",
                                                          {}, {}, transposeHiddenOutputVarReferences);
     
     
-    RMaxProp::ParamValues rMaxPropParams(Parameters::updateTimeMs, Parameters::tauRMS, 
-                                         Parameters::epsilon, Parameters::wMin, Parameters::wMax);
-    RMaxProp::VarValues rMaxPropVarValues(0.0);
-    RMaxProp::WUVarReferences rMaxPropInputHiddenVarReferences(
-        createWUVarRef(inputHidden, "m"),         // m 
-        createWUVarRef(inputHidden, "w"));        // variable
+    ParamValues rMaxPropParams{{"updateTime", Parameters::updateTimeMs}, {"tauRMS", Parameters::tauRMS}, 
+                               {"epsilon", Parameters::epsilon}, {"wMin", Parameters::wMin}, {"wMax", Parameters::wMax}};
+    
+    VarValues rMaxPropVarValues{{"upsilon", 0.0}};
+    WUVarReferences rMaxPropInputHiddenVarReferences{{"m", createWUVarRef(inputHidden, "m")},
+                                                     {"variable", createWUVarRef(inputHidden, "w")}};
     model.addCustomUpdate<RMaxProp>("InputHiddenWeightOptimiser", "GradientLearn",
                                     rMaxPropParams, rMaxPropVarValues, rMaxPropInputHiddenVarReferences);
     
-    RMaxProp::WUVarReferences rMaxPropHiddenOutputVarReferences(
-        createWUVarRef(hiddenOutput, "m"),                      // m 
-        createWUVarRef(hiddenOutput, "w", outputHidden, "w"));  // variable
+    WUVarReferences rMaxPropHiddenOutputVarReferences{{"m", createWUVarRef(hiddenOutput, "m")},
+                                                      {"variable", createWUVarRef(hiddenOutput, "w", outputHidden, "w")}};
     model.addCustomUpdate<RMaxProp>("HiddenOutputWeightOptimiser", "GradientLearn",
                                     rMaxPropParams, rMaxPropVarValues, rMaxPropHiddenOutputVarReferences);
 }

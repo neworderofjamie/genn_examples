@@ -2,63 +2,60 @@ import numpy as np
 from scipy.stats import expon
 import matplotlib.pyplot as plt
 
-from pygenn import genn_wrapper
-from pygenn import genn_model
+from pygenn import GeNNModel
 
 # Generate poisson spike trains
-poisson_spikes = []
+poisson_ids = []
+poisson_times = []
 dt = 1.0
 rate = 10.0
 isi = 1000.0 / (rate * dt)
 for p in range(100):
     time = 0.0
-    neuron_spikes = []
     while True:
         time += expon.rvs(1) * isi
         if time >= 500.0:
             break
         else:
-            neuron_spikes.append(time)
-    poisson_spikes.append(neuron_spikes)
+            poisson_ids.append(p)
+            poisson_times.append(time)
 
-model = genn_model.GeNNModel("float", "ssa")
-model.dT = dt
+poisson_ids = np.asarray(poisson_ids, dtype=int)
+poisson_times = np.asarray(poisson_times)
 
-# Count spikes each neuron should emit
-spike_counts = [len(n) for n in poisson_spikes]
+# Calculate start and end index of each neurons spikes in sorted array
+end_spike = np.cumsum(np.bincount(poisson_ids, minlength=100))
+start_spike = np.concatenate(([0], end_spike[0:-1]))
 
-# Get start and end indices of each spike sources section
-end_spike = np.cumsum(spike_counts)
-start_spike = np.empty_like(end_spike)
-start_spike[0] = 0
-start_spike[1:] = end_spike[0:-1]
+# Sort events first by neuron id and then 
+# by time and use to order spike times
+poisson_times = poisson_times[np.lexsort((poisson_times, poisson_ids))]
 
 # Build model
-model = genn_model.GeNNModel("float", "spike_source_array")
-model.dT = dt
+model = GeNNModel("float", "spike_source_array")
+model.dt = dt
 
 ssa = model.add_neuron_population("SSA", 100, "SpikeSourceArray", {}, 
                                   {"startSpike": start_spike, "endSpike": end_spike})
-ssa.set_extra_global_param("spikeTimes", np.hstack(poisson_spikes))
+ssa.extra_global_params["spikeTimes"].set_init_values(poisson_times)
+ssa.spike_recording_enabled = True
 
 model.build()
-model.load()
+model.load(num_recording_timesteps=int(np.ceil(500.0 / dt)))
 
 # Simulate
-spike_ids = np.empty(0)
-spike_times = np.empty(0)
 while model.t < 500.0:
     model.step_time()
-    ssa.pull_current_spikes_from_device()
 
-    times = np.ones_like(ssa.current_spikes) * model.t
-    spike_ids = np.hstack((spike_ids, ssa.current_spikes))
-    spike_times = np.hstack((spike_times, times))
+# Download recording data
+model.pull_recording_buffers_from_device()
+
+# Get recording data
+spike_times, spike_ids = ssa.spike_recording_data[0]
 
 # Plot for verification
 fig,axis = plt.subplots()
-for i, n in enumerate(poisson_spikes):
-    axis.scatter(n, [i] * len(n), color="blue", label=("Offline" if i == 0 else None))
+axis.scatter(poisson_times, poisson_ids, color="blue", label="Offline")
 axis.scatter(spike_times, spike_ids, color="red", label="GeNN")
 axis.legend()
 plt.show()

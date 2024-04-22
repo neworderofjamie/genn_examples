@@ -2,8 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 
-from pygenn import genn_wrapper
-from pygenn import genn_model
+from pygenn import (GeNNModel, VarLocation, init_var,
+                    init_postsynaptic, init_weight_update,
+                    init_sparse_connectivity)
 
 # Parameters
 TIMESTEP = 1.0
@@ -24,51 +25,46 @@ SCALE = (4000.0 / NUM_NEURONS) * (0.02 / PROBABILITY_CONNECTION)
 EXCITATORY_WEIGHT = 4.0E-3 * SCALE
 INHIBITORY_WEIGHT = -51.0E-3 * SCALE
 
-model = genn_model.GeNNModel("float", "va_benchmark")
-model.dT = TIMESTEP
-
+model = GeNNModel("float", "va_benchmark")
+model.dt = TIMESTEP
+model.default_narrow_sparse_ind_enabled = True
 fixed_prob = {"prob": PROBABILITY_CONNECTION}
 
 lif_params = {"C": 1.0, "TauM": 20.0, "Vrest": -49.0, "Vreset": RESET_VOLTAGE,
               "Vthresh": THRESHOHOLD_VOLTAGE, "Ioffset": 0.0, "TauRefrac": 5.0}
 
-lif_init = {"V": genn_model.init_var("Uniform", {"min": RESET_VOLTAGE, "max": THRESHOHOLD_VOLTAGE}),
+lif_init = {"V": init_var("Uniform", {"min": RESET_VOLTAGE, "max": THRESHOHOLD_VOLTAGE}),
             "RefracTime": 0.0}
-
-excitatory_synapse_init = {"g": EXCITATORY_WEIGHT}
-inhibitory_synapse_init = {"g": INHIBITORY_WEIGHT}
-
-excitatory_post_syn_params = {"tau": 5.0}
-inhibitory_post_syn_params = {"tau": 10.0}
 
 excitatory_pop = model.add_neuron_population("E", NUM_EXCITATORY, "LIF", lif_params, lif_init)
 inhibitory_pop = model.add_neuron_population("I", NUM_INHIBITORY, "LIF", lif_params, lif_init)
 
 excitatory_pop.spike_recording_enabled = True
 
-model.add_synapse_population("EE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+excitatory_weight_init = init_weight_update("StaticPulseConstantWeight", {"g": EXCITATORY_WEIGHT})
+inhibitory_weight_init = init_weight_update("StaticPulseConstantWeight", {"g": INHIBITORY_WEIGHT})
+excitatory_postsynaptic_init = init_postsynaptic("ExpCurr", {"tau": 5.0})
+inhibitory_postsynaptic_init = init_postsynaptic("ExpCurr", {"tau": 10.0})
+
+model.add_synapse_population("EE", "SPARSE",
     excitatory_pop, excitatory_pop,
-    "StaticPulse", {}, excitatory_synapse_init, {}, {},
-    "ExpCurr", excitatory_post_syn_params, {},
-    genn_model.init_connectivity("FixedProbabilityNoAutapse", fixed_prob))
+    excitatory_weight_init, excitatory_postsynaptic_init,
+    init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("EI", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("EI", "SPARSE",
     excitatory_pop, inhibitory_pop,
-    "StaticPulse", {}, excitatory_synapse_init, {}, {},
-    "ExpCurr", excitatory_post_syn_params, {},
-    genn_model.init_connectivity("FixedProbability", fixed_prob))
+    excitatory_weight_init, excitatory_postsynaptic_init,
+    init_sparse_connectivity("FixedProbability", fixed_prob))
 
-model.add_synapse_population("II", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("II", "SPARSE",
     inhibitory_pop, inhibitory_pop,
-    "StaticPulse", {}, inhibitory_synapse_init, {}, {},
-    "ExpCurr", inhibitory_post_syn_params, {},
-    genn_model.init_connectivity("FixedProbabilityNoAutapse", fixed_prob))
+    inhibitory_weight_init, inhibitory_postsynaptic_init,
+    init_sparse_connectivity("FixedProbabilityNoAutapse", fixed_prob))
 
-model.add_synapse_population("IE", "SPARSE_GLOBALG", genn_wrapper.NO_DELAY,
+model.add_synapse_population("IE", "SPARSE",
     inhibitory_pop, excitatory_pop,
-    "StaticPulse", {}, inhibitory_synapse_init, {}, {},
-    "ExpCurr", inhibitory_post_syn_params, {},
-    genn_model.init_connectivity("FixedProbability", fixed_prob))
+    inhibitory_weight_init, inhibitory_postsynaptic_init,
+    init_sparse_connectivity("FixedProbability", fixed_prob))
 
 print("Building Model")
 model.build()
@@ -86,7 +82,7 @@ print("Simulation time:%fs" % (sim_end_time - sim_start_time))
 model.pull_recording_buffers_from_device()
 
 # Get recording data
-spike_times, spike_ids = excitatory_pop.spike_recording_data
+spike_times, spike_ids = excitatory_pop.spike_recording_data[0]
 
 fig, axes = plt.subplots(2)
 

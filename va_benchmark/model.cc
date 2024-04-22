@@ -1,11 +1,10 @@
-#include <cmath>
-#include <vector>
+#include <fstream>
 
 #include "modelSpec.h"
 
 #include "parameters.h"
 
-void modelDefinition(NNmodel &model)
+void modelDefinition(ModelSpec &model)
 {
     model.setDT(1.0);
     model.setName("va_benchmark");
@@ -16,41 +15,34 @@ void modelDefinition(NNmodel &model)
     //---------------------------------------------------------------------------
     // Build model
     //---------------------------------------------------------------------------
-    InitVarSnippet::Uniform::ParamValues vDist(
-        Parameters::resetVoltage,       // 0 - min
-        Parameters::thresholdVoltage);  // 1 - max
+    ParamValues vDist{
+        {"min", Parameters::resetVoltage},
+        {"max", Parameters::thresholdVoltage}};
 
-    InitSparseConnectivitySnippet::FixedProbability::ParamValues fixedProb(
-        Parameters::probabilityConnection); // 0 - prob
+    ParamValues fixedProb{{"prob", Parameters::probabilityConnection}};
 
     // LIF model parameters
-    NeuronModels::LIF::ParamValues lifParams(
-        1.0,    // 0 - C
-        20.0,   // 1 - TauM
-        -49.0,  // 2 - Vrest
-        Parameters::resetVoltage,  // 3 - Vreset
-        Parameters::thresholdVoltage,  // 4 - Vthresh
-        0.0,    // 5 - Ioffset
-        5.0);    // 6 - TauRefrac
+    ParamValues lifParams{
+        {"C", 1.0},
+        {"TauM", 20.0},
+        {"Vrest", -49.0},
+        {"Vreset", Parameters::resetVoltage},
+        {"Vthresh", Parameters::thresholdVoltage},
+        {"Ioffset", 0.0},
+        {"TauRefrac", 5.0}};
 
     // LIF initial conditions
-    NeuronModels::LIF::VarValues lifInit(
-        initVar<InitVarSnippet::Uniform>(vDist),     // 0 - V
-        0.0);   // 1 - RefracTime
-
+    VarValues lifInit{
+        {"V", initVar<InitVarSnippet::Uniform>(vDist)},
+        {"RefracTime", 0.0}};
+    
     // Static synapse parameters
-    WeightUpdateModels::StaticPulse::VarValues excitatoryStaticSynapseInit(
-        Parameters::excitatoryWeight);    // 0 - Wij (nA)
-
-    WeightUpdateModels::StaticPulse::VarValues inhibitoryStaticSynapseInit(
-        Parameters::inhibitoryWeight);    // 0 - Wij (nA)
+    ParamValues excitatoryStaticSynapseInit{{"g", Parameters::excitatoryWeight}};
+    ParamValues inhibitoryStaticSynapseInit{{"g", Parameters::inhibitoryWeight}};
 
     // Exponential current parameters
-    PostsynapticModels::ExpCurr::ParamValues excitatoryExpCurrParams(
-        5.0);  // 0 - TauSyn (ms)
-
-    PostsynapticModels::ExpCurr::ParamValues inhibitoryExpCurrParams(
-        10.0);  // 0 - TauSyn (ms)
+    ParamValues excitatoryExpCurrParams{{"tau", 5.0}};
+    ParamValues inhibitoryExpCurrParams{{"tau", 10.0}};
 
     // Create IF_curr neuron
     auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
@@ -62,47 +54,67 @@ void modelDefinition(NNmodel &model)
 
     // Determine matrix type
     const SynapseMatrixType matrixType = Parameters::proceduralConnectivity
-        ? SynapseMatrixType::PROCEDURAL_GLOBALG
-        : (Parameters::bitmaskConnectivity ? SynapseMatrixType::BITMASK_GLOBALG : SynapseMatrixType::SPARSE_GLOBALG);
+        ? SynapseMatrixType::PROCEDURAL
+        : (Parameters::bitmaskConnectivity ? SynapseMatrixType::BITMASK : SynapseMatrixType::SPARSE);
 
-    auto *ee = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "EE", matrixType, NO_DELAY,
-        "E", "E",
-        {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {},
+    auto *ee = model.addSynapsePopulation(
+        "EE", matrixType, e, e,
+        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(excitatoryStaticSynapseInit),
+        initPostsynaptic<PostsynapticModels::ExpCurr>(excitatoryExpCurrParams),
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    auto *ei = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "EI", matrixType, NO_DELAY,
-        "E", "I",
-        {}, excitatoryStaticSynapseInit,
-        excitatoryExpCurrParams, {},
+    auto *ei = model.addSynapsePopulation(
+        "EI", matrixType, e, i,
+        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(excitatoryStaticSynapseInit),
+        initPostsynaptic<PostsynapticModels::ExpCurr>(excitatoryExpCurrParams),
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
-    auto *ii = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "II", matrixType, NO_DELAY,
-        "I", "I",
-        {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {},
+    auto *ii = model.addSynapsePopulation(
+        "II", matrixType, i, i,
+        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(inhibitoryStaticSynapseInit),
+        initPostsynaptic<PostsynapticModels::ExpCurr>(inhibitoryExpCurrParams),
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
-    auto *ie = model.addSynapsePopulation<WeightUpdateModels::StaticPulse, PostsynapticModels::ExpCurr>(
-        "IE", matrixType, NO_DELAY,
-        "I", "E",
-        {}, inhibitoryStaticSynapseInit,
-        inhibitoryExpCurrParams, {},
+    auto *ie = model.addSynapsePopulation(
+        "IE", matrixType, i, e,
+        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(inhibitoryStaticSynapseInit),
+        initPostsynaptic<PostsynapticModels::ExpCurr>(inhibitoryExpCurrParams),
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 
     if(Parameters::presynapticParallelism) {
         // Set span type
-        ee->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-        ei->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-        ii->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
-        ie->setSpanType(SynapseGroup::SpanType::PRESYNAPTIC);
+        ee->setParallelismHint(SynapseGroup::ParallelismHint::PRESYNAPTIC);
+        ei->setParallelismHint(SynapseGroup::ParallelismHint::PRESYNAPTIC);
+        ii->setParallelismHint(SynapseGroup::ParallelismHint::PRESYNAPTIC);
+        ie->setParallelismHint(SynapseGroup::ParallelismHint::PRESYNAPTIC);
 
         // Set threads per spike
         ee->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
         ei->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
         ii->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
         ie->setNumThreadsPerSpike(Parameters::numThreadsPerSpike);
-
-
     }
 }
+
+void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
+{
+    runtime.allocate(Parameters::numTimesteps);
+    runtime.initialize();
+    runtime.initializeSparse();
+    
+    const auto startTime = std::chrono::high_resolution_clock::now();
+    while(runtime.getTimestep() < Parameters::numTimesteps) {
+        runtime.stepTime();
+    }
+    std::chrono::duration<double> duration = std::chrono::high_resolution_clock::now() - startTime;
+    std::cout << "Init time:" << runtime.getInitTime() << std::endl;
+    std::cout << "Total simulation time:" << duration.count() << " seconds" << std::endl;
+    std::cout << "\tNeuron update time:" << runtime.getNeuronUpdateTime() << std::endl;
+    std::cout << "\tPresynaptic update time:" << runtime.getPresynapticUpdateTime() << std::endl;
+    
+    runtime.pullRecordingBuffersFromDevice();
+    
+    const auto *e = model.findNeuronGroup("E");
+    const auto *i = model.findNeuronGroup("I");
+    runtime.writeRecordedSpikes(*e, "spikes_e.csv");
+    runtime.writeRecordedSpikes(*i, "spikes_i.csv");
+
+}
+

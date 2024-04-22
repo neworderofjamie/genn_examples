@@ -1,22 +1,20 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from pygenn.genn_model import (GeNNModel, init_connectivity, create_cmlf_class,
-                               create_custom_sparse_connect_init_snippet_class)
-from pygenn.genn_wrapper import NO_DELAY
+from pygenn import (GeNNModel, init_postsynaptic, init_sparse_connectivity,
+                    init_weight_update, create_sparse_connect_init_snippet,
+                    create_var_ref)
 
-ring_model = create_custom_sparse_connect_init_snippet_class(
+ring_model = create_sparse_connect_init_snippet(
     "ring",
     row_build_code=
         """
-        $(addSynapse, ($(id_pre) + 1) % $(num_post));
-        $(endRow);
+        addSynapse((id_pre + 1) % num_post);
         """,
 
-    calc_max_row_len_func=create_cmlf_class(
-        lambda num_pre, num_post, pars: 1)())
+    calc_max_row_len_func=lambda num_pre, num_post, pars: 1)
 
 model = GeNNModel("float", "tennHHRing")
-model.dT = 0.1
+model.dt = 0.1
 
 p = {"gNa": 7.15,   # Na conductance in [muS]
      "ENa": 50.0,   # Na equi potential [mV]
@@ -31,42 +29,38 @@ ini = {"V": -60.0,      # membrane potential
        "h": 0.3176767,  # prob. for not Na channel blocking
        "n": 0.5961207}  # prob. for K channel activation
 
-s_ini = {"g": -0.2}
-
-ps_p = {"tau": 1.0, # Decay time constant [ms] 
-        "E": -80.0} # Reversal potential [mV]
-
 
 stim_ini = {"startSpike": [0], "endSpike": [1]}
 
 pop1 = model.add_neuron_population("Pop1", 10, "TraubMiles", p, ini)
 stim = model.add_neuron_population("Stim", 1, "SpikeSourceArray", {}, stim_ini)
 
-model.add_synapse_population("Pop1self", "SPARSE_GLOBALG", 10,
-    pop1, pop1,
-    "StaticPulse", {}, s_ini, {}, {},
-    "ExpCond", ps_p, {},
-    init_connectivity(ring_model, {}))
+weight_init = init_weight_update("StaticPulseConstantWeight", {"g": -0.2})
+postsynaptic_init = init_postsynaptic("ExpCond", {"tau": 1.0, "E": -80.0}, 
+                                      var_refs={"V": create_var_ref(pop1, "V")})
 
-model.add_synapse_population("StimPop1", "SPARSE_GLOBALG", NO_DELAY,
+model.add_synapse_population("Pop1self", "SPARSE", 10,
+    pop1, pop1,
+    weight_init, postsynaptic_init,
+    init_sparse_connectivity(ring_model, {}))
+
+model.add_synapse_population("StimPop1", "SPARSE", 0,
     stim, pop1,
-    "StaticPulse", {}, s_ini, {}, {},
-    "ExpCond", ps_p, {},
-    init_connectivity("OneToOne", {}))
-stim.set_extra_global_param("spikeTimes", [0.0])
+    weight_init, postsynaptic_init,
+    init_sparse_connectivity("OneToOne", {}))
+stim.extra_global_params["spikeTimes"].set_values([0.0])
 
 model.build()
 model.load()
 
-v = np.empty((2000, 10))
-v_view = pop1.vars["V"].view
+v_rec = np.empty((2000, 10))
+v = pop1.vars["V"]
 while model.t < 200.0:
     model.step_time()
 
-    pop1.pull_var_from_device("V")
-    
-    v[model.timestep - 1,:]=v_view[:]
+    v.pull_from_device()
+    v_rec[model.timestep - 1,:]= v.view[:]
 
 fig, axis = plt.subplots()
-axis.plot(v)
+axis.plot(v_rec)
 plt.show()

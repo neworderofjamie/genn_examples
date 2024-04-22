@@ -2,96 +2,90 @@ import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 
-from pygenn import genn_wrapper
-from pygenn import genn_model
+from pygenn import (GeNNModel, create_weight_update_model, 
+                    init_postsynaptic, init_var, init_weight_update)
 
 # STDP synapse with additive weight dependence
-stdp_additive = genn_model.create_custom_weight_update_class(
+stdp_additive = create_weight_update_model(
     "STDPAdditive",
-    param_names=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
+    params=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
     var_name_types=[("g", "scalar")],
     pre_var_name_types=[("preTrace", "scalar")],
     post_var_name_types=[("postTrace", "scalar")],
-    derived_params=[("aPlusScaled", genn_model.create_dpf_class(lambda pars, dt: pars[2] * (pars[5] - pars[4]))()),
-                    ("aMinusScaled", genn_model.create_dpf_class(lambda pars, dt: pars[3] * (pars[5] - pars[4]))())],
+    derived_params=[("aPlusScaled", lambda pars, dt: pars["aPlus"] * (pars["wMax"] - pars["wMin"])),
+                    ("aMinusScaled", lambda pars, dt: pars["aMinus"] * (pars["wMax"] - pars["wMin"]))],
 
-    sim_code=
+    pre_spike_syn_code=
         """
-        $(addToInSyn, $(g));
-        const scalar dt = $(t) - $(sT_post);
+        addToPost(g);
+        const scalar dt = t - st_post;
         if(dt > 0) {
-            const scalar timing = exp(-dt / $(tauMinus));
-            const scalar newWeight = $(g) - ($(aMinusScaled) * $(postTrace) * timing);
-            $(g) = fmin($(wMax), fmax($(wMin), newWeight));
+            const scalar timing = exp(-dt / tauMinus);
+            const scalar newWeight = g - (aMinusScaled * postTrace * timing);
+            g = fmin(wMax, fmax(wMin, newWeight));
         }
         """,
 
-    learn_post_code=
+    post_spike_syn_code=
         """
-        const scalar dt = $(t) - $(sT_pre);
+        const scalar dt = t - st_pre;
         if(dt > 0) {
-            const scalar timing = exp(-dt / $(tauPlus));
-            const scalar newWeight = $(g) + ($(aPlusScaled) * $(preTrace) * timing);
-            $(g) = fmin($(wMax), fmax($(wMin), newWeight));
+            const scalar timing = exp(-dt / tauPlus);
+            const scalar newWeight = g + (aPlusScaled * preTrace * timing);
+            g = fmin(wMax, fmax(wMin, newWeight));
         }
         """,
 
     pre_spike_code=
         """
-        const scalar dt = $(t) - $(sT_pre);
-        $(preTrace) = $(preTrace) * exp(-dt / $(tauPlus)) + 1.0;
+        const scalar dt = t - st_pre;
+        preTrace = preTrace * exp(-dt / tauPlus) + 1.0;
         """,
 
     post_spike_code=
         """
-        const scalar dt = $(t) - $(sT_post);
-        $(postTrace) = $(postTrace) * exp(-dt / $(tauMinus)) + 1.0;
-        """,
-
-    is_pre_spike_time_required=True,
-    is_post_spike_time_required=True)
+        const scalar dt = t - st_post;
+        postTrace = postTrace * exp(-dt / tauMinus) + 1.0;
+        """)
 
 # STDP synapse with multiplicative weight dependence
-stdp_multiplicative = genn_model.create_custom_weight_update_class(
+stdp_multiplicative = create_weight_update_model(
     "STDPMultiplicative",
-    param_names=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
+    params=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax"],
     var_name_types=[("g", "scalar")],
     pre_var_name_types=[("preTrace", "scalar")],
     post_var_name_types=[("postTrace", "scalar")],
 
-    sim_code=
+    pre_spike_syn_code=
         """
-        $(addToInSyn, $(g));
-        const scalar dt = $(t) - $(sT_post);
+        addToPost(g);
+        const scalar dt = t - st_post;
         if(dt > 0) {
-            const scalar timing = exp(-dt / $(tauMinus));
-            $(g) -= ($(g) - $(wMin)) * $(aMinus) * $(postTrace) * timing;
+            const scalar timing = exp(-dt / tauMinus);
+            g -= (g - wMin) * aMinus * postTrace * timing;
         }
         """,
 
-    learn_post_code=
+    post_spike_syn_code=
         """
-        const scalar dt = $(t) - $(sT_pre);
+        const scalar dt = t - st_pre;
         if(dt > 0) {
-            const scalar timing = exp(-dt / $(tauPlus));
-            $(g) += ($(wMax) - $(g)) * $(aPlus) * $(preTrace) * timing;
+            const scalar timing = exp(-dt / tauPlus);
+            g += (wMax - g) * aPlus * preTrace * timing;
         }
         """,
 
     pre_spike_code=
         """
-        const scalar dt = $(t) - $(sT_pre);
-        $(preTrace) = $(preTrace) * exp(-dt / $(tauPlus)) + 1.0;
+        const scalar dt = t - st_pre;
+        preTrace = preTrace * exp(-dt / tauPlus) + 1.0;
         """,
 
     post_spike_code=
         """
-        const scalar dt = $(t) - $(sT_post);
-        $(postTrace) = $(postTrace) * exp(-dt / $(tauMinus)) + 1.0;
-        """,
-
-    is_pre_spike_time_required=True,
-    is_post_spike_time_required=True)
+        const scalar dt = t - st_post;
+        postTrace = postTrace * exp(-dt / tauMinus) + 1.0;
+        """)
 
 DT = 1.0
 NUM_EX_SYNAPSES = 1000
@@ -102,8 +96,8 @@ A_PLUS = 0.01
 A_MINUS = 1.05 * A_PLUS
 
 
-model = genn_model.GeNNModel("float", "song")
-model.dT = DT
+model = GeNNModel("float", "song")
+model.dt = DT
 
 lif_params = {"C": 0.17, "TauM": 10.0, "Vrest": -74.0, "Vreset": -60.0,
               "Vthresh": -54.0, "Ioffset": 0.0, "TauRefrac": 1.0}
@@ -116,7 +110,7 @@ poisson_init = {"timeStepToSpike" : 0.0}
 
 post_syn_params = {"tau": 5.0}
 
-stdp_init = {"g": genn_model.init_var("Uniform", {"min": 0.0, "max": G_MAX})}
+stdp_init = {"g": init_var("Uniform", {"min": 0.0, "max": G_MAX})}
 stdp_params = {"tauPlus": 20.0, "tauMinus": 20.0, "aPlus": A_PLUS, "aMinus": A_MINUS, "wMin": 0.0, "wMax": G_MAX}
 stdp_pre_init = {"preTrace": 0.0}
 stdp_post_init = {"postTrace": 0.0}
@@ -127,15 +121,15 @@ multiplicative_pop = model.add_neuron_population("multiplicative", 1, "LIF", lif
 
 poisson_pop = model.add_neuron_population("input", NUM_EX_SYNAPSES, "PoissonNew", poisson_params, poisson_init)
 
-input_additive = model.add_synapse_population("input_additive", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+input_additive = model.add_synapse_population("input_additive", "DENSE",
     poisson_pop, additive_pop,
-    stdp_additive, stdp_params, stdp_init, stdp_pre_init, stdp_post_init,
-    "ExpCurr", post_syn_params, {})
+    init_weight_update(stdp_additive, stdp_params, stdp_init, stdp_pre_init, stdp_post_init),
+    init_postsynaptic("ExpCurr", post_syn_params))
 
-input_multiplicative = model.add_synapse_population("input_multiplicative", "DENSE_INDIVIDUALG", genn_wrapper.NO_DELAY,
+input_multiplicative = model.add_synapse_population("input_multiplicative", "DENSE",
     poisson_pop, multiplicative_pop,
-    stdp_multiplicative, stdp_params, stdp_init, stdp_pre_init, stdp_post_init,
-    "ExpCurr", post_syn_params, {})
+    init_weight_update(stdp_multiplicative, stdp_params, stdp_init, stdp_pre_init, stdp_post_init),
+    init_postsynaptic("ExpCurr", post_syn_params))
 
 print("Building Model")
 model.build()
@@ -149,12 +143,12 @@ while model.t < DURATION_MS:
     model.step_time()
 
 # Pull weight variables from device
-model.pull_var_from_device("input_additive", "g")
-model.pull_var_from_device("input_multiplicative", "g")
+input_additive.vars["g"].pull_from_device()
+input_multiplicative.vars["g"].pull_from_device()
 
 # Get weights
-weights = [input_additive.get_var_values("g"),
-           input_multiplicative.get_var_values("g")]
+weights = [input_additive.vars["g"].values,
+           input_multiplicative.vars["g"].values]
 
 figure, axes = plt.subplots(1, 2, sharey=True)
 

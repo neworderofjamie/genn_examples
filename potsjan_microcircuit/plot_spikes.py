@@ -10,7 +10,7 @@ N_full = {
   '6' : {'E': 14395, 'I': 2948}
 }
 
-N_scaling = 0.1
+N_scaling = 1.0
 
 def load_spikes(filename):
     # Parse filename and use to get population name and size
@@ -22,7 +22,7 @@ def load_spikes(filename):
     # Read CSV spikes
     spikes = np.loadtxt(filename, delimiter=",", skiprows=1,
                         dtype={"names": ("time", "neuron_id"),
-                            "formats": (np.float, np.int)})
+                            "formats": (float, int)})
 
     return spikes["time"], spikes["neuron_id"], name, num
 
