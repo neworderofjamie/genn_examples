@@ -42,6 +42,30 @@ AGENT_MIN_ACCELERATION = 0.0
 AGENT_MAX_ACCELERATION = 0.15
 AGENT_M = 0.5
 
+def draw_neuron_activity(activity, position, get_colour_fn, image):
+    # Convert activity to a 8-bit level
+    gray = int(255.0 * min(1.0, max(0.0, activity)))
+    
+    #// Draw rectangle of this colour
+    image[position[1]:position[1] + 25, position[0]:position[0] + 25,:] = get_colour_fn(gray)
+
+def draw_population_activity(pop_view, pop_name, position, get_colour_fn, image, num_columns=0):
+    # If (invalid) default number of columns is specified, use popsize
+    if num_columns == 0:
+        num_columns = len(pop_view)
+
+    for i, a in enumerate(pop_view):
+        row = i // num_columns
+        col = i % num_columns
+        
+        draw_neuron_activity(a, (position[0] + (col * 27), position[1] + (row * 27)),
+                             get_colour_fn, image)
+
+    # Label population
+    num_rows = int(np.ceil(len(pop_view) / num_columns))
+    cv2.putText(image, pop_name, (position[0], position[1] + 17 + (27 * num_rows)),
+                cv2.FONT_HERSHEY_COMPLEX_SMALL, 1.0, (0xFF, 0xFF, 0xFF))
+
 sigmoid_neuron_model = create_neuron_model(
     "sigmoid",
 
@@ -391,8 +415,27 @@ while True:
     cpu1.vars["r"].pull_from_device()
     pontine.vars["r"].pull_from_device()
 
-    # Visualize network activity
-    #visualize(activityImage);
+    # Visualize network 
+    get_red = lambda gray: (gray, 0, 0)
+    get_green = lambda gray: (0, gray, 0)
+    get_blue = lambda gray: (0, 0, gray)
+    
+    draw_population_activity(tl.vars["r"].view, "TL", (10, 10),
+                             get_red, activity_image, 8);
+    draw_population_activity(cl1.vars["r"].view, "CL1", (10, 110),
+                             get_red, activity_image, 8);
+    draw_population_activity(tb1.vars["r"].view, "TB1", (10, 210),
+                             get_red, activity_image);
+
+    draw_population_activity(tn2.vars["r"].view, "TN2", (300, 310),
+                             get_blue, activity_image, 1);
+
+    draw_population_activity(cpu4.vars["r"].view, "CPU4", (10, 310),
+                             get_green, activity_image, 8);
+    draw_population_activity(pontine.vars["r"].view, "Pontine", (10, 410),
+                             get_green, activity_image, 8);
+    draw_population_activity(cpu1.vars["r"].view, "CPU1", (10, 510),
+                             get_green, activity_image, 8);
 
     # If we are on outbound segment of route
     outbound = (model.timestep < NUM_OUTWARD_TIMESTEPS)
