@@ -481,4 +481,5 @@ while True:
     # Show output image
     cv2.imshow("Path", path_image)
     cv2.imshow("Activity", activity_image)
-    cv2.waitKey(1)
+    if cv2.waitKey(1) == 27:
+        break
