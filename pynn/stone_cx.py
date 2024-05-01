@@ -260,9 +260,8 @@ cpu1_params = {"a": 7.5, "b": -1.0}
 
 # Synapse parameters
 exc_init = {"g": 1.0}
-inh_init = {"g": 1.0}
+inh_init = {"g": -1.0}
 
-cl1_tb1_init = {"g": 1.0}
 cl1_tb1_init = {"g": (1.0 - C)}
 cpu4_cpu1_init = {"g": 0.5}
 pontine_cpu1_init = {"g": -0.5}
