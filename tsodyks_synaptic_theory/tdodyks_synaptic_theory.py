@@ -86,7 +86,7 @@ N_E = 8000
 N_I = 2000
 MU_EXT_E = get_noise_mean(23.7, TAU_M, C_M) / 1000.0
 MU_EXT_I = get_noise_mean(20.5, TAU_M, C_M) / 1000.0
-SIGMA_EXT = get_noise_std(1.0, TAU_M, 0.1, C_M) / 1000.0
+SIGMA_EXT = get_noise_std(1.0, TAU_M, 1.0, C_M) / 1000.0
 
 N_E_SELECT = int(F * N_E)
 N_E_NON_SELECT = int((1.0 - (F * P)) * N_E)
@@ -106,7 +106,7 @@ PARAMS_I = {"C": C_M  / 1000.0, "TauM": TAU_M, "Vrest": 0.0, "Vreset": V_RESET_I
 VARS = {"V": 0.0, "RefracTime": 0.0}
 
 model = GeNNModel("float", "tsodyks_synaptic_theory")
-model.dt = 0.1  # Not clear but this is minimum delay
+model.dt = 0.1
 
 # Neuron populations and current sources
 # ======================================
@@ -128,7 +128,6 @@ for i in range(P):
     e_select_pop[-1].spike_recording_enabled = True
     model.add_current_source(f"ENonSelectCurr{i}", "GaussianNoise", e_select_pop[-1],
                              {"mean": MU_EXT_E, "sd": SIGMA_EXT})
-
 
 # Inhibitory synapse populations
 # ==============================
