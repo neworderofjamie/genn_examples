@@ -147,6 +147,8 @@ VARS = {"V": 0.0, "RefracTime": 0.0}
 
 model = GeNNModel("float", "tsodyks_synaptic_theory")
 model.dt = 0.1
+model.fuse_postsynaptic_models = True
+model.fuse_pre_post_weight_update_models = True
 
 # Neuron populations and current sources
 # ======================================
@@ -185,8 +187,8 @@ for e in e_select_pop:
 # efficacy; The remaining synapses (i.e. non-selective to selective and 
 # non-selective to non-selective) have potentiated efficacy with probability 0.1
 num_non_select_num_pre = int(C * (1.0 - (F * P)) * N_E)
-add_stp_synapse_pop(model, e_non_select_pop, i_pop, 
-                    J_EI, num_non_select_num_pre)
+add_synapse_pop(model, e_non_select_pop, i_pop, 
+                J_EI, num_non_select_num_pre)
 
 non_select_g_init = init_var(non_selective_init, {"Jb": J_B, "Jp": J_P,
                                                   "p": 0.1})
@@ -200,7 +202,7 @@ for e in e_select_pop:
 # ========================================
 num_select_num_pre = int(C * F * N_E)
 for e_pre in e_select_pop:
-    add_stp_synapse_pop(model, e_pre, i_pop, J_EI, num_select_num_pre)
+    add_synapse_pop(model, e_pre, i_pop, J_EI, num_select_num_pre)
     add_stp_synapse_pop(model, e_pre, e_non_select_pop, J_B, num_select_num_pre)
     
     for e_post in e_select_pop:
