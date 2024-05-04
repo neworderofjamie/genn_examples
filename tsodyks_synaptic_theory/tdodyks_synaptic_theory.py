@@ -3,8 +3,9 @@ import matplotlib.pyplot as plt
 
 from pygenn import GeNNModel
 
-from pygenn import (create_var_init_snippet, init_postsynaptic,
-                    init_sparse_connectivity, init_var, init_weight_update)
+from pygenn import (create_var_init_snippet, create_weight_update_model,
+                    init_postsynaptic, init_sparse_connectivity,
+                    init_var, init_weight_update)
 
 non_selective_init = create_var_init_snippet(
     "non_selective",
@@ -23,6 +24,39 @@ delay_init = create_var_init_snippet(
     value = gennrand() % 10;
     """)
 
+stp_model = create_weight_update_model(
+    "stp",
+    
+    params=["TauD", "TauF", "U"],
+    pre_vars=[("x", "scalar"), ("u", "scalar")],
+    vars=[("g", "scalar"), ("d", "uint8_t")],
+    
+    pre_spike_code=
+    """
+    const timepoint deltaT = t - st_pre;
+    
+    // x(t-)
+    const scalar xTPlus = x - (u * x);
+    x = 1.0 + ((xTPlus - 1) * exp(-deltaT / TauD));
+    
+    // u(t+)
+    const scalar uTMinus = U + ((u - U) * exp(-deltaT / TauF));
+    u = uTMinus + (U * (1.0 - uTMinus));
+    """,
+    pre_spike_syn_code=
+    """
+    addToPostDelay(g  * u * x, d);
+    """)
+
+def add_stp_synapse_pop(model, pre_pop, post_pop, g, num):
+    pop = model.add_synapse_population(f"{pre_pop.name}_{post_pop.name}", "SPARSE",
+                                       pre_pop, post_pop,
+                                       init_weight_update(stp_model, {"TauD": TAU_D, "TauF": TAU_F, "U": U},
+                                                          {"g": g, "d": init_var(delay_init)}, {"x": 1.0, "u": U}),
+                                       init_postsynaptic("ExpCurr", {"tau": TAU_SYN}),
+                                       init_sparse_connectivity("FixedNumberPreWithReplacement", {"num": num}))
+    pop.max_dendritic_delay_timesteps = 10
+    
 def add_synapse_pop(model, pre_pop, post_pop, g, num):
     pop = model.add_synapse_population(f"{pre_pop.name}_{post_pop.name}", "SPARSE",
                                        pre_pop, post_pop,
@@ -60,10 +94,10 @@ def get_weight(PSP_val, tau_m, C_m = 250.0, tau_syn_ex = 2.0):
     PSC_e = (PSC_e_over_PSP_e * PSP_val)
     return PSC_e
 
-def get_noise_mean(mu_ext, tau_m, C_m=250):
+def get_noise_mean(mu_ext, tau_m, C_m=250.0):
     return (C_m / tau_m) * mu_ext
 
-def get_noise_std(sigma_ext, tau_m, dt=0.1, C_m=250.):
+def get_noise_std(sigma_ext, tau_m, dt=0.1, C_m=250.0):
     return math.sqrt(2/(tau_m*dt))*C_m*sigma_ext
 
 # Single cell parameters
@@ -71,7 +105,8 @@ def get_noise_std(sigma_ext, tau_m, dt=0.1, C_m=250.):
 V_THRESH = 20.0
 V_RESET_E = 16.0
 V_RESET_I = 13.0
-TAU_M = 15.0
+TAU_M_E = 15.0
+TAU_M_I = 10.0
 
 C_M = 250.0 # **NOTE** NOT GeNN units
 TAU_REFRAC = 2.0
@@ -84,24 +119,29 @@ P = 5
 C = 0.20
 N_E = 8000
 N_I = 2000
-MU_EXT_E = get_noise_mean(23.7, TAU_M, C_M) / 1000.0
-MU_EXT_I = get_noise_mean(20.5, TAU_M, C_M) / 1000.0
-SIGMA_EXT = get_noise_std(1.0, TAU_M, 1.0, C_M) / 1000.0
+MU_EXT_E = get_noise_mean(23.7, TAU_M_E, C_M) / 1000.0
+MU_EXT_I = get_noise_mean(20.5, TAU_M_I, C_M) / 1000.0
+SIGMA_EXT_E = get_noise_std(1.0, TAU_M_E, 1.0, C_M) / 1000.0
+SIGMA_EXT_I = get_noise_std(1.0, TAU_M_I, 1.0, C_M) / 1000.0
 
 N_E_SELECT = int(F * N_E)
 N_E_NON_SELECT = int((1.0 - (F * P)) * N_E)
 
 # Synaptic parameters
 # ===================
-J_IE = get_weight(-0.25, TAU_M, C_M, TAU_SYN) / 1000.0 # **NOTE** J_EI and J_IE swapped for sanity
-J_EI = get_weight(0.135, TAU_M, C_M, TAU_SYN) / 1000.0
-J_II = get_weight(-0.2, TAU_M, C_M, TAU_SYN) / 1000.0
-J_B = get_weight(0.1, TAU_M, C_M, TAU_SYN) / 1000.0
-J_P = get_weight(0.45, TAU_M, C_M, TAU_SYN) / 1000.0
+J_IE = get_weight(-0.25, TAU_M_I, C_M, TAU_SYN) / 1000.0 # **NOTE** J_EI and J_IE swapped for sanity
+J_EI = get_weight(0.135, TAU_M_E, C_M, TAU_SYN) / 1000.0
+J_II = get_weight(-0.2, TAU_M_I, C_M, TAU_SYN) / 1000.0
+J_B = get_weight(0.1, TAU_M_E, C_M, TAU_SYN) / 1000.0
+J_P = get_weight(0.45, TAU_M_E, C_M, TAU_SYN) / 1000.0
 
-PARAMS_E = {"C": C_M  / 1000.0, "TauM": TAU_M, "Vrest": 0.0, "Vreset": V_RESET_E,
+U = 0.19
+TAU_F = 1500.0
+TAU_D = 200.0
+
+PARAMS_E = {"C": C_M  / 1000.0, "TauM": TAU_M_E, "Vrest": 0.0, "Vreset": V_RESET_E,
             "Vthresh": V_THRESH, "Ioffset": 0.0, "TauRefrac": TAU_REFRAC}
-PARAMS_I = {"C": C_M  / 1000.0, "TauM": TAU_M, "Vrest": 0.0, "Vreset": V_RESET_I,
+PARAMS_I = {"C": C_M  / 1000.0, "TauM": TAU_M_I, "Vrest": 0.0, "Vreset": V_RESET_I,
             "Vthresh": V_THRESH, "Ioffset": 0.0, "TauRefrac": TAU_REFRAC}
 VARS = {"V": 0.0, "RefracTime": 0.0}
 
@@ -113,13 +153,14 @@ model.dt = 0.1
 i_pop = model.add_neuron_population("I", N_I, "LIF", PARAMS_I, VARS)
 i_pop.spike_recording_enabled = True
 model.add_current_source("ICurr", "GaussianNoise", i_pop,
-                         {"mean": MU_EXT_I, "sd": SIGMA_EXT})
+                         {"mean": MU_EXT_I, "sd": SIGMA_EXT_I})
 
-e_non_select_pop = model.add_neuron_population("ENonSelect", N_E_NON_SELECT, "LIF", PARAMS_E, VARS)
+e_non_select_pop = model.add_neuron_population("ENonSelect", N_E_NON_SELECT, "LIF",
+                                               PARAMS_E, VARS)
 e_non_select_pop.spike_recording_enabled = True
 
 model.add_current_source("ENonSelectCurr", "GaussianNoise", e_non_select_pop,
-                         {"mean": MU_EXT_E, "sd": SIGMA_EXT})
+                         {"mean": MU_EXT_E, "sd": SIGMA_EXT_E})
 
 e_select_pop = []
 for i in range(P):
@@ -127,7 +168,7 @@ for i in range(P):
                                                     PARAMS_E, VARS))
     e_select_pop[-1].spike_recording_enabled = True
     model.add_current_source(f"ENonSelectCurr{i}", "GaussianNoise", e_select_pop[-1],
-                             {"mean": MU_EXT_E, "sd": SIGMA_EXT})
+                             {"mean": MU_EXT_E, "sd": SIGMA_EXT_E})
 
 # Inhibitory synapse populations
 # ==============================
@@ -144,31 +185,32 @@ for e in e_select_pop:
 # efficacy; The remaining synapses (i.e. non-selective to selective and 
 # non-selective to non-selective) have potentiated efficacy with probability 0.1
 num_non_select_num_pre = int(C * (1.0 - (F * P)) * N_E)
-add_synapse_pop(model, e_non_select_pop, i_pop, J_EI, num_non_select_num_pre)
+add_stp_synapse_pop(model, e_non_select_pop, i_pop, 
+                    J_EI, num_non_select_num_pre)
 
 non_select_g_init = init_var(non_selective_init, {"Jb": J_B, "Jp": J_P,
                                                   "p": 0.1})
-add_synapse_pop(model, e_non_select_pop, e_non_select_pop,
-                non_select_g_init, num_non_select_num_pre)
+add_stp_synapse_pop(model, e_non_select_pop, e_non_select_pop,
+                    non_select_g_init, num_non_select_num_pre)
 for e in e_select_pop:
-    add_synapse_pop(model, e_non_select_pop, e, non_select_g_init,
-                    num_non_select_num_pre)
+    add_stp_synapse_pop(model, e_non_select_pop, e, non_select_g_init,
+                        num_non_select_num_pre)
 
 # Excitatory selective synapse populations
 # ========================================
 num_select_num_pre = int(C * F * N_E)
 for e_pre in e_select_pop:
-    add_synapse_pop(model, e_pre, i_pop, J_EI, num_select_num_pre)
-    add_synapse_pop(model, e_pre, e_non_select_pop, J_B, num_select_num_pre)
+    add_stp_synapse_pop(model, e_pre, i_pop, J_EI, num_select_num_pre)
+    add_stp_synapse_pop(model, e_pre, e_non_select_pop, J_B, num_select_num_pre)
     
     for e_post in e_select_pop:
         j = J_P if e_pre == e_post else J_B
-        add_synapse_pop(model, e_pre, e_post, j, num_select_num_pre)
+        add_stp_synapse_pop(model, e_pre, e_post, j, num_select_num_pre)
 
 model.build()
-model.load(num_recording_timesteps=2000)
+model.load(num_recording_timesteps=60000)
 
-while model.timestep < 2000:
+while model.t < 6000.0:
     model.step_time()
 
 model.pull_recording_buffers_from_device()
