@@ -1,11 +1,12 @@
 import math
 import matplotlib.pyplot as plt
+import numpy as np
 
 from pygenn import GeNNModel
 
-from pygenn import (create_var_init_snippet, create_weight_update_model,
-                    init_postsynaptic, init_sparse_connectivity,
-                    init_var, init_weight_update)
+from pygenn import (create_current_source_model, create_var_init_snippet,
+                    create_weight_update_model, init_postsynaptic,
+                    init_sparse_connectivity, init_var, init_weight_update)
 
 non_selective_init = create_var_init_snippet(
     "non_selective",
@@ -24,35 +25,55 @@ delay_init = create_var_init_snippet(
     value = gennrand() % 10;
     """)
 
+stim_model = create_current_source_model(
+    "stim",
+    
+    params=["startTime", "endTime", "mean", "sd"],
+    vars=[("current", "scalar")],
+    injection_code=
+    """
+    if(t > startTime && t < endTime) {
+        if(fmod(t, 1.0) < 0.001) {
+            current = mean + (gennrand_normal() * sd);
+        }
+        injectCurrent(current);
+    }
+    """)
+
 stp_model = create_weight_update_model(
     "stp",
     
     params=["TauD", "TauF", "U"],
-    pre_vars=[("x", "scalar"), ("u", "scalar")],
+    pre_vars=[("xTMinus", "scalar"), ("uTPlus", "scalar")],
     vars=[("g", "scalar"), ("d", "uint8_t")],
     
     pre_spike_code=
     """
     const timepoint deltaT = t - st_pre;
     
-    // x(t-)
-    const scalar xTPlus = x - (u * x);
-    x = 1.0 + ((xTPlus - 1) * exp(-deltaT / TauD));
+    // Calculate xTPlus from last spike`
+    const scalar xTPlus = xTMinus - (uTPlus * xTMinus);
     
-    // u(t+)
-    const scalar uTMinus = U + ((u - U) * exp(-deltaT / TauF));
-    u = uTMinus + (U * (1.0 - uTMinus));
+    // Update xTMinus for current spike
+    xTMinus = 1.0 + ((xTPlus - 1) * exp(-deltaT / TauD));
+    
+    // Calculate uTMinus for current spike
+    const scalar uTMinus = U + ((uTPlus - U) * exp(-deltaT / TauF));
+    
+    // Calculate uTPlus frm this
+    uTPlus = uTMinus + (U * (1.0 - uTMinus));
     """,
     pre_spike_syn_code=
     """
-    addToPostDelay(g  * u * x, d);
+    addToPostDelay(g  * uTPlus * xTMinus, d);
     """)
 
 def add_stp_synapse_pop(model, pre_pop, post_pop, g, num):
     pop = model.add_synapse_population(f"{pre_pop.name}_{post_pop.name}", "SPARSE",
                                        pre_pop, post_pop,
                                        init_weight_update(stp_model, {"TauD": TAU_D, "TauF": TAU_F, "U": U},
-                                                          {"g": g, "d": init_var(delay_init)}, {"x": 1.0, "u": U}),
+                                                          {"g": g, "d": init_var(delay_init)},
+                                                          {"xTMinus": 1.0, "uTPlus": U}),
                                        init_postsynaptic("ExpCurr", {"tau": TAU_SYN}),
                                        init_sparse_connectivity("FixedNumberPreWithReplacement", {"num": num}))
     pop.max_dendritic_delay_timesteps = 10
@@ -121,6 +142,7 @@ N_E = 8000
 N_I = 2000
 MU_EXT_E = get_noise_mean(23.7, TAU_M_E, C_M) / 1000.0
 MU_EXT_I = get_noise_mean(20.5, TAU_M_I, C_M) / 1000.0
+MU_LOAD = get_noise_mean(23.7 * (1.15 - 1.0), TAU_M_E, C_M) / 1000.0
 SIGMA_EXT_E = get_noise_std(1.0, TAU_M_E, 1.0, C_M) / 1000.0
 SIGMA_EXT_I = get_noise_std(1.0, TAU_M_I, 1.0, C_M) / 1000.0
 
@@ -147,6 +169,7 @@ VARS = {"V": 0.0, "RefracTime": 0.0}
 
 model = GeNNModel("float", "tsodyks_synaptic_theory")
 model.dt = 0.1
+model.seed = 1234
 model.fuse_postsynaptic_models = True
 model.fuse_pre_post_weight_update_models = True
 
@@ -154,24 +177,33 @@ model.fuse_pre_post_weight_update_models = True
 # ======================================
 i_pop = model.add_neuron_population("I", N_I, "LIF", PARAMS_I, VARS)
 i_pop.spike_recording_enabled = True
-model.add_current_source("ICurr", "GaussianNoise", i_pop,
-                         {"mean": MU_EXT_I, "sd": SIGMA_EXT_I})
+model.add_current_source("ICurr", stim_model, i_pop,
+                         {"mean": MU_EXT_I, "sd": SIGMA_EXT_I, "startTime": 0.0, "endTime": 6000.0},
+                         {"current": 0.0})
 
 e_non_select_pop = model.add_neuron_population("ENonSelect", N_E_NON_SELECT, "LIF",
                                                PARAMS_E, VARS)
 e_non_select_pop.spike_recording_enabled = True
 
-model.add_current_source("ENonSelectCurr", "GaussianNoise", e_non_select_pop,
-                         {"mean": MU_EXT_E, "sd": SIGMA_EXT_E})
+model.add_current_source("ENonSelectCurr", stim_model, e_non_select_pop,
+                         {"mean": MU_EXT_E, "sd": SIGMA_EXT_E, "startTime": 0.0, "endTime": 6000.0},
+                         {"current": 0.0})
 
 e_select_pop = []
 for i in range(P):
     e_select_pop.append(model.add_neuron_population(f"ESelect{i}", N_E_SELECT, "LIF", 
                                                     PARAMS_E, VARS))
     e_select_pop[-1].spike_recording_enabled = True
-    model.add_current_source(f"ENonSelectCurr{i}", "GaussianNoise", e_select_pop[-1],
-                             {"mean": MU_EXT_E, "sd": SIGMA_EXT_E})
+    model.add_current_source(f"ENonSelectCurr{i}", stim_model, e_select_pop[-1],
+                             {"mean": MU_EXT_E, "sd": SIGMA_EXT_E, "startTime": 0.0, "endTime": 6000.0},
+                             {"current": 0.0})
 
+# Load
+#model.add_current_source(f"LoadCurr", stim_model, e_select_pop[2],
+#                         {"mean": MU_LOAD, "sd": SIGMA_EXT_E,
+#                          "startTime": 3000.0, "endTime": 3350.0},
+#                         {"current": 0.0})
+                             
 # Inhibitory synapse populations
 # ==============================
 add_synapse_pop(model, i_pop, i_pop, J_II, int(C * N_I))
