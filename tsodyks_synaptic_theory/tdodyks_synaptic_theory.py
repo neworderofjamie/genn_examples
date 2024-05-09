@@ -77,6 +77,7 @@ def add_stp_synapse_pop(model, pre_pop, post_pop, g, num):
                                        init_postsynaptic("ExpCurr", {"tau": TAU_SYN}),
                                        init_sparse_connectivity("FixedNumberPreWithReplacement", {"num": num}))
     pop.max_dendritic_delay_timesteps = 10
+    return pop
     
 def add_synapse_pop(model, pre_pop, post_pop, g, num):
     pop = model.add_synapse_population(f"{pre_pop.name}_{post_pop.name}", "SPARSE",
@@ -86,6 +87,7 @@ def add_synapse_pop(model, pre_pop, post_pop, g, num):
                                        init_postsynaptic("ExpCurr", {"tau": TAU_SYN}),
                                        init_sparse_connectivity("FixedNumberPreWithReplacement", {"num": num}))
     pop.max_dendritic_delay_timesteps = 10
+    return pop
 
 def get_weight(PSP_val, tau_m, C_m = 250.0, tau_syn_ex = 2.0):
     """ Computes weight to elicit a change in the membrane potential.
@@ -142,10 +144,11 @@ N_E = 8000
 N_I = 2000
 MU_EXT_E = get_noise_mean(23.7, TAU_M_E, C_M) / 1000.0
 MU_EXT_I = get_noise_mean(20.5, TAU_M_I, C_M) / 1000.0
-MU_LOAD = get_noise_mean(23.7 * (1.15 - 1.0), TAU_M_E, C_M) / 1000.0
+MU_LOAD = get_noise_mean(23.7 * (2.0 - 1.0), TAU_M_E, C_M) / 1000.0
 SIGMA_EXT_E = get_noise_std(1.0, TAU_M_E, 1.0, C_M) / 1000.0
 SIGMA_EXT_I = get_noise_std(1.0, TAU_M_I, 1.0, C_M) / 1000.0
-
+# 1.12 - 8 pulses, 0.0026
+# 1.4 - 9 pules, 0.0022
 N_E_SELECT = int(F * N_E)
 N_E_NON_SELECT = int((1.0 - (F * P)) * N_E)
 
@@ -161,6 +164,10 @@ U = 0.19
 TAU_F = 1500.0
 TAU_D = 200.0
 
+DT = 0.1
+
+RECORD_SELECT = [2]
+
 PARAMS_E = {"C": C_M  / 1000.0, "TauM": TAU_M_E, "Vrest": 0.0, "Vreset": V_RESET_E,
             "Vthresh": V_THRESH, "Ioffset": 0.0, "TauRefrac": TAU_REFRAC}
 PARAMS_I = {"C": C_M  / 1000.0, "TauM": TAU_M_I, "Vrest": 0.0, "Vreset": V_RESET_I,
@@ -168,10 +175,10 @@ PARAMS_I = {"C": C_M  / 1000.0, "TauM": TAU_M_I, "Vrest": 0.0, "Vreset": V_RESET
 VARS = {"V": 0.0, "RefracTime": 0.0}
 
 model = GeNNModel("float", "tsodyks_synaptic_theory")
-model.dt = 0.1
+model.dt = DT
 model.seed = 1234
 model.fuse_postsynaptic_models = True
-model.fuse_pre_post_weight_update_models = True
+model.fuse_pre_post_weight_update_models = (len(RECORD_SELECT) == 0)
 
 # Neuron populations and current sources
 # ======================================
@@ -199,10 +206,10 @@ for i in range(P):
                              {"current": 0.0})
 
 # Load
-#model.add_current_source(f"LoadCurr", stim_model, e_select_pop[2],
-#                         {"mean": MU_LOAD, "sd": SIGMA_EXT_E,
-#                          "startTime": 3000.0, "endTime": 3350.0},
-#                         {"current": 0.0})
+model.add_current_source(f"LoadCurr", stim_model, e_select_pop[2],
+                         {"mean": MU_LOAD, "sd": 0.0,
+                          "startTime": 3000.0, "endTime": 3350.0},
+                         {"current": 0.0})
                              
 # Inhibitory synapse populations
 # ==============================
@@ -233,9 +240,11 @@ for e in e_select_pop:
 # Excitatory selective synapse populations
 # ========================================
 num_select_num_pre = int(C * F * N_E)
+e_select_syn_pop = []
 for e_pre in e_select_pop:
     add_synapse_pop(model, e_pre, i_pop, J_EI, num_select_num_pre)
-    add_stp_synapse_pop(model, e_pre, e_non_select_pop, J_B, num_select_num_pre)
+    e_select_syn_pop.append(add_stp_synapse_pop(model, e_pre, e_non_select_pop,
+                                                J_B, num_select_num_pre))
     
     for e_post in e_select_pop:
         j = J_P if e_pre == e_post else J_B
@@ -244,33 +253,82 @@ for e_pre in e_select_pop:
 model.build()
 model.load(num_recording_timesteps=60000)
 
-while model.t < 6000.0:
+u_record = [np.empty((60000, N_E_SELECT)) for _ in RECORD_SELECT]
+x_record = [np.empty((60000, N_E_SELECT)) for _ in RECORD_SELECT]
+for i in range(60000):
     model.step_time()
+
+    # Loop through populations to record
+    for r, u, x in zip(RECORD_SELECT, u_record, x_record):
+        # Pull STP state variables from device
+        pop = e_select_syn_pop[r]
+        pop.pre_vars["xTMinus"].pull_from_device()
+        pop.pre_vars["uTPlus"].pull_from_device()
+
+        # Copy into arrays
+        x[i,:] = pop.pre_vars["xTMinus"].view
+        u[i,:] = pop.pre_vars["uTPlus"].view
 
 model.pull_recording_buffers_from_device()
 
 fig, axis = plt.subplots()
 
-# Plot inhibitory
+# Plot spikes from inhibitory population
 i_times, i_ids = i_pop.spike_recording_data[0]
 axis.scatter(i_times, i_ids, s=1, label="I")
 
+# Plot spikes from non-selective excitatory populationm
 e_non_select_times, e_non_select_ids = e_non_select_pop.spike_recording_data[0]
 axis.scatter(e_non_select_times, e_non_select_ids + N_I, s=1, label="ENonSelect")
 
+# Loop through selective excitatory populations
 start = N_I + N_E_NON_SELECT
+timesteps = np.arange(0, 6000.0, DT)
+u_decay = np.exp(-DT / TAU_F)
+x_decay = np.exp(-DT / TAU_D)
 for i, e in enumerate(e_select_pop):
+    # Plot spikes
     e_select_times, e_select_ids = e.spike_recording_data[0]
     axis.scatter(e_select_times, e_select_ids + start, s=1, label=f"ESelect{i}")
+
+    # If this population has been recorded
+    if i in RECORD_SELECT:
+        # Get u and x arrays
+        i_idx = RECORD_SELECT.index(i)
+        u_pop = u_record[i_idx]
+        x_pop = x_record[i_idx]
+        
+        # Loop through neurons in population
+        for i in range(N_E_SELECT):
+            # Select spike times from this neuron
+            s_times = e_select_times[e_select_ids == i]
+            s_timesteps = np.rint(s_times / DT).astype(int)
+
+            # Loop over pairs of spike times
+            for t_start, t_stop in zip(s_timesteps[:-1], s_timesteps[1:]):
+                # Use Euler to calculate intermediate values
+                for t in range(t_start + 1, t_stop):
+                    u_pop[t, i] = u_pop[t - 1, i] + (-(u_pop[t - 1, i] - U) / TAU_F) * DT
+                    x_pop[t, i] = x_pop[t - 1, i] + ((1 - x_pop[t - 1, i]) / TAU_D) * DT
+
+        # Plot average u and x over the top of selective population raster
+        axis.plot(timesteps, (np.average(u_pop, axis=1) * N_E_SELECT) + start,
+                  color="blue", label="u")
+        axis.plot(timesteps, (np.average(x_pop, axis=1) * N_E_SELECT) + start,
+                  color="red", label="x")
+
     start += N_E_SELECT
 
 axis.legend()
+"""
+rate_fig, rate_axes = plt.subplots(P, sharex=True)
+
+for e, a in zip(e_select_pop, rate_axes):
+    e_select_times, _ = e.spike_recording_data[0]
+    
+    a.hist(e_select_times, bins=[0, 3000, 3350, 6000], density=True)
+    a.set_title(e.name)
+    a.set_ylim((0, 0.0015))
+"""
+
 plt.show()
-# Add synapse populations
-# I->all neurons
-# 
-
-# Mapping
-# N_E_SELECT neurons per core
-# 1 weight (outgoing or incoming? per core) - 
-
