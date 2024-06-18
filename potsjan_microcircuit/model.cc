@@ -11,10 +11,10 @@ void modelDefinition(ModelSpec &model)
 {
     model.setDT(Parameters::dtMs);
     model.setName("potjans_microcircuit");
-    model.setTiming(Parameters::measureTiming);
+    model.setTimingEnabled(Parameters::measureTiming);
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
-    model.setMergePostsynapticModels(true);
+    model.setFusePostsynapticModels(true);
     model.setDefaultNarrowSparseIndEnabled(true);
 
     GENN_PREFERENCES.optimizeCode = true;
