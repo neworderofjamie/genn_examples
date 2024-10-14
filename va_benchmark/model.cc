@@ -10,7 +10,7 @@ void modelDefinition(ModelSpec &model)
     model.setName("va_benchmark");
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
-    model.setTiming(true);
+    model.setTimingEnabled(true);
 
     //---------------------------------------------------------------------------
     // Build model
