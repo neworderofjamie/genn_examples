@@ -2,6 +2,46 @@
 
 #include "modelSpec.h"
 
+class LIFHalf : public NeuronModels::Base
+{
+public:
+    DECLARE_SNIPPET(LIFHalf);
+
+    SET_SIM_CODE(
+        "if (RefracTime <= 0.0) {\n"
+        "  scalar alpha = ((Isyn + Ioffset) * Rmembrane) + Vrest;\n"
+        "  V = alpha - (ExpTC * (alpha - V));\n"
+        "}\n"
+        "else {\n"
+        "  RefracTime -= dt;\n"
+        "}\n"
+    );
+
+    SET_THRESHOLD_CONDITION_CODE("RefracTime <= 0.0 && V >= Vthresh");
+
+    SET_RESET_CODE(
+        "V = Vreset;\n"
+        "RefracTime = TauRefrac;\n");
+
+    SET_PARAMS({
+        "C",          // Membrane capacitance
+        "TauM",       // Membrane time constant [ms]
+        "Vrest",      // Resting membrane potential [mV]
+        "Vreset",     // Reset voltage [mV]
+        "Vthresh",    // Spiking threshold [mV]
+        "Ioffset",    // Offset current
+        "TauRefrac"});
+
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const ParamValues &pars, double dt){ return std::exp(-dt / pars.at("TauM").cast<double>()); }},
+        {"Rmembrane", [](const ParamValues &pars, double){ return  pars.at("TauM").cast<double>() / pars.at("C").cast<double>(); }}});
+
+    SET_VARS({{"V", "scalar", "half"}, {"RefracTime", "scalar", "half"}});
+
+    SET_NEEDS_AUTO_REFRACTORY(false);
+};
+IMPLEMENT_SNIPPET(LIFHalf);
+
 void modelDefinition(ModelSpec &model)
 {
     model.setDT(1.0);
@@ -29,7 +69,7 @@ void modelDefinition(ModelSpec &model)
         {"RefracTime", 0.0}};
 
     // Create IF_curr neuron
-    auto *pop = model.addNeuronPopulation<NeuronModels::LIF>("Pop", 1000, lifParams, lifInit);
+    auto *pop = model.addNeuronPopulation<LIFHalf>("Pop", 1000, lifParams, lifInit);
 
     // Enable spike recording
     pop->setSpikeRecordingEnabled(true);
