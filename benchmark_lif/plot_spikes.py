@@ -13,6 +13,8 @@ figure, axes = plt.subplots(2, sharex=True)
 # Plot spikes
 axes[0].scatter(spikes["time"], spikes["neuron_id"], s=2, edgecolors="none")
 
+print(f"{len(spikes)} spikes")
+
 # Plot rates
 bins = np.arange(0, 1000 + 1, 10)
 rate = np.histogram(spikes["time"], bins=bins)[0] *  (1000.0 / 10.0) * (1.0 / 1000.0)

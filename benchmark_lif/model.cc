@@ -45,6 +45,7 @@ IMPLEMENT_SNIPPET(LIFHalf);
 void modelDefinition(ModelSpec &model)
 {
     model.setDT(1.0);
+    model.setSeed(1234);
     model.setName("benchmark_lif");
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
@@ -69,7 +70,7 @@ void modelDefinition(ModelSpec &model)
         {"RefracTime", 0.0}};
 
     // Create IF_curr neuron
-    auto *pop = model.addNeuronPopulation<LIFHalf>("Pop", 1000, lifParams, lifInit);
+    auto *pop = model.addNeuronPopulation<LIFHalf>("Pop", 1000000, lifParams, lifInit);
 
     // Enable spike recording
     pop->setSpikeRecordingEnabled(true);
