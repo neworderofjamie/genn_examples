@@ -4,13 +4,58 @@
 
 #include "parameters.h"
 
+
+class LIFHalf : public NeuronModels::Base
+{
+public:
+    DECLARE_SNIPPET(LIFHalf);
+
+    SET_SIM_CODE(
+        "if (RefracTime <= 0.0) {\n"
+        "  scalar alpha = ((Isyn + Ioffset) * Rmembrane) + Vrest;\n"
+        "  V = alpha - (ExpTC * (alpha - V));\n"
+        "}\n"
+        "else {\n"
+        "  RefracTime -= dt;\n"
+        "}\n"
+    );
+
+    SET_THRESHOLD_CONDITION_CODE("RefracTime <= 0.0 && V >= Vthresh");
+
+    SET_RESET_CODE(
+        "V = Vreset;\n"
+        "RefracTime = TauRefrac;\n");
+
+    SET_PARAMS({
+        "C",          // Membrane capacitance
+        "TauM",       // Membrane time constant [ms]
+        "Vrest",      // Resting membrane potential [mV]
+        "Vreset",     // Reset voltage [mV]
+        "Vthresh",    // Spiking threshold [mV]
+        "Ioffset",    // Offset current
+        "TauRefrac"});
+
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const ParamValues &pars, double dt){ return std::exp(-dt / pars.at("TauM").cast<double>()); }},
+        {"Rmembrane", [](const ParamValues &pars, double){ return  pars.at("TauM").cast<double>() / pars.at("C").cast<double>(); }}});
+
+    SET_VARS({{"V", "scalar", "half"}, {"RefracTime", "scalar", "half"}});
+
+    SET_NEEDS_AUTO_REFRACTORY(false);
+};
+IMPLEMENT_SNIPPET(LIFHalf);
+
+
 void modelDefinition(ModelSpec &model)
 {
+    GENN_PREFERENCES.debugCode = true;
+
     model.setDT(1.0);
     model.setName("va_benchmark");
     model.setDefaultVarLocation(VarLocation::DEVICE);
     model.setDefaultSparseConnectivityLocation(VarLocation::DEVICE);
     model.setTimingEnabled(true);
+    model.setDefaultNarrowSparseIndEnabled(true);
 
     //---------------------------------------------------------------------------
     // Build model
@@ -45,8 +90,8 @@ void modelDefinition(ModelSpec &model)
     ParamValues inhibitoryExpCurrParams{{"tau", 10.0}};
 
     // Create IF_curr neuron
-    auto *e = model.addNeuronPopulation<NeuronModels::LIF>("E", Parameters::numExcitatory, lifParams, lifInit);
-    auto *i = model.addNeuronPopulation<NeuronModels::LIF>("I", Parameters::numInhibitory, lifParams, lifInit);
+    auto *e = model.addNeuronPopulation<LIFHalf>("E", Parameters::numExcitatory, lifParams, lifInit);
+    auto *i = model.addNeuronPopulation<LIFHalf>("I", Parameters::numInhibitory, lifParams, lifInit);
 
     // Enable spike recording
     e->setSpikeRecordingEnabled(true);
