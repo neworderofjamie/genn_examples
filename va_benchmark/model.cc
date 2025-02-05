@@ -45,10 +45,21 @@ public:
 };
 IMPLEMENT_SNIPPET(LIFHalf);
 
+class StaticPulseHalf : public WeightUpdateModels::Base
+{
+public:
+    DECLARE_SNIPPET(StaticPulseHalf);
+
+    SET_VARS({{"g", "scalar", "half", VarAccess::READ_ONLY}});
+
+    SET_PRE_SPIKE_SYN_CODE("addToPost(g);\n");
+};
+IMPLEMENT_SNIPPET(StaticPulseHalf);
 
 void modelDefinition(ModelSpec &model)
 {
-    GENN_PREFERENCES.debugCode = true;
+    //GENN_PREFERENCES.debugCode = true;
+    GENN_PREFERENCES.generateLineInfo = true;
 
     model.setDT(1.0);
     model.setName("va_benchmark");
