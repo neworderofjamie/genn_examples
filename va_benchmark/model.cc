@@ -93,8 +93,8 @@ void modelDefinition(ModelSpec &model)
         {"RefracTime", 0.0}};
     
     // Static synapse parameters
-    ParamValues excitatoryStaticSynapseInit{{"g", Parameters::excitatoryWeight}};
-    ParamValues inhibitoryStaticSynapseInit{{"g", Parameters::inhibitoryWeight}};
+    VarValues excitatoryStaticSynapseInit{{"g", Parameters::excitatoryWeight}};
+    VarValues inhibitoryStaticSynapseInit{{"g", Parameters::inhibitoryWeight}};
 
     // Exponential current parameters
     ParamValues excitatoryExpCurrParams{{"tau", 5.0}};
@@ -115,22 +115,22 @@ void modelDefinition(ModelSpec &model)
 
     auto *ee = model.addSynapsePopulation(
         "EE", matrixType, e, e,
-        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(excitatoryStaticSynapseInit),
+        initWeightUpdate<StaticPulseHalf>({}, excitatoryStaticSynapseInit),
         initPostsynaptic<PostsynapticModels::ExpCurr>(excitatoryExpCurrParams),
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
     auto *ei = model.addSynapsePopulation(
         "EI", matrixType, e, i,
-        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(excitatoryStaticSynapseInit),
+        initWeightUpdate<StaticPulseHalf>({}, excitatoryStaticSynapseInit),
         initPostsynaptic<PostsynapticModels::ExpCurr>(excitatoryExpCurrParams),
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
     auto *ii = model.addSynapsePopulation(
         "II", matrixType, i, i,
-        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(inhibitoryStaticSynapseInit),
+        initWeightUpdate<StaticPulseHalf>({}, inhibitoryStaticSynapseInit),
         initPostsynaptic<PostsynapticModels::ExpCurr>(inhibitoryExpCurrParams),
         initConnectivity<InitSparseConnectivitySnippet::FixedProbabilityNoAutapse>(fixedProb));
     auto *ie = model.addSynapsePopulation(
         "IE", matrixType, i, e,
-        initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(inhibitoryStaticSynapseInit),
+        initWeightUpdate<StaticPulseHalf>({}, inhibitoryStaticSynapseInit),
         initPostsynaptic<PostsynapticModels::ExpCurr>(inhibitoryExpCurrParams),
         initConnectivity<InitSparseConnectivitySnippet::FixedProbability>(fixedProb));
 

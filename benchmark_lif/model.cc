@@ -70,7 +70,7 @@ void modelDefinition(ModelSpec &model)
         {"RefracTime", 0.0}};
 
     // Create IF_curr neuron
-    auto *pop = model.addNeuronPopulation<LIFHalf>("Pop", 1000000, lifParams, lifInit);
+    auto *pop = model.addNeuronPopulation<NeuronModels::LIF>("Pop", 10000, lifParams, lifInit);
 
     // Enable spike recording
     pop->setSpikeRecordingEnabled(true);

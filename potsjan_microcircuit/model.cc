@@ -7,6 +7,7 @@
 // Model includes
 #include "parameters.h"
 
+
 void modelDefinition(ModelSpec &model)
 {
     model.setDT(Parameters::dtMs);

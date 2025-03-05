@@ -4,6 +4,7 @@ void modelDefinition(NNmodel &model)
 {
   model.setDT(1.0);
   model.setName("if_curr");
+  model.setSeed(1234);
 
   //---------------------------------------------------------------------------
   // Build model
