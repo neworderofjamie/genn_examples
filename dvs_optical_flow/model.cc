@@ -17,9 +17,6 @@
 // GeNN includes
 #include "modelSpec.h"
 
-// Common includes
-#include "../common/dvs.h"
-
 // Model includes
 #include "parameters.h"
 
@@ -398,12 +395,11 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     auto *spikeVectorDVSPtr = spikeVectorDVS->getHostPointer<uint32_t>();
 
     // Create DAVIS device
-    using Filter = DVS::CombineFilter<DVS::PolarityFilter<DVS::Polarity::ON>, DVS::ROIFilter<43, 303, 0, 260>>;
-    using TransformX = DVS::Subtract<43>;
-    using TransformY = DVS::NoTransform;
-    DVS::Davis dvsDevice;
+    auto dvsDevice = DVS::create<libcaer::devices::davis>();
     dvsDevice.start();
 
+    const DVS::CropRect dvsCropRect{43, 0, 303, 260};
+    
     double dvsGet = 0.0;
     double step = 0.0;
     double render = 0.0;
@@ -435,8 +431,9 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
         {
             //TimerAccumulate timer(dvsGet);
             spikeVectorDVS->memsetHostPointer(0);
-            dvsDevice.readEvents<Parameters::inputSize, Filter, TransformX, TransformY>(spikeVectorDVSPtr);
-
+            dvsDevice.readEvents(spikeVectorDVS, DVS::Polarity::ON_ONLY,
+                                 1.0f, &dvsCropRect);
+            
             // Copy to GPU
             spikeVectorDVS->pushToDevice();
         }
