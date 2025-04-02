@@ -6,7 +6,7 @@ import numpy as np
 # Read CSV spikes
 data = np.loadtxt("voltages.csv", delimiter=",", skiprows=1,
                   dtype={"names": ("time", "neuron_id", "voltage"),
-                         "formats": (np.float, np.int, np.float)})
+                         "formats": (float, int, float)})
 
 # Check there are 4 neurons
 neuron_ids = np.unique(data["neuron_id"])
