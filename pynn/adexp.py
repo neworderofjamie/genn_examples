@@ -39,18 +39,26 @@ adexp_model = create_neuron_model(
         // Calculate RK4 terms
         v1 = {dv('V', 'W')};
         w1 = {dw('V', 'W')};
-        v2 = {dv('V + (dt * 0.5 * v1)', 'W + (dt * 0.5 * w1)')};
-        w2 = {dw('V + (dt * 0.5 * v1)', 'W + (dt * 0.5 * w1)')};
-        v3 = {dv('V + (dt * 0.5 * v2)', 'W + (dt * 0.5 * w2)')};
-        w3 = {dw('V + (dt * 0.5 * v2)', 'W + (dt * 0.5 * w2)')};
-        v4 = {dv('V + (dt * v3)', 'W + (dt * w3)')};
-        w4 = {dw('V + (dt * v3)', 'W + (dt * w3)')};
+        const scalar halfDT = dt * 0.5;
+        scalar tmpV = V + (halfDT * v1);
+        scalar tmpW = W + (halfDT * w1);
+        v2 = {dv('tmpV', 'tmpW')};
+        w2 = {dw('tmpV', 'tmpW')};
+        tmpV = V + (halfDT * v2);
+        tmpW = W + (halfDT * w2);
+        v3 = {dv('tmpV', 'tmpW')};
+        w3 = {dw('tmpV', 'tmpW')};
+        tmpV = V + (dt * v3);
+        tmpW = W + (dt * w3);
+        v4 = {dv('tmpV', 'tmpW')};
+        w4 = {dw('tmpV', 'tmpW')};
         // Update V
-        V += (dt / 6.0) * (v1 + (2.0 * (v2 + v3)) + v4);
+        const scalar sixthDT = dt / 6.0;
+        V += sixthDT * (v1 + (2.0 * (v2 + v3)) + v4);
         // If we're not above peak, update w
         // **NOTE** it's not safe to do this at peak as wn may well be huge
         if(V <= -0.4) {{
-           W += (dt / 6.0) * (w1 + (2.0 * (w2 + w3)) + w4);
+           W += sixthDT * (w1 + (2.0 * (w2 + w3)) + w4);
         }}
         """,
 
