@@ -60,7 +60,7 @@ adexp_model = create_neuron_model(
         """
         // **NOTE** we reset v to arbitrary plotting peak rather than to actual reset voltage
         V = vSpike;
-        W += (b * 1000.0);
+        W += b;
         """)
 
 c = 281.0 / 1000.0
@@ -78,7 +78,7 @@ adexp_params = {
     "vReset":       -70.6 * v_scale,
     "tauWRecip":    1.0 / 144.0,
     "a":            (4.0 / 1000.0) / v_scale,
-    "b":            0.0805 / 1000.0,
+    "b":            0.0805,
     "iOffset":      700.0 / 1000.0}
 adexp_vars = {"V": -70.6 * v_scale, "W": 0.0, "v1": 0.0, "w1": 0.0, "v2": 0.0, "w2": 0.0, "v3": 0.0, "w3": 0.0, "v4": 0.0, "w4": 0.0}
 
