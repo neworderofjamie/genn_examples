@@ -80,6 +80,56 @@ class MacroToExcitatory : public InitSparseConnectivitySnippet::Base
 };
 IMPLEMENT_SNIPPET(MacroToExcitatory);
 
+class MacroToInhibitory : public InitSparseConnectivitySnippet::Base
+{
+    DECLARE_SNIPPET(MacroToInhibitory);
+
+    SET_PARAMS({{"macroPixelSize", "unsigned int"}, {"detectorSize", "unsigned int"}});
+    SET_DERIVED_PARAMS({{"detectorLeft", [](const ParamValues&, double){ return Parameters::DetectorLeft; }},
+                        {"detectorRight", [](const ParamValues&, double){ return Parameters::DetectorRight; }},
+                        {"detectorUp", [](const ParamValues&, double){ return Parameters::DetectorUp; }},
+                        {"detectorDown", [](const ParamValues&, double){ return Parameters::DetectorDown; }},
+                        {"detectorMax", [](const ParamValues&, double){ return Parameters::DetectorMax; }}});
+
+    SET_ROW_BUILD_CODE(
+        "const unsigned int xi = id_pre % macroPixelSize;\n"
+        "const unsigned int yi = id_pre / macroPixelSize;\n"
+        "// Create inhibitory connection to 'left' detector associated with macropixel one to right\n"
+        "if(xi < (macroPixelSize - 2)\n"
+        "    && yi >= 1 && yi < (macroPixelSize - 1))\n"
+        "{\n"
+        "    const unsigned int xj = (xi - 1 + 1) * detectorMax;\n"
+        "    const unsigned int yj = yi - 1;\n"
+        "    addSynapse(xj + detectorLeft + (yj * detectorSize * detectorMax));\n"
+        "}\n"
+        "// Create inhibitory connection to 'right' detector associated with macropixel one to right\n"
+        "if(xi >= 2\n"
+        "    && yi >= 1 && yi < (macroPixelSize - 1))\n"
+        "{\n"
+        "    const unsigned int xj = (xi - 1 - 1) * detectorMax;\n"
+        "    const unsigned int yj = yi - 1;\n"
+        "    addSynapse(xj + detectorRight + (yj * detectorSize * detectorMax));\n"
+        "}\n"
+        "// Create inhibitory connection to 'up' detector associated with macropixel one below\n"
+        "if(xi >= 1 && xi < (macroPixelSize - 1)\n"
+        "    && yi < (macroPixelSize - 2))\n"
+        "{\n"
+        "    const unsigned int xj = (xi - 1) * detectorMax;\n"
+        "    const unsigned int yj = yi - 1 + 1;\n"
+        "    addSynapse(xj + detectorUp + (yj * detectorSize * detectorMax));\n"
+        "}\n"
+        "// Create inhibitory connection to 'down' detector associated with macropixel one above\n"
+        "if(xi >= 1 && xi < (macroPixelSize - 1)\n"
+        "    && yi >= 2)\n"
+        "{\n"
+        "    const unsigned int xj = (xi - 1) * detectorMax;\n"
+        "    const unsigned int yj = yi - 1 - 1;\n"
+        "    addSynapse(xj + detectorDown + (yj * detectorSize * detectorMax));\n"
+        "}\n");
+    SET_MAX_ROW_LENGTH(Parameters::DetectorMax);
+};
+IMPLEMENT_SNIPPET(MacroToInhibitory);
+
 // Anonymous namespace
 namespace
 {
@@ -90,97 +140,6 @@ void signalHandler(int status)
     g_SignalStatus = status;
 }
 
-unsigned int getNeuronIndex(unsigned int resolution, unsigned int x, unsigned int y)
-{
-    return x + (y * resolution);
-}
-
-void buildDetectors(unsigned int *inhibitoryRowLength, unsigned int *inhibitoryInd)
-{
-    // Loop through macro cells
-    unsigned int iInhibitory = 0;
-    for(unsigned int yi = 0; yi < Parameters::macroPixelSize; yi++)
-    {
-        for(unsigned int xi = 0; xi < Parameters::macroPixelSize; xi++)
-        {
-            // Get index of start of row
-            unsigned int sInhibitory = (iInhibitory * Parameters::DetectorMax);
-
-            // If we're not in border region
-            /*if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
-                && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
-            {
-                const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
-                const unsigned int yj = yi - 1;
-
-                // Add excitatory synapses to all detectors
-                excitatoryInd[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                              xj + Parameters::DetectorLeft, yj);
-                excitatoryInd[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                              xj + Parameters::DetectorRight, yj);
-                excitatoryInd[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                              xj + Parameters::DetectorUp, yj);
-                excitatoryInd[sExcitatory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                              xj + Parameters::DetectorDown, yj);
-                excitatoryRowLength[iExcitatory++] = 4;
-            }
-            else {
-                excitatoryRowLength[iExcitatory++] = 0;
-            }*/
-
-
-            // Create inhibitory connection to 'left' detector associated with macropixel one to right
-            inhibitoryRowLength[iInhibitory] = 0;
-            if(xi < (Parameters::macroPixelSize - 2)
-                && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
-            {
-                const unsigned int xj = (xi - 1 + 1) * Parameters::DetectorMax;
-                const unsigned int yj = yi - 1;
-                inhibitoryInd[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                              xj + Parameters::DetectorLeft, yj);
-                inhibitoryRowLength[iInhibitory]++;
-            }
-
-            // Create inhibitory connection to 'right' detector associated with macropixel one to right
-            if(xi >= 2
-                && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
-            {
-                const unsigned int xj = (xi - 1 - 1) * Parameters::DetectorMax;
-                const unsigned int yj = yi - 1;
-                inhibitoryInd[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                              xj + Parameters::DetectorRight, yj);
-                inhibitoryRowLength[iInhibitory]++;
-            }
-
-            // Create inhibitory connection to 'up' detector associated with macropixel one below
-            if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
-                && yi < (Parameters::macroPixelSize - 2))
-            {
-                const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
-                const unsigned int yj = yi - 1 + 1;
-                inhibitoryInd[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                              xj + Parameters::DetectorUp, yj);
-                inhibitoryRowLength[iInhibitory]++;
-            }
-
-            // Create inhibitory connection to 'down' detector associated with macropixel one above
-            if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
-                && yi >= 2)
-            {
-                const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
-                const unsigned int yj = yi - 1 - 1;
-                inhibitoryInd[sInhibitory++] = getNeuronIndex(Parameters::detectorSize * Parameters::DetectorMax,
-                                                              xj + Parameters::DetectorDown, yj);
-                inhibitoryRowLength[iInhibitory]++;
-            }
-            iInhibitory++;
-
-        }
-    }
-
-    // Check
-    assert(iInhibitory == (Parameters::macroPixelSize * Parameters::macroPixelSize));
-}
 void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
                           std::mutex &outputMutex, const float (&output)[Parameters::detectorSize][Parameters::detectorSize][2])
 {
@@ -348,7 +307,7 @@ void modelDefinition(ModelSpec &model)
         {"kernelSize", Parameters::kernelSize}, 
         {"macroPixelSize", Parameters::macroPixelSize}};
     
-    ParamValues macroExcitatoryConnectInit{
+    ParamValues macroConnectInit{
         {"macroPixelSize", Parameters::macroPixelSize}, 
         {"detectorSize", Parameters::detectorSize}};
 
@@ -379,15 +338,15 @@ void modelDefinition(ModelSpec &model)
         macroPixel, output,
         initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(macroPixelOutputExcitatoryWeightUpdateInit),
         initPostsynaptic<PostsynapticModels::ExpCurr>(outputExcitatoryPostSynParams),
-        initConnectivity<MacroToExcitatory>(macroExcitatoryConnectInit));
+        initConnectivity<MacroToExcitatory>(macroConnectInit));
 
-    auto *macroPixelOutputInhibitory = model.addSynapsePopulation(
+    model.addSynapsePopulation(
         "MacroPixel_Output_Inhibitory", SynapseMatrixType::SPARSE,
         macroPixel, output,
         initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(macroPixelOutputInhibitoryWeightUpdateInit),
-        initPostsynaptic<PostsynapticModels::ExpCurr>(outputInhibitoryPostSynParams));
-    
-    macroPixelOutputInhibitory->setMaxConnections(Parameters::DetectorMax);
+        initPostsynaptic<PostsynapticModels::ExpCurr>(outputInhibitoryPostSynParams),
+        initConnectivity<MacroToInhibitory>(macroConnectInit));
+
     // Use zero-copy for input and output spikes as we want to access them every timestep
     //dvs->setSpikeZeroCopyEnabled(true);
     //output->setSpikeZeroCopyEnabled(true);
@@ -400,15 +359,10 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     // Lookup populations
     auto *dvs = model.findNeuronGroup("DVS");
     auto *output = model.findNeuronGroup("Output");
-    auto *macroPixelOutputInhibitory = model.findSynapseGroup("MacroPixel_Output_Inhibitory");
 
     runtime.allocate(1);
     runtime.allocateArray(*dvs, "spikeVector", timestepWords);
     runtime.initialize();
-
-    buildDetectors(runtime.getArray(*macroPixelOutputInhibitory, "rowLength")->getHostPointer<unsigned int>(),
-                   runtime.getArray(*macroPixelOutputInhibitory, "ind")->getHostPointer<unsigned int>());
-
     runtime.initializeSparse();
 
     // Lookup arrays
