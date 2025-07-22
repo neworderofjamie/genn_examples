@@ -51,6 +51,35 @@ class CentreToMacroSnippet : public InitSparseConnectivitySnippet::Base
 };
 IMPLEMENT_SNIPPET(CentreToMacroSnippet);
 
+class MacroToExcitatory : public InitSparseConnectivitySnippet::Base
+{
+    DECLARE_SNIPPET(MacroToExcitatory);
+
+    SET_PARAMS({{"macroPixelSize", "unsigned int"}, {"detectorSize", "unsigned int"}});
+    SET_DERIVED_PARAMS({{"detectorLeft", [](const ParamValues&, double){ return Parameters::DetectorLeft; }},
+                        {"detectorRight", [](const ParamValues&, double){ return Parameters::DetectorRight; }},
+                        {"detectorUp", [](const ParamValues&, double){ return Parameters::DetectorUp; }},
+                        {"detectorDown", [](const ParamValues&, double){ return Parameters::DetectorDown; }},
+                        {"detectorMax", [](const ParamValues&, double){ return Parameters::DetectorMax; }}});
+
+    SET_ROW_BUILD_CODE(
+        "const unsigned int xi = id_pre % macroPixelSize;\n"
+        "const unsigned int yi = id_pre / macroPixelSize;\n"
+        "if(xi >= 1 && xi < (macroPixelSize - 1)\n"
+        "    && yi >= 1 && yi < (macroPixelSize - 1))\n"
+        "{\n"
+        "    const unsigned int xj = (xi - 1) * detectorMax;\n"
+        "    const unsigned int yj = yi - 1;\n"
+        "    // Add excitatory synapses to all detectors\n"
+        "    addSynapse(xj + detectorLeft + (yj * detectorSize * detectorMax));\n"
+        "    addSynapse(xj + detectorRight + (yj * detectorSize * detectorMax));\n"
+        "    addSynapse(xj + detectorUp + (yj * detectorSize * detectorMax));\n"
+        "    addSynapse(xj + detectorDown + (yj * detectorSize * detectorMax));\n"
+        "}\n");
+    SET_MAX_ROW_LENGTH(Parameters::DetectorMax);
+};
+IMPLEMENT_SNIPPET(MacroToExcitatory);
+
 // Anonymous namespace
 namespace
 {
@@ -66,22 +95,19 @@ unsigned int getNeuronIndex(unsigned int resolution, unsigned int x, unsigned in
     return x + (y * resolution);
 }
 
-void buildDetectors(unsigned int *excitatoryRowLength, unsigned int *excitatoryInd,
-                    unsigned int *inhibitoryRowLength, unsigned int *inhibitoryInd)
+void buildDetectors(unsigned int *inhibitoryRowLength, unsigned int *inhibitoryInd)
 {
     // Loop through macro cells
-    unsigned int iExcitatory = 0;
     unsigned int iInhibitory = 0;
     for(unsigned int yi = 0; yi < Parameters::macroPixelSize; yi++)
     {
         for(unsigned int xi = 0; xi < Parameters::macroPixelSize; xi++)
         {
             // Get index of start of row
-            unsigned int sExcitatory = (iExcitatory * Parameters::DetectorMax);
             unsigned int sInhibitory = (iInhibitory * Parameters::DetectorMax);
 
             // If we're not in border region
-            if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
+            /*if(xi >= 1 && xi < (Parameters::macroPixelSize - 1)
                 && yi >= 1 && yi < (Parameters::macroPixelSize - 1))
             {
                 const unsigned int xj = (xi - 1) * Parameters::DetectorMax;
@@ -100,7 +126,7 @@ void buildDetectors(unsigned int *excitatoryRowLength, unsigned int *excitatoryI
             }
             else {
                 excitatoryRowLength[iExcitatory++] = 0;
-            }
+            }*/
 
 
             // Create inhibitory connection to 'left' detector associated with macropixel one to right
@@ -153,7 +179,6 @@ void buildDetectors(unsigned int *excitatoryRowLength, unsigned int *excitatoryI
     }
 
     // Check
-    assert(iExcitatory == (Parameters::macroPixelSize * Parameters::macroPixelSize));
     assert(iInhibitory == (Parameters::macroPixelSize * Parameters::macroPixelSize));
 }
 void displayThreadHandler(std::mutex &inputMutex, const cv::Mat &inputImage,
@@ -317,11 +342,15 @@ void modelDefinition(ModelSpec &model)
     ParamValues outputInhibitoryPostSynParams{
         {"tau", 50.0}};
         
-    ParamValues dvsMacroPixelConnecInit{
+    ParamValues dvsMacroPixelConnectInit{
         {"inputSize", Parameters::inputSize}, 
         {"centreSize", Parameters::centreSize}, 
         {"kernelSize", Parameters::kernelSize}, 
         {"macroPixelSize", Parameters::macroPixelSize}};
+    
+    ParamValues macroExcitatoryConnectInit{
+        {"macroPixelSize", Parameters::macroPixelSize}, 
+        {"detectorSize", Parameters::detectorSize}};
 
     //------------------------------------------------------------------------
     // Neuron populations
@@ -338,18 +367,19 @@ void modelDefinition(ModelSpec &model)
     //------------------------------------------------------------------------
     // Synapse populations
     //------------------------------------------------------------------------
-    auto *dvsMacroPixel = model.addSynapsePopulation(
+    model.addSynapsePopulation(
         "DVS_MacroPixel", SynapseMatrixType::SPARSE,
         dvs, macroPixel,
         initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(dvsMacroPixelWeightUpdateInit),
         initPostsynaptic<PostsynapticModels::ExpCurr>(macroPixelPostSynParams),
-        initConnectivity<CentreToMacroSnippet>(dvsMacroPixelConnecInit));
+        initConnectivity<CentreToMacroSnippet>(dvsMacroPixelConnectInit));
 
-    auto *macroPixelOutputExcitatory = model.addSynapsePopulation(
+    model.addSynapsePopulation(
         "MacroPixel_Output_Excitatory", SynapseMatrixType::SPARSE,
         macroPixel, output,
         initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(macroPixelOutputExcitatoryWeightUpdateInit),
-        initPostsynaptic<PostsynapticModels::ExpCurr>(outputExcitatoryPostSynParams));
+        initPostsynaptic<PostsynapticModels::ExpCurr>(outputExcitatoryPostSynParams),
+        initConnectivity<MacroToExcitatory>(macroExcitatoryConnectInit));
 
     auto *macroPixelOutputInhibitory = model.addSynapsePopulation(
         "MacroPixel_Output_Inhibitory", SynapseMatrixType::SPARSE,
@@ -357,7 +387,6 @@ void modelDefinition(ModelSpec &model)
         initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(macroPixelOutputInhibitoryWeightUpdateInit),
         initPostsynaptic<PostsynapticModels::ExpCurr>(outputInhibitoryPostSynParams));
     
-    macroPixelOutputExcitatory->setMaxConnections(Parameters::DetectorMax);
     macroPixelOutputInhibitory->setMaxConnections(Parameters::DetectorMax);
     // Use zero-copy for input and output spikes as we want to access them every timestep
     //dvs->setSpikeZeroCopyEnabled(true);
@@ -371,16 +400,13 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     // Lookup populations
     auto *dvs = model.findNeuronGroup("DVS");
     auto *output = model.findNeuronGroup("Output");
-    auto *macroPixelOutputExcitatory = model.findSynapseGroup("MacroPixel_Output_Excitatory");
     auto *macroPixelOutputInhibitory = model.findSynapseGroup("MacroPixel_Output_Inhibitory");
 
     runtime.allocate(1);
     runtime.allocateArray(*dvs, "spikeVector", timestepWords);
     runtime.initialize();
 
-    buildDetectors(runtime.getArray(*macroPixelOutputExcitatory, "rowLength")->getHostPointer<unsigned int>(),
-                   runtime.getArray(*macroPixelOutputExcitatory, "ind")->getHostPointer<unsigned int>(),
-                   runtime.getArray(*macroPixelOutputInhibitory, "rowLength")->getHostPointer<unsigned int>(),
+    buildDetectors(runtime.getArray(*macroPixelOutputInhibitory, "rowLength")->getHostPointer<unsigned int>(),
                    runtime.getArray(*macroPixelOutputInhibitory, "ind")->getHostPointer<unsigned int>());
 
     runtime.initializeSparse();
