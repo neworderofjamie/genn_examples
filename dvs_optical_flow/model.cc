@@ -29,6 +29,28 @@ public:
 };
 IMPLEMENT_SNIPPET(DVSModel);
 
+class CentreToMacroSnippet : public InitSparseConnectivitySnippet::Base
+{
+    DECLARE_SNIPPET(CentreToMacroSnippet);
+
+    SET_PARAMS({{"inputSize", "unsigned int"}, {"centreSize", "unsigned int"}, 
+                {"kernelSize", "unsigned int"}, {"macroPixelSize", "unsigned int"}});
+    
+    SET_ROW_BUILD_CODE(
+        "const unsigned int nearBorder = (inputSize - centreSize) / 2;\n"
+        "const unsigned int farBorder = nearBorder + centreSize;\n"
+        "// If we're in the centre\n"
+        "const unsigned int xi = id_pre % inputSize;\n"
+        "const unsigned int yi = id_pre / inputSize;\n"
+        "if(xi >= nearBorder && xi < farBorder && yi >= nearBorder && yi < farBorder) {\n"
+        "    const unsigned int yj = (yi - nearBorder) / kernelSize;\n"
+        "    const unsigned int xj = (xi - nearBorder) / kernelSize;\n"
+        "    addSynapse(xj + (yj * macroPixelSize));\n"
+        "}\n");
+    SET_MAX_ROW_LENGTH(1);
+};
+IMPLEMENT_SNIPPET(CentreToMacroSnippet);
+
 // Anonymous namespace
 namespace
 {
@@ -42,36 +64,6 @@ void signalHandler(int status)
 unsigned int getNeuronIndex(unsigned int resolution, unsigned int x, unsigned int y)
 {
     return x + (y * resolution);
-}
-
-void buildCentreToMacroConnection(unsigned int *rowLength, unsigned int *ind)
-{
-    // Calculate start and end of border on each row
-    const unsigned int near_border = (Parameters::inputSize - Parameters::centreSize) / 2;
-    const unsigned int far_border = near_border + Parameters::centreSize;
-
-    // Loop through rows of pixels in centre
-    unsigned int i = 0;
-    for(unsigned int yi = 0; yi < Parameters::inputSize; yi++)
-    {
-        for(unsigned int xi = 0; xi < Parameters::inputSize; xi++)
-        {
-            // If we're in the centre
-            if(xi >= near_border && xi < far_border && yi >= near_border && yi < far_border) {
-                const unsigned int yj = (yi - near_border) / Parameters::kernelSize;
-                const unsigned int xj = (xi - near_border) / Parameters::kernelSize;
-
-                ind[i] = getNeuronIndex(Parameters::macroPixelSize, xj, yj);
-                rowLength[i++] = 1;
-            }
-            else {
-                rowLength[i++] = 0;
-            }
-        }
-    }
-
-    // Check
-    assert(i == (Parameters::inputSize * Parameters::inputSize));
 }
 
 void buildDetectors(unsigned int *excitatoryRowLength, unsigned int *excitatoryInd,
@@ -324,6 +316,12 @@ void modelDefinition(ModelSpec &model)
 
     ParamValues outputInhibitoryPostSynParams{
         {"tau", 50.0}};
+        
+    ParamValues dvsMacroPixelConnecInit{
+        {"inputSize", Parameters::inputSize}, 
+        {"centreSize", Parameters::centreSize}, 
+        {"kernelSize", Parameters::kernelSize}, 
+        {"macroPixelSize", Parameters::macroPixelSize}};
 
     //------------------------------------------------------------------------
     // Neuron populations
@@ -344,7 +342,8 @@ void modelDefinition(ModelSpec &model)
         "DVS_MacroPixel", SynapseMatrixType::SPARSE,
         dvs, macroPixel,
         initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(dvsMacroPixelWeightUpdateInit),
-        initPostsynaptic<PostsynapticModels::ExpCurr>(macroPixelPostSynParams));
+        initPostsynaptic<PostsynapticModels::ExpCurr>(macroPixelPostSynParams),
+        initConnectivity<CentreToMacroSnippet>(dvsMacroPixelConnecInit));
 
     auto *macroPixelOutputExcitatory = model.addSynapsePopulation(
         "MacroPixel_Output_Excitatory", SynapseMatrixType::SPARSE,
@@ -358,7 +357,6 @@ void modelDefinition(ModelSpec &model)
         initWeightUpdate<WeightUpdateModels::StaticPulseConstantWeight>(macroPixelOutputInhibitoryWeightUpdateInit),
         initPostsynaptic<PostsynapticModels::ExpCurr>(outputInhibitoryPostSynParams));
     
-    dvsMacroPixel->setMaxConnections(1);
     macroPixelOutputExcitatory->setMaxConnections(Parameters::DetectorMax);
     macroPixelOutputInhibitory->setMaxConnections(Parameters::DetectorMax);
     // Use zero-copy for input and output spikes as we want to access them every timestep
@@ -373,7 +371,6 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     // Lookup populations
     auto *dvs = model.findNeuronGroup("DVS");
     auto *output = model.findNeuronGroup("Output");
-    auto *dvsMacroPixel = model.findSynapseGroup("DVS_MacroPixel");
     auto *macroPixelOutputExcitatory = model.findSynapseGroup("MacroPixel_Output_Excitatory");
     auto *macroPixelOutputInhibitory = model.findSynapseGroup("MacroPixel_Output_Inhibitory");
 
@@ -381,8 +378,6 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
     runtime.allocateArray(*dvs, "spikeVector", timestepWords);
     runtime.initialize();
 
-    buildCentreToMacroConnection(runtime.getArray(*dvsMacroPixel, "rowLength")->getHostPointer<unsigned int>(),
-                                 runtime.getArray(*dvsMacroPixel, "ind")->getHostPointer<unsigned int>());
     buildDetectors(runtime.getArray(*macroPixelOutputExcitatory, "rowLength")->getHostPointer<unsigned int>(),
                    runtime.getArray(*macroPixelOutputExcitatory, "ind")->getHostPointer<unsigned int>(),
                    runtime.getArray(*macroPixelOutputInhibitory, "rowLength")->getHostPointer<unsigned int>(),
