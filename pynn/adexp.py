@@ -6,21 +6,22 @@ from pygenn import GeNNModel
 from pygenn import create_neuron_model
 
 def dv(v: str, w: str):
-    return f"tauMRecip * (-(({v}) - eL) + (deltaT * exp((({v}) - vThresh) / deltaT)) + R * (i - ({w})))"
+    return f"tauMRecip * (-(({v}) - eL) + (deltaT * exp((({v}) - vThresh) * deltaTRecip)) + R * (i - ({w})))"
 
 def dw(v: str, w: str):
     return f"tauWRecip * ((a * ({v} - eL)) - {w})"
 
 adexp_model = create_neuron_model(
     "adexp",
-    params=["tauMRecip",    # Membrane capacitance [pF]
+    params=["tauMRecip",    # Reciprocal of membrane capacitance [pF]
             "R",            # Leak conductance [nS]
             "eL",           # Leak reversal potential [mV]
             "deltaT",       # Slope factor [mV]
+            "deltaTRecip",  # Reciprocal of slope factor
             "vThresh",      # Threshold voltage [mV]
             "vSpike",       # Artificial spike height [mV]
             "vReset",       # Reset voltage [mV]
-            "tauWRecip",    # Adaption time constant
+            "tauWRecip",    # Reciprocal of adaption time constant
             "a",            # Subthreshold adaption [nS]
             "b",            # Spike-triggered adaptation [nA]
             "iOffset"],     # Offset current
@@ -53,7 +54,7 @@ adexp_model = create_neuron_model(
         v4 = {dv('tmpV', 'tmpW')};
         w4 = {dw('tmpV', 'tmpW')};
         // Update V
-        const scalar sixthDT = dt / 6.0;
+        const scalar sixthDT = dt * 0.166666667;
         V += sixthDT * (v1 + (2.0 * (v2 + v3)) + v4);
         // If we're not above peak, update w
         // **NOTE** it's not safe to do this at peak as wn may well be huge
@@ -81,6 +82,7 @@ adexp_params = {
     "tauMRecip":    gL / c,
     "eL":           -70.6 * v_scale,
     "deltaT":       2.0 * v_scale,
+    "deltaTRecip":  1.0 / (2.0 * v_scale),
     "vThresh":      -50.4 * v_scale,
     "vSpike":       10.0 * v_scale,
     "vReset":       -70.6 * v_scale,
