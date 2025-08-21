@@ -75,10 +75,11 @@ adexp_model = create_neuron_model(
 c = 281.0 / 1000.0
 gL = 30.0 / 1000.0
 v_scale = 0.01
+w_scale = 10.0
 
 # Parameters
 adexp_params = {
-    "R":            (1.0 / gL) * v_scale,
+    "R":            (1.0 / gL) * (v_scale / w_scale),
     "tauMRecip":    gL / c,
     "eL":           -70.6 * v_scale,
     "deltaT":       2.0 * v_scale,
@@ -87,9 +88,9 @@ adexp_params = {
     "vSpike":       10.0 * v_scale,
     "vReset":       -70.6 * v_scale,
     "tauWRecip":    1.0 / 144.0,
-    "a":            (4.0 / 1000.0) / v_scale,
-    "b":            0.0805,
-    "iOffset":      700.0 / 1000.0}
+    "a":            (4.0 / 1000.0) / (v_scale / w_scale) ,
+    "b":            0.0805 * w_scale,
+    "iOffset":      700.0 * (w_scale / 1000.0)}
 adexp_vars = {"V": -70.6 * v_scale, "W": 0.0, "v1": 0.0, "w1": 0.0, "v2": 0.0, "w2": 0.0, "v3": 0.0, "w3": 0.0, "v4": 0.0, "w4": 0.0}
 
 print(adexp_params)
@@ -137,7 +138,7 @@ for i in range(4):
     adexp_w_grad[i] = np.vstack(adexp_w_grad[i])
 
 # Create plot
-figure, axes = plt.subplots(4)
+figure, axes = plt.subplots(4, sharex=True)
 
 # Plot voltages
 axes[0].set_title("Voltage")
