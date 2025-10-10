@@ -1,11 +1,40 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
 
-from pygenn import (GeNNModel, VarLocation, init_postsynaptic,
-                    init_sparse_connectivity, init_weight_update, init_var)
+from pygenn import (GeNNModel, VarAccess, VarLocation, 
+                    create_neuron_model, create_weight_update_model,
+                    init_postsynaptic, init_sparse_connectivity, 
+                    init_weight_update, init_var)
 from scipy.stats import norm
 from six import iteritems, itervalues
 from time import perf_counter
+
+lif_half = create_neuron_model(
+    "lif_half",
+    sim_code="""
+        if (RefracTime <= 0.0) {
+          scalar alpha = ((Isyn + Ioffset) * Rmembrane) + Vrest;
+          V = alpha - (ExpTC * (alpha - V));
+        }
+        else {
+          RefracTime -= dt;
+        }
+        """,
+    threshold_condition_code="RefracTime <= 0.0 && V >= Vthresh",
+    reset_code="""
+        V = Vreset;
+        RefracTime = TauRefrac;
+        """,
+    params=["C", "TauM", "Vrest", "Vreset","Vthresh","Ioffset","TauRefrac"],
+
+    derived_params=[("ExpTC", lambda pars, dt: np.exp(-dt / pars["TauM"])),
+                    ("Rmembrane", lambda pars, dt: pars["TauM"] / pars["C"])],
+    vars=[("V", "scalar", "half"), ("RefracTime", "scalar", "half")])
+
+static_pulse_dendritic_delay_half = create_weight_update_model(
+    "static_pulse_dendritic_delay_half",
+    vars=[("g", "scalar", "half", VarAccess.READ_ONLY), ("d", "uint8_t", VarAccess.READ_ONLY)],
+    pre_spike_syn_code="addToPostDelay(g, d);")
 
 # ----------------------------------------------------------------------------
 # Parameters
@@ -192,7 +221,7 @@ for layer in LAYER_NAMES:
         poisson_params = {"weight": ext_weight, "tauSyn": 0.5, "rate": ext_input_rate}
 
         pop_size = get_scaled_num_neurons(layer, pop)
-        neuron_pop = model.add_neuron_population(pop_name, pop_size, "LIF", lif_params, lif_init)
+        neuron_pop = model.add_neuron_population(pop_name, pop_size, lif_half, lif_params, lif_init)
         model.add_current_source(pop_name + "_poisson", "PoissonExp", neuron_pop, poisson_params, poisson_init)
 
         # Enable spike recording
@@ -258,7 +287,7 @@ for trg_layer in LAYER_NAMES:
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": 0.0, "max": float(np.finfo(np.float32).max)}
 
                         # Create weight parameters
-                        static_synapse_init = init_weight_update("StaticPulseDendriticDelay", {},
+                        static_synapse_init = init_weight_update(static_pulse_dendritic_delay_half, {},
                                                                  {"g": init_var("NormalClipped", w_dist),
                                                                   "d": init_var("NormalClippedDelay", d_dist)})
                         # Add synapse population
@@ -279,7 +308,7 @@ for trg_layer in LAYER_NAMES:
                         w_dist = {"mean": mean_weight, "sd": weight_sd, "min": float(-np.finfo(np.float32).max), "max": 0.0}
 
                         # Create weight parameters
-                        static_synapse_init = init_weight_update("StaticPulseDendriticDelay", {},
+                        static_synapse_init = init_weight_update(static_pulse_dendritic_delay_half, {},
                                                                  {"g": init_var("NormalClipped", w_dist),
                                                                   "d": init_var("NormalClippedDelay", d_dist)})
                         # Add synapse population
