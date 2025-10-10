@@ -7,6 +7,56 @@
 // Model includes
 #include "parameters.h"
 
+class LIFHalf : public NeuronModels::Base
+{
+public:
+    DECLARE_SNIPPET(LIFHalf);
+
+    SET_SIM_CODE(
+        "if (RefracTime <= 0.0) {\n"
+        "  scalar alpha = ((Isyn + Ioffset) * Rmembrane) + Vrest;\n"
+        "  V = alpha - (ExpTC * (alpha - V));\n"
+        "}\n"
+        "else {\n"
+        "  RefracTime -= dt;\n"
+        "}\n"
+    );
+
+    SET_THRESHOLD_CONDITION_CODE("RefracTime <= 0.0 && V >= Vthresh");
+
+    SET_RESET_CODE(
+        "V = Vreset;\n"
+        "RefracTime = TauRefrac;\n");
+
+    SET_PARAMS({
+        "C",          // Membrane capacitance
+        "TauM",       // Membrane time constant [ms]
+        "Vrest",      // Resting membrane potential [mV]
+        "Vreset",     // Reset voltage [mV]
+        "Vthresh",    // Spiking threshold [mV]
+        "Ioffset",    // Offset current
+        "TauRefrac"});
+
+    SET_DERIVED_PARAMS({
+        {"ExpTC", [](const ParamValues &pars, double dt){ return std::exp(-dt / pars.at("TauM").cast<double>()); }},
+        {"Rmembrane", [](const ParamValues &pars, double){ return  pars.at("TauM").cast<double>() / pars.at("C").cast<double>(); }}});
+
+    SET_VARS({{"V", "scalar", "half"}, {"RefracTime", "scalar", "half"}});
+
+    SET_NEEDS_AUTO_REFRACTORY(false);
+};
+IMPLEMENT_SNIPPET(LIFHalf);
+
+class StaticPulseDendriticDelayHalf : public WeightUpdateModels::Base
+{
+public:
+    DECLARE_SNIPPET(StaticPulseDendriticDelayHalf);
+
+    SET_VARS({{"g", "scalar", "half", VarAccess::READ_ONLY}, {"d", "uint8_t", VarAccess::READ_ONLY}});
+
+    SET_PRE_SPIKE_SYN_CODE("addToPostDelay(g, d);\n");
+};
+IMPLEMENT_SNIPPET(StaticPulseDendriticDelayHalf);
 
 void modelDefinition(ModelSpec &model)
 {
@@ -72,7 +122,7 @@ void modelDefinition(ModelSpec &model)
 
             // Create population
             const unsigned int popSize = Parameters::getScaledNumNeurons(layer, pop);
-            neuronGroups[layer][pop] = model.addNeuronPopulation<NeuronModels::LIF>(
+            neuronGroups[layer][pop] = model.addNeuronPopulation<LIFHalf>(
                 popName, popSize, lifParams, lifInit);
 
             // Add poisson current source population
@@ -156,7 +206,7 @@ void modelDefinition(ModelSpec &model)
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation(
                                 synapseName, matrixType, src, trg,
-                                initWeightUpdate<WeightUpdateModels::StaticPulseDendriticDelay>({}, staticSynapseInit),
+                                initWeightUpdate<StaticPulseDendriticDelayHalf>({}, staticSynapseInit),
                                 initPostsynaptic<PostsynapticModels::ExpCurr>(excitatoryExpCurrParams),
                                 initConnectivity<InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement>(connectParams));
 
@@ -185,7 +235,7 @@ void modelDefinition(ModelSpec &model)
                             // Add synapse population
                             auto *synPop = model.addSynapsePopulation(
                                 synapseName, matrixType, src, trg,
-                                initWeightUpdate<WeightUpdateModels::StaticPulseDendriticDelay>({}, staticSynapseInit),
+                                initWeightUpdate<StaticPulseDendriticDelayHalf>({}, staticSynapseInit),
                                 initPostsynaptic<PostsynapticModels::ExpCurr>(inhibitoryExpCurrParams),
                                 initConnectivity<InitSparseConnectivitySnippet::FixedNumberTotalWithReplacement>(connectParams));
 
