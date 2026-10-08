@@ -371,9 +371,9 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
 
     // Create DAVIS device
     auto dvsDevice = DVS::create<libcaer::devices::davis>();
-    dvsDevice.start();
+    dvsDevice->start();
 
-    const DVS::CropRect dvsCropRect{43, 0, 303, 260};
+    const DVS::CropRect dvsCropRect({43, 0, 303, 260});
     
     double dvsGet = 0.0;
     double step = 0.0;
@@ -406,8 +406,8 @@ void simulate(const ModelSpec &model, Runtime::Runtime &runtime)
         {
             //TimerAccumulate timer(dvsGet);
             spikeVectorDVS->memsetHostPointer(0);
-            dvsDevice.readEvents(spikeVectorDVS, DVS::Polarity::ON_ONLY,
-                                 1.0f, &dvsCropRect);
+            dvsDevice->readEvents(spikeVectorDVS, DVS::Polarity::ON_ONLY,
+                                  1.0f, &dvsCropRect);
             
             // Copy to GPU
             spikeVectorDVS->pushToDevice();
